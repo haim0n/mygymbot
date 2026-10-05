@@ -1,13 +1,57 @@
 // Shared setup for browser tests: a phone-sized Chromium, a fixed clock, seeded storage and a fake Claude.
-// One-time setup: npx playwright install chromium
+// One-time setup: npx playwright install chromium, uv sync. The bundle comes from npm run build (test:e2e runs it).
 import { chromium, devices } from "playwright";
-import { startServer } from "../../dev/server.mjs";
+import { spawn } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:net";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export const NOW = new Date("2026-10-03T18:00:00"); // a Saturday evening
 
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+
+const freePort = () =>
+  new Promise((resolve) => {
+    const probe = createServer().listen(0, "127.0.0.1", () => {
+      const { port } = probe.address();
+      probe.close(() => resolve(port));
+    });
+  });
+
+// The Python server on its own port, with `seed` as its data file, so tests never share data.
+async function startServer(seed) {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "gymbot-test-"));
+  const dataFile = path.join(dir, "gymbot.json");
+  await writeFile(dataFile, JSON.stringify(seed));
+  const port = await freePort();
+  const env = { ...process.env, PORT: String(port), GYMBOT_DATA_FILE: dataFile, GYMBOT_ACCESS_KEY: "" };
+  const server = spawn(path.join(ROOT, ".venv/bin/python"), ["-m", "server"], { cwd: ROOT, env, stdio: ["ignore", "ignore", "pipe"] });
+  let log = "";
+  server.stderr.on("data", (chunk) => (log += chunk));
+  const url = `http://127.0.0.1:${port}/`;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      if ((await fetch(url)).ok) break;
+    } catch {
+      // not listening yet
+    }
+    if (attempt === 100 || server.exitCode !== null) throw new Error(`The server didn't start:\n${log}`);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return {
+    url,
+    close: async () => {
+      server.kill();
+      await rm(dir, { recursive: true, force: true });
+    },
+  };
+}
+
 // `claude(body)` returns the text the fake Claude replies with; every request body is kept in `claudeRequests`.
 export async function openApp(t, { seed = {}, claude = () => "OK" } = {}) {
-  const server = await startServer({ port: 0, seed }); // data in memory, kept across reloads like the real app
+  const server = await startServer(seed); // data kept across reloads, like the real app
   const browser = await chromium.launch();
   const page = await browser.newPage({ ...devices["Pixel 5"] });
   const errors = [];

@@ -1,6 +1,6 @@
-// Local stand-ins for what claude.ai gives an artifact. Nothing here ships in src/gymbot.jsx.
+// Stand-ins for what claude.ai gives an artifact, backed by the Python server. Nothing here ships in src/gymbot.jsx.
 //   window.storage  → /api/storage on the server (a JSON file), same keys and the same promise-based API.
-//   Claude API      → POST /api/messages on the server, which adds your API key server-side.
+//   Claude API      → POST /api/messages on the server, which answers with Gemini in the same reply shape.
 
 const storageUrl = (key) => `/api/storage/${encodeURIComponent(key)}`;
 

@@ -1,0 +1,6 @@
+{
+  "env": {
+    "CLOUDSDK_CORE_PROJECT": "mygymbot",
+    "GOOGLE_CLOUD_PROJECT": "mygymbot"
+  }
+}

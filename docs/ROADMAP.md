@@ -13,7 +13,7 @@
 
 ## Later: standalone app (global launch)
 
-- **Backend**: Python (FastAPI) + Postgres; analytics and forecasts in Polars. Anthropic API called server-side with your key; per-user rate limits.
+- **Backend**: Python (FastAPI) + Postgres; analytics and forecasts in Polars. AI called server-side (Gemini on Vertex AI, as in the hosted copy today); per-user rate limits.
 - **Client**: keep React (PWA first; React Native if app-store presence matters). The pure domain functions port over unchanged.
 - **Accounts, payments, privacy**: auth; Stripe or app-store billing; privacy policy, consent and data deletion (pain, injuries and bodyweight are health-related data); "not medical advice" notice.
 - **Real notifications** for pre-workout motivation and check-ins (push or calendar).

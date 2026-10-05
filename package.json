@@ -3,17 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "AI workout coach. Runs as a single-file Claude.ai artifact; this repo adds a local dev harness and tests.",
+  "description": "AI workout coach. The app runs as a single-file Claude.ai artifact; this repo adds the web shell, a Python backend for the hosted copy, and tests.",
   "scripts": {
-    "dev": "node dev/server.mjs",
-    "start": "node dev/server.mjs --live",
+    "build": "esbuild web/main.jsx --bundle --jsx=automatic --sourcemap --outfile=web/dist/app.js --log-level=warning",
+    "dev": "npm run build -- --watch=forever & uv run python -m server",
     "test": "node --test tests/domain.test.mjs",
-    "test:e2e": "node --test tests/e2e/workout.test.mjs tests/e2e/activities.test.mjs tests/e2e/coach.test.mjs tests/e2e/data.test.mjs",
-    "test:all": "npm test && npm run test:e2e",
-    "deploy": "gcloud run deploy gymbot --source . --project mygymbot --region me-west1 --quiet"
+    "test:server": "uv run pytest -q",
+    "test:e2e": "npm run build && node --test tests/e2e/workout.test.mjs tests/e2e/activities.test.mjs tests/e2e/coach.test.mjs tests/e2e/data.test.mjs",
+    "test:all": "npm test && npm run test:server && npm run test:e2e",
+    "deploy": "gcloud run deploy gymbot --source . --project=mygymbot --region=me-west1 --quiet"
   },
   "dependencies": {
-    "esbuild": "^0.23.1",
     "lucide-react": "0.383.0",
     "papaparse": "^5.4.1",
     "react": "^18.3.1",
@@ -21,6 +21,7 @@
     "recharts": "^2.12.7"
   },
   "devDependencies": {
+    "esbuild": "^0.23.1",
     "playwright": "^1.47.2"
   },
   "engines": {

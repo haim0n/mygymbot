@@ -1,4 +1,9 @@
 node_modules/
+.venv/
+__pycache__/
+.pytest_cache/
 .env
-# Your workout data and its backups (npm start / npm run dev). Never commit.
+# The bundle (npm run build)
+web/dist/
+# Your workout data and its backups (local runs). Never commit.
 data/

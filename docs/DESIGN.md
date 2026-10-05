@@ -19,7 +19,7 @@ Users: Haim and friends (dogfooding), later the public.
 
 Consequences: no server, no API costs for the creator, every user's data private to their account, no notifications while the app is closed, and no access to other users' data (including for migration).
 
-Haim's own copy runs the same file through `dev/server.mjs` on Cloud Run (`Dockerfile`, `npm run deploy`): `window.storage` becomes `gymbot.json` in a mounted, versioned bucket (also copied daily at startup), Claude calls go through the server with his API key, and a secret access link sets a cookie that every request must carry. One instance at most, so there's one writer; during a deploy the old and new revisions briefly overlap. Goals → Your data exports every `gymbot:*` key in that same file format, so a history can move from claude.ai to this copy.
+Haim's own copy runs the same file on Cloud Run behind a Python (FastAPI) server in `server/` (`Dockerfile`, `npm run deploy`): `window.storage` becomes `gymbot.json` in a mounted, versioned bucket (also copied daily at startup), the app's Claude calls are answered by Gemini on Vertex AI (`server/gemini.py` translates the Anthropic request and reply shapes, so the app is unchanged), and a secret access link sets a cookie that every request must carry. One instance at most, so there's one writer; during a deploy the old and new revisions briefly overlap. Goals → Your data exports every `gymbot:*` key in that same file format, so a history can move from claude.ai to this copy.
 
 ## 3. Data model
 
@@ -240,6 +240,8 @@ All JSON answers go through `askClaudeForJson`, which reads the outermost `{…}
 | Weekly target counts training days | A gym session and a swim on the same day are one day |
 | Explicit `distanceUnit` on every activity | Units can differ between sports and users |
 | Original simplified figures | Commercial exercise illustrations need a license |
+| Hosted backend in Python, front end stays JS | Haim works in Python; the app file must stay a JS artifact |
+| Gemini on Vertex AI for the hosted copy, behind the app's Claude request shape | Billed to the `mygymbot` project with no API key; the artifact keeps calling Claude unchanged |
 
 ## 9. Known limitations
 
@@ -254,4 +256,5 @@ All JSON answers go through `askClaudeForJson`, which reads the outermost `{…}
 ## 10. Testing
 
 - `npm test`: unit tests for Autopilot, equipment steps, rep-range stability, rest, import, muscle rules, video library, live workout, forecasts, schedule and check-ins, activities and highlights. `tests/load-app.mjs` bundles the app with an extra export line and empty stand-ins for UI libraries.
-- `npm run test:e2e`: Playwright on a Pixel 5-sized screen with a fixed clock (Sat 3 Oct 2026, 18:00), seeded storage, and a fake Claude that records requests. Storage is the dev server's, held in memory. Covers live workout (reorder, check-off, reload, finish), history edit, activities, check-in, video-tag resolution, the Today card and export.
+- `npm run test:server`: pytest for the backend: storage round-trip, daily backup, corrupt-file refusal, access gate, Claude-to-Gemini translation, and errors becoming 502 (no network).
+- `npm run test:e2e`: Playwright on a Pixel 5-sized screen with a fixed clock (Sat 3 Oct 2026, 18:00), seeded storage, and a fake Claude that records requests. Each test starts the Python server with its own seeded data file. Covers live workout (reorder, check-off, reload, finish), history edit, activities, check-in, video-tag resolution, the Today card and export.

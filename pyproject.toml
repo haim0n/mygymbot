@@ -1,0 +1,20 @@
+[project]
+name = "gymbot-server"
+version = "0.1.0"
+description = "Backend for Haim's hosted GymBot: serves the web app, stores its data and answers its AI calls with Gemini."
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.142.2",
+    "google-genai>=2.28.0",
+    "uvicorn>=0.54.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests/server"]
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.13.1",
+    "pytest>=9.1.1",
+]
