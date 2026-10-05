@@ -1,4 +1,4 @@
-"""The app's ``window.storage`` keys and values, kept in one JSON file."""
+"""The app's ``window.storage`` keys and values, kept in one JSON file per user."""
 
 import json
 import shutil
@@ -55,3 +55,19 @@ class Store:
         temporary = self.path.with_suffix(".tmp")
         temporary.write_text(json.dumps(self.data, indent=1))
         temporary.replace(self.path)
+
+
+@dataclass
+class Stores:
+    """One ``Store`` per user, ``<user>.json`` in ``directory``, opened on the user's first request."""
+
+    directory: Path
+    _open: dict[str, Store] = field(default_factory=dict, repr=False)
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    def for_user(self, user: str) -> Store:
+        """The store for ``user``, which must be safe as a file name."""
+        with self._lock:
+            if user not in self._open:
+                self._open[user] = Store.open(self.directory / f"{user}.json")
+            return self._open[user]

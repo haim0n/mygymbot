@@ -20,13 +20,12 @@ const freePort = () =>
     });
   });
 
-// The Python server on its own port, with `seed` as its data file, so tests never share data.
+// The Python server on its own port, with `seed` as the dev user's data, so tests never share data.
 async function startServer(seed) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "gymbot-test-"));
-  const dataFile = path.join(dir, "gymbot.json");
-  await writeFile(dataFile, JSON.stringify(seed));
+  await writeFile(path.join(dir, "dev.json"), JSON.stringify(seed));
   const port = await freePort();
-  const env = { ...process.env, PORT: String(port), GYMBOT_DATA_FILE: dataFile, GYMBOT_ACCESS_KEY: "" };
+  const env = { ...process.env, PORT: String(port), GYMBOT_DATA_DIR: dir, GYMBOT_IAP_AUDIENCE: "" };
   const server = spawn(path.join(ROOT, ".venv/bin/python"), ["-m", "server"], { cwd: ROOT, env, stdio: ["ignore", "ignore", "pipe"] });
   let log = "";
   server.stderr.on("data", (chunk) => (log += chunk));

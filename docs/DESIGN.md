@@ -19,7 +19,7 @@ Users: Haim and friends (dogfooding), later the public.
 
 Consequences: no server, no API costs for the creator, every user's data private to their account, no notifications while the app is closed, and no access to other users' data (including for migration).
 
-Haim's own copy runs the same file on Cloud Run behind a Python (FastAPI) server in `server/` (`Dockerfile`, `npm run deploy`): `window.storage` becomes `gymbot.json` in a mounted, versioned bucket (also copied daily at startup), the app's Claude calls are answered by Gemini on Vertex AI (`server/gemini.py` translates the Anthropic request and reply shapes, so the app is unchanged), and a secret access link sets a cookie that every request must carry. One instance at most, so there's one writer; during a deploy the old and new revisions briefly overlap. Goals → Your data exports every `gymbot:*` key in that same file format, so a history can move from claude.ai to this copy.
+Haim's own copy runs the same file on Cloud Run behind a Python (FastAPI) server in `server/` (`Dockerfile`, `npm run deploy`): `window.storage` becomes `<user>.json` in a mounted, versioned bucket (also copied daily at startup), the app's Claude calls are answered by Gemini on Vertex AI (`server/gemini.py` translates the Anthropic request and reply shapes, so the app is unchanged), and users sign in with Google through Identity-Aware Proxy, whose access list is the allowlist; the server verifies IAP's signed identity on every request and keeps one file per email, so storage is per user while the page and the AI are shared. One instance at most, so there's one writer; during a deploy the old and new revisions briefly overlap. Goals → Your data exports every `gymbot:*` key in that same file format, so a history can move from claude.ai to this copy.
 
 ## 3. Data model
 
@@ -242,6 +242,7 @@ All JSON answers go through `askClaudeForJson`, which reads the outermost `{…}
 | Original simplified figures | Commercial exercise illustrations need a license |
 | Hosted backend in Python, front end stays JS | Haim works in Python; the app file must stay a JS artifact |
 | Gemini on Vertex AI for the hosted copy, behind the app's Claude request shape | Billed to the `mygymbot` project with no API key; the artifact keeps calling Claude unchanged |
+| Hosted users: Google sign-in through IAP, IAP's IAM list as the allowlist, one data file per email | No login screen, passwords or user table to build; adding or removing someone is one IAM change; the app and its storage keys stay unchanged |
 
 ## 9. Known limitations
 

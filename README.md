@@ -17,19 +17,44 @@ npm run dev                          # http://localhost:5173, bundle rebuilds on
 
 ## Hosted copy (Cloud Run)
 
-Haim's own copy runs on Cloud Run (project `mygymbot`, region `me-west1`) from the `Dockerfile`; AI is Gemini on Vertex AI through the service account, and its data is `gymbot.json` in the private, versioned bucket `gs://mygymbot-data`. It lives at https://gymbot-83264737603.me-west1.run.app. Ship a change with `npm run deploy`. Open it once with the access link, `https://<service url>/?key=<key>`; the key is the `gymbot-access-key` secret.
+Haim's own copy runs on Cloud Run (project `mygymbot`, region `me-west1`) from the `Dockerfile`; AI is Gemini on Vertex AI through the service account, and each user's data is `<their email>.json` in the private, versioned bucket `gs://mygymbot-data`. It lives at https://gymbot-83264737603.me-west1.run.app. Ship a change with `npm run deploy`.
 
-To move a history out of claude.ai: Goals → Your data → Export data, save the text as `gymbot.json`, and `gcloud storage cp gymbot.json gs://mygymbot-data/gymbot.json --project=mygymbot`.
+Users sign in with their Google account through Identity-Aware Proxy (IAP). IAP's access list is the allowlist; the server checks IAP's signed identity on every request and gives each email its own file.
 
-One-time setup (done; later deploys are just `npm run deploy`, which keeps these settings):
+### Letting a friend in
+
+No deploy is needed, and it works for any Google account (Gmail or not).
+
+1. **Get the email of the Google account they'll sign in with.** It has to be exactly that account; any other one gets "You don't have access".
+2. **Bring their claude.ai history over (optional, and before their first visit).** They open GymBot on claude.ai, go to Goals → Your data → Export data, and send you the text. (Older copies on claude.ai have no Export button; share the current `src/gymbot.jsx` there first, see CLAUDE.md.) Save it as `<email>.json` (the email in lowercase) and upload it:
+   ```bash
+   gcloud storage cp FRIEND@gmail.com.json \
+     gs://mygymbot-data/FRIEND@gmail.com.json --project=mygymbot
+   ```
+   If they visit first, the app saves an empty profile to that file; check with them before overwriting it.
+3. **Add them to the access list:**
+   ```bash
+   gcloud iap web add-iam-policy-binding --project=mygymbot --region=me-west1 \
+     --resource-type=cloud-run --service=gymbot \
+     --member=user:FRIEND@gmail.com --role=roles/iap.httpsResourceAccessor
+   ```
+4. **Send them the address**, https://gymbot-83264737603.me-west1.run.app. They sign in with Google; access can take a minute or two to start working. On a phone, Add to Home Screen makes it feel like an app.
+
+Who has access now: `gcloud iap web get-iam-policy --project=mygymbot --region=me-west1 --resource-type=cloud-run --service=gymbot`.
+
+To lock someone out, run step 3 with `remove-iam-policy-binding` instead. Their file stays in the bucket, so adding them back restores everything.
+
+One-time setup (later deploys are just `npm run deploy`, which keeps these settings):
 
 ```bash
 gcloud storage buckets create gs://mygymbot-data --project=mygymbot --location=me-west1 --uniform-bucket-level-access --public-access-prevention
 gcloud storage buckets update gs://mygymbot-data --project=mygymbot --versioning   # plus a lifecycle rule: delete old versions after 30 days
-# secret gymbot-access-key; the compute service account gets secretAccessor on it, objectUser on the bucket, and aiplatform.user on the project
-gcloud run deploy gymbot --source . --project=mygymbot --region=me-west1 --max-instances=1 --allow-unauthenticated \
-  --execution-environment=gen2 --add-volume=name=data,type=cloud-storage,bucket=mygymbot-data --add-volume-mount=volume=data,mount-path=/data \
-  --set-secrets=GYMBOT_ACCESS_KEY=gymbot-access-key:latest
+# the compute service account gets objectUser on the bucket and aiplatform.user on the project
+# IAP: the project has no organization, so first create the OAuth consent screen (External, published) and a web OAuth client in the console
+# with redirect URI https://iap.googleapis.com/v1/oauth/clientIds/<client id>:handleRedirect (enable cloudresourcemanager.googleapis.com too),
+# then hand IAP the client with `gcloud iap settings set` (resource type cloud-run); the IAP service agent gets run.invoker on the service
+gcloud run deploy gymbot --source . --project=mygymbot --region=me-west1 --max-instances=1 --no-allow-unauthenticated --iap \
+  --execution-environment=gen2 --add-volume=name=data,type=cloud-storage,bucket=mygymbot-data --add-volume-mount=volume=data,mount-path=/data
 ```
 
 ## Tests

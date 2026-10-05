@@ -6,7 +6,7 @@ AI workout coach. The app is one React file that runs as a **Claude.ai artifact*
 
 ```bash
 npm install && npx playwright install chromium && uv sync   # once
-npm run dev          # http://localhost:5173: bundle rebuilds on save, Python server, data in data/dev.json
+npm run dev          # http://localhost:5173: bundle rebuilds on save, Python server, one user (dev), data in data/dev.json
 npm test             # JS unit tests for the app's pure logic (fast, no browser)
 npm run test:server  # Python tests for the backend (uv run pytest)
 npm run test:e2e     # builds, then browser tests on a Pixel 5-sized screen with a fake AI
@@ -17,7 +17,7 @@ npm run deploy       # ship to Haim's hosted copy on Cloud Run (only after npm r
 
 - `src/gymbot.jsx`: the whole app (JS, front end only).
 - `web/`: the page around it for the hosted copy (`index.html`, `main.jsx`, `shims.js` standing in for the artifact's `window.storage` and Claude API). Built to `web/dist/` by esbuild.
-- `server/`: the Python backend (FastAPI): serves `web/`, stores data (`storage.py`), answers AI calls with Gemini (`gemini.py`), and gates access (`app.py`). **Backend code is Python only.**
+- `server/`: the Python backend (FastAPI): serves `web/`, stores each user's data (`storage.py`), answers AI calls with Gemini (`gemini.py`), and identifies users from IAP (`iap.py`). **Backend code is Python only.**
 - `tests/`: `domain.test.mjs` (JS logic), `server/` (pytest), `e2e/` (Playwright driving the Python server).
 
 Run `npm test` after any logic change and `npm run test:all` before handing work back.
@@ -52,13 +52,13 @@ Each section starts with a `/* ──── Name ──── */` banner; search
 
 ## Haim's hosted copy (Cloud Run)
 
-Haim dogfoods the app on Cloud Run: service `gymbot`, project `mygymbot`, region `me-west1`, built from the `Dockerfile` (bundle with Node, serve with Python). `window.storage` is backed by `gymbot.json` in the bucket `gs://mygymbot-data` (mounted at `/data`, versioned, plus a daily copy in `backups/`). AI is Gemini (`GEMINI_MODEL` in `server/gemini.py`) on Vertex AI through the service account; no API key. Access needs the secret link (`/?key=…`, Secret Manager `gymbot-access-key`).
+Haim dogfoods the app on Cloud Run: service `gymbot`, project `mygymbot`, region `me-west1`, built from the `Dockerfile` (bundle with Node, serve with Python). `window.storage` is backed by one `<email>.json` per user in the bucket `gs://mygymbot-data` (mounted at `/data`, versioned, plus a daily copy in `backups/`). AI is Gemini (`GEMINI_MODEL` in `server/gemini.py`) on Vertex AI through the service account; no API key. Users sign in with Google through IAP; IAP's access list (`roles/iap.httpsResourceAccessor`, see README) is the allowlist, and the server verifies IAP's signed token (`server/iap.py`) and uses the email to pick the file. Changing who has access is Haim's step (README → Letting a friend in).
 
 - **`mygymbot` is the only GCP project to touch.** Pass `--project=mygymbot` literally on every gcloud call (the machine default is Haim's work project; `.claude/settings.json` also sets `CLOUDSDK_CORE_PROJECT`). Python passes the project and quota project explicitly.
-- `gs://mygymbot-data/gymbot.json` is his real workout history: read it freely (`gcloud storage cat`) to debug or tune; never write or delete it. Try changes with `npm run dev`.
-- Ship with `npm run deploy`, only after `npm run test:all` passes. It reuses the service's settings (volume, secret, one instance), so no extra flags.
-- After a deploy, smoke-check https://gymbot-83264737603.me-west1.run.app: 401 without the key, the access link answers 302, `/` and `/dist/app.js` load, and `/api/messages` returns a Gemini reply. Read the key into a shell variable (`gcloud secrets versions access latest --secret=gymbot-access-key --project=mygymbot`); never print it. Once real data is in the bucket, don't write test keys there.
-- Logs: `gcloud run services logs read gymbot --project=mygymbot --region=me-west1`. Earlier versions of the data (kept 30 days): `gcloud storage ls -a gs://mygymbot-data/gymbot.json --project=mygymbot`.
+- `gs://mygymbot-data/*.json` are real workout histories, one per email: read them freely (`gcloud storage cat`) to debug or tune; never write or delete it. Try changes with `npm run dev`.
+- Ship with `npm run deploy`, only after `npm run test:all` passes. It reuses the service's settings (volume, IAP, one instance), so no extra flags.
+- After a deploy, smoke-check https://gymbot-83264737603.me-west1.run.app: without signing in it redirects to Google sign-in, and the logs show the new revision started cleanly. Haim checks the signed-in app in his browser. Never write test keys to anyone's file.
+- Logs: `gcloud run services logs read gymbot --project=mygymbot --region=me-west1`. Earlier versions of the data (kept 30 days): `gcloud storage ls -a gs://mygymbot-data/ --project=mygymbot`.
 - Docker can't run on this machine (no socket access). To check the container builds without deploying, run `gcloud builds submit . --project=mygymbot --region=me-west1` with a config whose only step is `docker build`.
 
 ## Gemini notes
