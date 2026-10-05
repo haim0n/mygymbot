@@ -58,7 +58,7 @@ Haim dogfoods the app on Cloud Run: service `gymbot`, project `mygymbot`, region
 - `gs://mygymbot-data/*.json` are real workout histories, one per email: read them freely (`gcloud storage cat`) to debug or tune; never write or delete it. Try changes with `npm run dev`.
 - Ship with `npm run deploy`, only after `npm run test:all` passes. It reuses the service's settings (volume, IAP, one instance), so no extra flags.
 - After a deploy, smoke-check https://gymbot-83264737603.me-west1.run.app: without signing in it redirects to Google sign-in, and the logs show the new revision started cleanly. Haim checks the signed-in app in his browser. Never write test keys to anyone's file.
-- Logs: `gcloud run services logs read gymbot --project=mygymbot --region=me-west1`. Earlier versions of the data (kept 30 days): `gcloud storage ls -a gs://mygymbot-data/ --project=mygymbot`.
+- Logs: `gcloud run services logs read gymbot --project=mygymbot --region=me-west1`. Earlier versions of the data (the last 10 per file, up to 7 days old; every app save makes one): `gcloud storage ls -a 'gs://mygymbot-data/**' --project=mygymbot`. Daily copies in `backups/` are kept 30 days.
 - Docker can't run on this machine (no socket access). To check the container builds without deploying, run `gcloud builds submit . --project=mygymbot --region=me-west1` with a config whose only step is `docker build`.
 
 ## Gemini notes

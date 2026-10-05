@@ -48,7 +48,7 @@ One-time setup (later deploys are just `npm run deploy`, which keeps these setti
 
 ```bash
 gcloud storage buckets create gs://mygymbot-data --project=mygymbot --location=me-west1 --uniform-bucket-level-access --public-access-prevention
-gcloud storage buckets update gs://mygymbot-data --project=mygymbot --versioning   # plus a lifecycle rule: delete old versions after 30 days
+gcloud storage buckets update gs://mygymbot-data --project=mygymbot --versioning   # lifecycle: keep at most 10 old versions per file, for 7 days; daily backups/ for 30 days
 # the compute service account gets objectUser on the bucket and aiplatform.user on the project
 # IAP: the project has no organization, so first create the OAuth consent screen (External, published) and a web OAuth client in the console
 # with redirect URI https://iap.googleapis.com/v1/oauth/clientIds/<client id>:handleRedirect (enable cloudresourcemanager.googleapis.com too),
