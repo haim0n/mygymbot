@@ -17,11 +17,11 @@ npm run dev                          # http://localhost:5173, bundle rebuilds on
 
 ## Hosted copy (Cloud Run)
 
-Haim's own copy runs on Cloud Run (project `mygymbot`, region `me-west1`) from the `Dockerfile`; AI is Gemini on Vertex AI through the service account, and its data is `gymbot.json` in the private, versioned bucket `gs://mygymbot-data`. Ship a change with `npm run deploy`. Open it once with the access link, `https://<service url>/?key=<key>`; the key is the `gymbot-access-key` secret.
+Haim's own copy runs on Cloud Run (project `mygymbot`, region `me-west1`) from the `Dockerfile`; AI is Gemini on Vertex AI through the service account, and its data is `gymbot.json` in the private, versioned bucket `gs://mygymbot-data`. It lives at https://gymbot-83264737603.me-west1.run.app. Ship a change with `npm run deploy`. Open it once with the access link, `https://<service url>/?key=<key>`; the key is the `gymbot-access-key` secret.
 
 To move a history out of claude.ai: Goals → Your data → Export data, save the text as `gymbot.json`, and `gcloud storage cp gymbot.json gs://mygymbot-data/gymbot.json --project=mygymbot`.
 
-One-time setup (the bucket is done; the secret and first deploy are pending):
+One-time setup (done; later deploys are just `npm run deploy`, which keeps these settings):
 
 ```bash
 gcloud storage buckets create gs://mygymbot-data --project=mygymbot --location=me-west1 --uniform-bucket-level-access --public-access-prevention
