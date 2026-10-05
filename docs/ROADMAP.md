@@ -2,9 +2,8 @@
 
 ## Now: dogfooding with friends (claude.ai artifact)
 
-1. **Data export** (JSON of all `gymbot:*` keys) so friends' history can move to the standalone app later. Their data lives only in their own Claude accounts.
-2. **Feedback button.** Note: artifact *shared* storage is visible to every user, so either keep feedback non-sensitive or send people to an external form.
-3. Watch AI usage: coach, form checks, check-ins and the daily note count against each friend's own Claude plan; free plans hit limits sooner. Everything else is plain code.
+1. **Feedback button.** Note: artifact *shared* storage is visible to every user, so either keep feedback non-sensitive or send people to an external form.
+2. Watch AI usage: coach, form checks, check-ins and the daily note count against each friend's own Claude plan; free plans hit limits sooner. Everything else is plain code.
 
 ## Next: make the codebase easier to grow
 

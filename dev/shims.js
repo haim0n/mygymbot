@@ -1,23 +1,41 @@
-// Local stand-ins for what claude.ai gives an artifact. Dev only; nothing here ships in src/gymbot.jsx.
-//   window.storage  → localStorage, same keys and the same promise-based API.
-//   Claude API      → POST /api/messages on the dev server, which adds your API key server-side.
+// Local stand-ins for what claude.ai gives an artifact. Nothing here ships in src/gymbot.jsx.
+//   window.storage  → /api/storage on the server (a JSON file), same keys and the same promise-based API.
+//   Claude API      → POST /api/messages on the server, which adds your API key server-side.
+
+const storageUrl = (key) => `/api/storage/${encodeURIComponent(key)}`;
+
+// Reads wait out a dropped connection instead of failing: the app treats a failed read as "nothing stored yet"
+// and would then save its empty defaults over your data.
+async function read(url) {
+  for (;;) {
+    try {
+      const response = await fetch(url);
+      if (response.ok || response.status === 404) return response;
+    } catch {
+      // Offline or server restarting; try again.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+}
+
+async function write(url, init) {
+  const response = await fetch(url, init);
+  if (!response.ok) throw new Error(`Storage error ${response.status}`);
+}
 
 window.storage = {
   async get(key) {
-    const value = localStorage.getItem(key);
-    if (value === null) throw new Error(`No value stored for ${key}`); // the real API throws for missing keys too
-    return { key, value, shared: false };
+    const response = await read(storageUrl(key));
+    if (response.status === 404) throw new Error(`No value stored for ${key}`); // the real API throws for missing keys too
+    return { key, value: await response.text(), shared: false };
   },
   async set(key, value) {
-    localStorage.setItem(key, value);
+    await write(storageUrl(key), { method: "PUT", body: value });
     return { key, value, shared: false };
   },
   async delete(key) {
-    localStorage.removeItem(key);
+    await write(storageUrl(key), { method: "DELETE" });
     return { key, deleted: true, shared: false };
-  },
-  async list(prefix = "") {
-    return { keys: Object.keys(localStorage).filter((k) => k.startsWith(prefix)), prefix, shared: false };
   },
 };
 

@@ -6,7 +6,8 @@ AI workout coach (React). Today it runs as a **single-file Claude.ai artifact**,
 
 ```bash
 npm install && npx playwright install chromium   # once
-npm run dev        # http://localhost:5173, rebuilds on save. ANTHROPIC_API_KEY=... for real coach replies
+npm run dev        # http://localhost:5173, rebuilds on save, test data in data/dev.json. ANTHROPIC_API_KEY=... for real coach replies
+npm start          # http://localhost:8080, Haim's real data in data/gymbot.json; built once, so restart it to ship a change
 npm test           # unit tests for the pure logic (fast, no browser)
 npm run test:e2e   # browser tests on a Pixel 5-sized screen with a fake Claude
 ```
@@ -40,6 +41,10 @@ Run `npm test` after any logic change and `npm run test:all` before handing work
 Config · Prompts · Persistence · Claude client · Media · Dates & formatting · Training domain · Autopilot · Motivation · Muscles · Live workout · Schedule, check-ins & forecasts · Activities · Import · Coach context · UI primitives · Motivation UI · Muscle visuals · Video guides · Exercise thumbnails & details · Check-in · Activities UI · Coach · Log (Live workout UI, Import history) · Form check · Progress · Goals · Rest timer · App
 
 Each section starts with a `/* ──── Name ──── */` banner; search for it.
+
+## Haim's own copy (`npm start`)
+
+Haim dogfoods the app from this machine: `npm start` serves it with `window.storage` backed by `data/gymbot.json` (a daily copy goes to `data/backups/` at startup). That file is his real workout history: read it freely to debug or tune, never write to it or delete it, and use `npm run dev` (data/dev.json) to try changes. A change reaches his phone when `npm start` is restarted, so restart only after `npm run test:all` passes.
 
 ## Deploying a change to claude.ai
 

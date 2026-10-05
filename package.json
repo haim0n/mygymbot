@@ -6,8 +6,9 @@
   "description": "AI workout coach. Runs as a single-file Claude.ai artifact; this repo adds a local dev harness and tests.",
   "scripts": {
     "dev": "node dev/server.mjs",
+    "start": "node dev/server.mjs --live",
     "test": "node --test tests/domain.test.mjs",
-    "test:e2e": "node --test tests/e2e/workout.test.mjs tests/e2e/activities.test.mjs tests/e2e/coach.test.mjs",
+    "test:e2e": "node --test tests/e2e/workout.test.mjs tests/e2e/activities.test.mjs tests/e2e/coach.test.mjs tests/e2e/data.test.mjs",
     "test:all": "npm test && npm run test:e2e"
   },
   "dependencies": {

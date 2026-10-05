@@ -1,4 +1,4 @@
 node_modules/
-dev/app.js
-dev/app.js.map
 .env
+# Your workout data and its backups (npm start / npm run dev). Never commit.
+data/

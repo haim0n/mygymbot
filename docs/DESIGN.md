@@ -19,6 +19,8 @@ Users: Haim and friends (dogfooding), later the public.
 
 Consequences: no server, no API costs for the creator, every user's data private to their account, no notifications while the app is closed, and no access to other users' data (including for migration).
 
+Haim's own copy runs the same file through `dev/server.mjs` (`npm start`): `window.storage` becomes a JSON file on his machine (`data/gymbot.json`, backed up daily at startup) and Claude calls go through the server with his API key. Goals → Your data exports every `gymbot:*` key in that same file format, so a history can move from claude.ai to this copy.
+
 ## 3. Data model
 
 All dates are local `YYYY-MM-DD` strings. Weights are stored in the unit chosen when they were logged (`kg` or `lb`); dumbbell weights are per dumbbell; `0` means bodyweight.
@@ -216,7 +218,7 @@ All JSON answers go through `askClaudeForJson`, which reads the outermost `{…}
 - **Log:** Import history (toggle) · Session saved · check-in card · coach reply · Workout or Start a workout · Log an activity · Up next · Add exercises (describe in words, or manual) · History (folded).
 - **Form:** exercise, focus note, file picker, frames, feedback, past checks.
 - **Progress:** stats · Activities (last 7 days) · muscle heatmap · estimated 1RM chart with trend line · weekly volume · best lifts.
-- **Goals:** goal cards (barbell loaded with plates you've lifted, forecast) · new goal · About you (units, bodyweight, experience, sessions per week, training days, usual time, food preferences, coaching style, main focus, injuries and equipment).
+- **Goals:** goal cards (barbell loaded with plates you've lifted, forecast) · new goal · About you (units, bodyweight, experience, sessions per week, training days, usual time, food preferences, coaching style, main focus, injuries and equipment). · Your data (export as text)
 - **Everywhere:** rest timer bar (top), tab bar with a dot while a workout is in progress, exercise details sheet.
 
 ## 8. Decision log
@@ -242,14 +244,14 @@ All JSON answers go through `askClaudeForJson`, which reads the outermost `{…}
 ## 9. Known limitations
 
 - **No notifications** while the app is closed (it's a web artifact). Calendar reminders are the workaround.
+- **Hosted copy: a save that fails offline is only retried by the next change.** Losing signal and then closing the tab loses what was logged since the last successful save.
 - **Changing kg/lb doesn't convert** past entries.
 - **Activities can't be edited** (delete and re-log).
 - **Video links weren't verified as still online.** YouTube blocks automated checks. Each is one line in `VIDEO_LIBRARY`.
 - **Forecasts are straight lines** and get optimistic as gains slow.
-- **No data export yet.** Friends' data lives only in their Claude accounts.
 - **Simplified body figure:** 14 muscle groups, and it doesn't show the movement itself.
 
 ## 10. Testing
 
 - `npm test`: unit tests for Autopilot, equipment steps, rep-range stability, rest, import, muscle rules, video library, live workout, forecasts, schedule and check-ins, activities and highlights. `tests/load-app.mjs` bundles the app with an extra export line and empty stand-ins for UI libraries.
-- `npm run test:e2e`: Playwright on a Pixel 5-sized screen with a fixed clock (Sat 3 Oct 2026, 18:00), seeded storage, and a fake Claude that records requests. Covers live workout (reorder, check-off, reload, finish), history edit, activities, check-in, video-tag resolution and the Today card.
+- `npm run test:e2e`: Playwright on a Pixel 5-sized screen with a fixed clock (Sat 3 Oct 2026, 18:00), seeded storage, and a fake Claude that records requests. Storage is the dev server's, held in memory. Covers live workout (reorder, check-off, reload, finish), history edit, activities, check-in, video-tag resolution, the Today card and export.

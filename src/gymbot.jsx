@@ -335,6 +335,20 @@ function usePersistentState(key, initialValue) {
   return [value, setValue, loaded];
 }
 
+// Every stored key as one JSON object, so a history can move to another copy of the app.
+async function exportAllData() {
+  const entries = await Promise.all(
+    Object.values(STORAGE_KEYS).map(async (key) => {
+      try {
+        return [key, JSON.parse((await window.storage.get(key, false)).value)];
+      } catch {
+        return null; // never stored
+      }
+    })
+  );
+  return JSON.stringify(Object.fromEntries(entries.filter(Boolean)));
+}
+
 /* ───────────────────────────── Claude client ───────────────────────────── */
 
 async function callClaude({ system, messages, tools }) {
@@ -3323,7 +3337,47 @@ function GoalsView({ settings, setSettings, records, workouts }) {
           </Field>
         </div>
       </Panel>
+
+      <ExportPanel />
     </div>
+  );
+}
+
+// Shows the export as text: downloads and clipboard access can be blocked inside the artifact sandbox.
+function ExportPanel() {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  async function exportData() {
+    setBusy(true);
+    setError("");
+    try {
+      setText(await exportAllData());
+    } catch {
+      setError("Couldn't read your data. Try again.");
+    }
+    setBusy(false);
+  }
+
+  function copy() {
+    navigator.clipboard
+      .writeText(text)
+      .then(() => setCopied(true))
+      .catch(() => setError("Copying isn't allowed here. Tap the text, select all and copy it."));
+  }
+
+  return (
+    <Panel className="space-y-3">
+      <div>
+        <SectionTitle>Your data</SectionTitle>
+        <p className="-mt-1 text-sm text-zinc-500">Everything you've logged, as text you can keep or move to another copy of GymBot.</p>
+      </div>
+      {text && <textarea readOnly rows={6} value={text} onFocus={(e) => e.target.select()} aria-label="Exported data" className={inputClass} />}
+      {text ? <PrimaryButton onClick={copy}>{copied ? "Copied" : "Copy"}</PrimaryButton> : <PrimaryButton onClick={exportData} busy={busy}>Export data</PrimaryButton>}
+      <ErrorText message={error} />
+    </Panel>
   );
 }
 
