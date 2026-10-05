@@ -7,7 +7,7 @@ AI workout coach (React). Today it runs as a **single-file Claude.ai artifact**,
 ```bash
 npm install && npx playwright install chromium   # once
 npm run dev        # http://localhost:5173, rebuilds on save, test data in data/dev.json. ANTHROPIC_API_KEY=... for real coach replies
-npm start          # http://localhost:8080, Haim's real data in data/gymbot.json; built once, so restart it to ship a change
+npm run deploy     # ship to Haim's hosted copy on Cloud Run (only after npm run test:all passes)
 npm test           # unit tests for the pure logic (fast, no browser)
 npm run test:e2e   # browser tests on a Pixel 5-sized screen with a fake Claude
 ```
@@ -42,9 +42,13 @@ Config · Prompts · Persistence · Claude client · Media · Dates & formatting
 
 Each section starts with a `/* ──── Name ──── */` banner; search for it.
 
-## Haim's own copy (`npm start`)
+## Haim's hosted copy (Cloud Run)
 
-Haim dogfoods the app from this machine: `npm start` serves it with `window.storage` backed by `data/gymbot.json` (a daily copy goes to `data/backups/` at startup). That file is his real workout history: read it freely to debug or tune, never write to it or delete it, and use `npm run dev` (data/dev.json) to try changes. A change reaches his phone when `npm start` is restarted, so restart only after `npm run test:all` passes.
+Haim dogfoods the app on Cloud Run: service `gymbot`, project `mygymbot`, region `me-west1`. It runs `dev/server.mjs --live` from the `Dockerfile`, with `window.storage` backed by `gymbot.json` in the bucket `gs://mygymbot-data` (mounted at `/data`, versioned, plus a daily copy in `backups/`). Access needs the secret link (`/?key=…`, Secret Manager `gymbot-access-key`).
+
+- **Always pass `--project=mygymbot`** to gcloud: the default project on this machine is Haim's work project.
+- `gs://mygymbot-data/gymbot.json` is his real workout history: read it freely (`gcloud storage cat`) to debug or tune; never write or delete it. Try changes with `npm run dev`.
+- Ship with `npm run deploy`, only after `npm run test:all` passes.
 
 ## Deploying a change to claude.ai
 

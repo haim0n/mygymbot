@@ -2,9 +2,12 @@
 //   npm run dev    → http://localhost:5173, rebuilds on save, test data in data/dev.json
 //   npm start      → http://localhost:8080, built once at start, your real data in data/gymbot.json
 //   ANTHROPIC_API_KEY=sk-... → real coach replies (the key never reaches the browser)
-//   HOST=...       → address to listen on (default 127.0.0.1: this machine only). Anyone who can reach
-//                    another address can use your API key and data, so only pick one behind Tailscale or similar.
+//   HOST=...       → address to listen on (default 127.0.0.1: this machine only). Any other address needs
+//                    GYMBOT_ACCESS_KEY, since whoever reaches the server can use your API key and data.
+//   GYMBOT_ACCESS_KEY=... → only browsers that opened /?key=<key> once get in
+//   GYMBOT_DATA_DIR=...   → where the data files go (default data/; on Cloud Run, the mounted bucket)
 // Without a key, every Claude call gets a short placeholder reply, so the app still runs.
+import { createHash, timingSafeEqual } from "node:crypto";
 import http from "node:http";
 import { constants, copyFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -110,7 +113,7 @@ async function handleStorage(store, request, response, url) {
 
 async function proxyToClaude(request, response) {
   const body = await readBody(request);
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim(); // a pasted key often carries a newline
   if (!apiKey) {
     response.writeHead(200, { "content-type": "application/json" });
     response.end(JSON.stringify({ content: [{ type: "text", text: PLACEHOLDER_REPLY }] }));
@@ -123,6 +126,27 @@ async function proxyToClaude(request, response) {
   });
   response.writeHead(upstream.status, { "content-type": "application/json" });
   response.end(await upstream.text());
+}
+
+const LOOPBACK_HOSTS = ["127.0.0.1", "localhost", "::1"];
+const digest = (text) => createHash("sha256").update(text).digest();
+const isAccessKey = (text, accessKey) => Boolean(text) && timingSafeEqual(digest(text), digest(accessKey));
+
+// The access link (/?key=…) is opened once; after that the key travels in a cookie, so every request is checked.
+// Returns true when the request was answered here.
+function guard(request, response, url, accessKey) {
+  if (isAccessKey(url.searchParams.get("key"), accessKey)) {
+    response.writeHead(302, {
+      location: "/",
+      "set-cookie": `gymbot_access=${accessKey}; Path=/; Max-Age=34560000; HttpOnly; Secure; SameSite=Lax`, // 400 days, the browser maximum
+    });
+    response.end();
+    return true;
+  }
+  const cookie = request.headers.cookie?.match(/(?:^|;\s*)gymbot_access=([^;]+)/)?.[1];
+  if (isAccessKey(cookie, accessKey)) return false;
+  response.writeHead(401, { "content-type": "text/plain" }).end("Open GymBot with your access link.");
+  return true;
 }
 
 async function serveFile(url, response) {
@@ -143,12 +167,14 @@ async function serveFile(url, response) {
 }
 
 // `dataFile` null keeps data in memory, starting from `seed` (tests).
-export async function startServer({ port = 5173, host = "127.0.0.1", watch = false, dataFile = null, seed } = {}) {
+export async function startServer({ port = 5173, host = "127.0.0.1", watch = false, dataFile = null, seed, accessKey } = {}) {
+  if (!accessKey && !LOOPBACK_HOSTS.includes(host)) throw new Error(`Listening on ${host} needs GYMBOT_ACCESS_KEY`);
   buildOnce ??= build({ watch });
   await buildOnce;
   const store = await openStore(dataFile, seed);
   const route = (request, response) => {
     const url = new URL(request.url, "http://localhost");
+    if (accessKey && guard(request, response, url, accessKey)) return Promise.resolve();
     if (url.pathname.startsWith("/api/storage/")) return handleStorage(store, request, response, url);
     if (request.method === "POST" && url.pathname === "/api/messages") return proxyToClaude(request, response);
     return serveFile(url, response);
@@ -168,7 +194,13 @@ export async function startServer({ port = 5173, host = "127.0.0.1", watch = fal
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const live = process.argv.includes("--live"); // npm start: your real data, no rebuilds until restarted
-  const dataFile = path.join(ROOT, "data", live ? "gymbot.json" : "dev.json");
-  const { url } = await startServer({ port: Number(process.env.PORT) || (live ? 8080 : 5173), host: process.env.HOST, watch: !live, dataFile });
-  console.log(`GymBot: ${url}  data: ${path.relative(ROOT, dataFile)}${process.env.ANTHROPIC_API_KEY ? "" : "  (no ANTHROPIC_API_KEY: placeholder coach replies)"}`);
+  const dataFile = path.join(process.env.GYMBOT_DATA_DIR ?? path.join(ROOT, "data"), live ? "gymbot.json" : "dev.json");
+  const { url } = await startServer({
+    port: Number(process.env.PORT) || (live ? 8080 : 5173),
+    host: process.env.HOST,
+    watch: !live,
+    dataFile,
+    accessKey: process.env.GYMBOT_ACCESS_KEY?.trim(),
+  });
+  console.log(`GymBot: ${url}  data: ${dataFile}${process.env.ANTHROPIC_API_KEY ? "" : "  (no ANTHROPIC_API_KEY: placeholder coach replies)"}`);
 }

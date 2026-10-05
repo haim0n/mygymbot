@@ -19,7 +19,7 @@ Users: Haim and friends (dogfooding), later the public.
 
 Consequences: no server, no API costs for the creator, every user's data private to their account, no notifications while the app is closed, and no access to other users' data (including for migration).
 
-Haim's own copy runs the same file through `dev/server.mjs` (`npm start`): `window.storage` becomes a JSON file on his machine (`data/gymbot.json`, backed up daily at startup) and Claude calls go through the server with his API key. Goals → Your data exports every `gymbot:*` key in that same file format, so a history can move from claude.ai to this copy.
+Haim's own copy runs the same file through `dev/server.mjs` on Cloud Run (`Dockerfile`, `npm run deploy`): `window.storage` becomes `gymbot.json` in a mounted, versioned bucket (also copied daily at startup), Claude calls go through the server with his API key, and a secret access link sets a cookie that every request must carry. One instance at most, so there's one writer; during a deploy the old and new revisions briefly overlap. Goals → Your data exports every `gymbot:*` key in that same file format, so a history can move from claude.ai to this copy.
 
 ## 3. Data model
 

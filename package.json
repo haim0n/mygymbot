@@ -9,9 +9,11 @@
     "start": "node dev/server.mjs --live",
     "test": "node --test tests/domain.test.mjs",
     "test:e2e": "node --test tests/e2e/workout.test.mjs tests/e2e/activities.test.mjs tests/e2e/coach.test.mjs tests/e2e/data.test.mjs",
-    "test:all": "npm test && npm run test:e2e"
+    "test:all": "npm test && npm run test:e2e",
+    "deploy": "gcloud run deploy gymbot --source . --project mygymbot --region me-west1 --quiet"
   },
   "dependencies": {
+    "esbuild": "^0.23.1",
     "lucide-react": "0.383.0",
     "papaparse": "^5.4.1",
     "react": "^18.3.1",
@@ -19,7 +21,6 @@
     "recharts": "^2.12.7"
   },
   "devDependencies": {
-    "esbuild": "^0.23.1",
     "playwright": "^1.47.2"
   },
   "engines": {
