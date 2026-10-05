@@ -1,0 +1,27 @@
+{
+  "name": "gymbot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AI workout coach. Runs as a single-file Claude.ai artifact; this repo adds a local dev harness and tests.",
+  "scripts": {
+    "dev": "node dev/server.mjs",
+    "test": "node --test tests/domain.test.mjs",
+    "test:e2e": "node --test tests/e2e/workout.test.mjs tests/e2e/activities.test.mjs tests/e2e/coach.test.mjs",
+    "test:all": "npm test && npm run test:e2e"
+  },
+  "dependencies": {
+    "lucide-react": "0.383.0",
+    "papaparse": "^5.4.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.12.7"
+  },
+  "devDependencies": {
+    "esbuild": "^0.23.1",
+    "playwright": "^1.47.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
