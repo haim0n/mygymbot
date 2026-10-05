@@ -56,7 +56,25 @@ Haim dogfoods the app on Cloud Run: service `gymbot`, project `mygymbot`, region
 
 - **`mygymbot` is the only GCP project to touch.** Pass `--project=mygymbot` literally on every gcloud call (the machine default is Haim's work project; `.claude/settings.json` also sets `CLOUDSDK_CORE_PROJECT`). Python passes the project and quota project explicitly.
 - `gs://mygymbot-data/gymbot.json` is his real workout history: read it freely (`gcloud storage cat`) to debug or tune; never write or delete it. Try changes with `npm run dev`.
-- Ship with `npm run deploy`, only after `npm run test:all` passes.
+- Ship with `npm run deploy`, only after `npm run test:all` passes. It reuses the service's settings (volume, secret, one instance), so no extra flags.
+- After a deploy, smoke-check https://gymbot-83264737603.me-west1.run.app: 401 without the key, the access link answers 302, `/` and `/dist/app.js` load, and `/api/messages` returns a Gemini reply. Read the key into a shell variable (`gcloud secrets versions access latest --secret=gymbot-access-key --project=mygymbot`); never print it. Once real data is in the bucket, don't write test keys there.
+- Logs: `gcloud run services logs read gymbot --project=mygymbot --region=me-west1`. Earlier versions of the data (kept 30 days): `gcloud storage ls -a gs://mygymbot-data/gymbot.json --project=mygymbot`.
+- Docker can't run on this machine (no socket access). To check the container builds without deploying, run `gcloud builds submit . --project=mygymbot --region=me-west1` with a config whose only step is `docker build`.
+
+## Gemini notes
+
+- `gemini-3.8-flash` at location `global`. Newer models: list `publishers/google/models` on `aiplatform.googleapis.com/v1beta1` with a gcloud access token and `x-goog-user-project: mygymbot`.
+- `thinking_level="minimal"` is rejected; `"low"` is the floor. Thinking takes roughly 300 to 500 tokens on top of the answer, which is why the server ignores the app's `max_tokens: 1000` and uses `MAX_OUTPUT_TOKENS`.
+- Gemini wraps JSON answers in code fences; `askClaudeForJson` already cuts to the outermost `{…}`.
+- With Google credentials on this machine, `npm run dev` makes real Gemini calls, billed to `mygymbot`.
+
+## Working with Haim
+
+- **Commit only when he says "commit"**: one commit per logical step, with a body listing what changed. Ask before creating anything billable or outward-facing.
+- **He handles secrets himself** (creating them and changing who can read them; auto mode blocks those for Claude Code). Hand him the command, then verify the result read-only before continuing.
+- **Commands for him to paste**: long single lines get split when pasted, so break them with a trailing `\`. For `! command`, the `!` must be the very first character, or it arrives as a chat message and nothing runs.
+- **The shell is zsh**: an unquoted `$VAR` holding several words is passed as one argument. Write flags literally (a `--project` flag kept in a variable once created a bucket in his work project).
+- **Verify, don't assume**: esbuild strips comments, so test a rebuild with a real code change; check cloud results by reading them back.
 
 ## Deploying a change to claude.ai
 
