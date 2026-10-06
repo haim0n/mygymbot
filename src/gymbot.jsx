@@ -89,6 +89,7 @@ const VOLUME_LEVELS = [
   { min: 0.5, color: "#bfdbfe", label: "Under 5 sets" },
 ];
 const MAX_EXERCISES_PER_CLASSIFICATION = 20; // keeps the coach's JSON answer well inside its length limit
+const INJURY_READ_DELAY_MS = 2000; // wait until typing in "Injuries and equipment" pauses before asking which muscles it affects
 
 // Exercise name → muscles, checked in order, so specific patterns come first. Unmatched names are classified by the coach.
 const MUSCLE_RULES = [
@@ -261,8 +262,8 @@ const COACH_PROMPT = `You are GymBot, a direct, knowledgeable strength coach.
 Base every answer on the athlete's data below and cite specific dates, weights and reps.
 Replies are read on a phone: keep them short, use "- " bullets and **bold** for key numbers.
 If the data can't answer the question, say exactly what to log.
-When planning a session, use the autopilot targets unless something the athlete told you (RECENT PAIN, athlete notes, check-in notes, this chat) gives a reason to change them, and say what you changed and why.
-Reported pain always changes the plan: lighten, swap or skip exercises that load the sore area, and ask how it feels now.
+When planning a session, use the autopilot targets unless something the athlete told you (check-in notes, the athlete's profile, this chat) gives a reason to change them, and say what you changed and why.
+Pain and injuries (RECENT PAIN, INJURIES AND EQUIPMENT, this chat) always change the plan: lighten, swap or skip exercises that load the sore area, and ask how it feels now.
 Match the coaching style given in the athlete profile.
 The athlete may also run, swim, cycle or do yoga and Pilates. Count those in recovery, planning and food advice (for example, a hard run the day before heavy squats).
 For food questions, suggest simple meals and snacks that fit the athlete's food preferences and today's training: carbs around training, protein spread over the day (about 1.6-2.2 g per kg of bodyweight suits strength and muscle goals). No crash diets or very low-calorie advice; for medical conditions, allergies or eating concerns, keep it general and suggest a registered dietitian.
@@ -289,11 +290,16 @@ const MUSCLE_CLASSIFIER_PROMPT = `Classify which muscles each exercise (one per 
 Use only these muscle ids: chest, shoulders, biceps, triceps, forearms, core, traps, lats, upperBack, lowerBack, glutes, quads, hamstrings, calves.
 1-2 primary muscles and up to 3 secondary. Use the exercise names exactly as given.`;
 
+const INJURY_AREAS_PROMPT = `Below is an athlete's note about their injuries and equipment. Which muscles does a current injury or pain affect?
+Respond with compact single-line JSON only, no prose or backticks: {"muscles":[muscle,...]}
+Use only these muscle ids: ${MUSCLES.join(", ")}.
+Ignore equipment, and injuries described as fully healed. Use an empty list when nothing hurts now.`;
+
 const MOTIVATION_PROMPT = `You are GymBot, the athlete's strength coach. Write today's motivation note: 1-2 sentences, under 40 words, plain text.
 Build it on one specific fact from the data: a recent best, a streak, a lift going up next time, a goal getting close, or time since the last session.
 No generic quotes, emojis or hashtags. Never guilt or shame; if they've been away, make coming back feel easy.
 If a workout is planned today and not done yet, make the note a short pep talk for that session that names one specific target from the autopilot targets.
-If RECENT PAIN is listed, don't push for more weight; acknowledge it and encourage an easy, pain-free session instead.`;
+If RECENT PAIN or an injury is listed, don't push for more weight on that area; acknowledge it and encourage a pain-free session instead.`;
 
 const CHECK_IN_PROMPT = `You are GymBot, the athlete's strength coach, checking in after a workout. Reply in 3-4 short sentences, plain text.
 Acknowledge how it felt and mention one specific thing from the session. Give one recovery tip and one meal or snack idea that fits their food preferences.
@@ -662,7 +668,7 @@ function workingSetHistory(workouts, name) {
   });
 }
 
-function prescribe(history, [min, max], step) {
+function prescribe(history, [min, max], step, injuredMuscle) {
   const last = history.at(-1);
   const previous = history.at(-2);
   const sets = last.reps.length;
@@ -677,6 +683,8 @@ function prescribe(history, [min, max], step) {
   // ponytail: the check-in doesn't ask where it hurt, so pain holds every lift of that session; a body-area question would narrow it.
   if (last.pain && last.pain !== "No")
     return plan("hold", Math.min(max, Math.max(min, lowestReps)), last.weight, "You reported pain after the last session. Keep the weight until it's gone.");
+  if (injuredMuscle)
+    return plan("hold", Math.min(max, Math.max(min, lowestReps)), last.weight, `Easy on your ${MUSCLE_LABELS[injuredMuscle].toLowerCase()} (injuries in your profile). Keep the weight.`);
   if (lowestReps >= max) return plan("increase", min, nextWeightUp(last.weight, step), `Every set reached ${max} reps.`);
   if (!missedRange(last)) return plan("reps", Math.min(max, lowestReps + 1), last.weight, `Stay at this weight until every set reaches ${max}.`);
   if (previous && previous.weight === last.weight && missedRange(previous) && last.weight > 0)
@@ -689,18 +697,25 @@ function restSeconds(exerciseName, [, maxReps]) {
   return equipmentOf(exerciseName) === "bigBarbell" ? base + BIG_LIFT_EXTRA_REST : base;
 }
 
-function buildAutopilotPlans(workouts, { profile, repRanges = {} }) {
+// Muscles the profile's injury note affects, once read for the note as it is now; [] while it's being read.
+const injuredMuscles = ({ profile, injuryAreas }) => (injuryAreas && injuryAreas.notes === (profile.notes ?? "").trim() ? injuryAreas.muscles : []);
+
+function buildAutopilotPlans(workouts, settings, learnedMuscles = {}) {
+  const { profile, repRanges = {} } = settings;
+  const injured = injuredMuscles(settings);
   return exercisesByFrequency(workouts)
     .map((name) => ({ name, history: workingSetHistory(workouts, name) }))
     .filter(({ history }) => daysBetween(history.at(-1).date, today()) <= PLAN_LOOKBACK_DAYS)
     .map(({ name, history }) => {
       const range = repRanges[name] ?? inferRepRange(history); // a range you picked always wins
+      const muscles = musclesFor(name, learnedMuscles);
+      const injuredMuscle = muscles && [...muscles.primary, ...muscles.secondary].find((m) => injured.includes(m));
       return {
         name,
         range,
         rest: restSeconds(name, range),
         last: history.at(-1),
-        ...prescribe(history, range, weightStep(name, profile.unit)),
+        ...prescribe(history, range, weightStep(name, profile.unit), injuredMuscle),
       };
     });
 }
@@ -1295,7 +1310,7 @@ function buildCoachContext({ profile, goals }, workouts, plans, learnedMuscles, 
   return [
     `Today is ${today()}. Weights are in ${u}, written weight x reps; dumbbell weights are per dumbbell.`,
     `ATHLETE: ${profile.experience}, bodyweight ${profile.bodyweight || "unknown"}${u}, ${schedule}, focus: ${profile.focus}, coaching style: ${COACH_STYLES[profile.coachStyle ?? DEFAULT_SETTINGS.profile.coachStyle]}.`,
-    profile.notes && `ATHLETE NOTES: ${profile.notes}`,
+    profile.notes && `INJURIES AND EQUIPMENT (from the athlete's profile; plan around these): ${profile.notes}`,
     profile.foodNotes && `FOOD PREFERENCES: ${profile.foodNotes}`,
     pain.length > 0 && `RECENT PAIN (from post-workout check-ins; adapt plans around it):\n${pain.join("\n")}`,
     `TODAY: ${todayLine}.`,
@@ -1654,6 +1669,24 @@ function useLearnedMuscles({ enabled, exerciseNames }) {
   }, [enabled, learnedLoaded, key]);
 
   return learned;
+}
+
+// Reads the profile's injury note into muscles once per version of the note, for Autopilot to go easy on.
+function useInjuryAreas({ enabled, settings, setSettings }) {
+  const notes = (settings.profile.notes ?? "").trim();
+  const isRead = settings.injuryAreas?.notes === notes;
+  const requestedNotes = useRef(null);
+
+  useEffect(() => {
+    if (!enabled || !notes || isRead || requestedNotes.current === notes) return; // an empty note holds nothing (see injuredMuscles)
+    const timer = setTimeout(() => {
+      requestedNotes.current = notes;
+      askClaudeForJson(INJURY_AREAS_PROMPT, notes)
+        .then((result) => setSettings((s) => ({ ...s, injuryAreas: { notes, muscles: sanitizeMuscles({ primary: result.muscles }).primary } })))
+        .catch(() => {}); // the coach still reads the note; Autopilot just doesn't hold anything
+    }, INJURY_READ_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [enabled, isRead, notes]);
 }
 
 function MuscleHeatmap({ workouts, learned }) {
@@ -3351,6 +3384,11 @@ function GoalsView({ settings, setSettings, records, workouts }) {
               placeholder="Home gym with a rack and dumbbells up to 30 kg. Left shoulder gets cranky on overhead work."
               className={inputClass}
             />
+            {injuredMuscles(settings).length > 0 && (
+              <p className="mt-1 text-sm text-zinc-500">
+                Autopilot keeps the weight on lifts that work your {joinWords(injuredMuscles(settings).map((m) => MUSCLE_LABELS[m].toLowerCase()))}.
+              </p>
+            )}
           </Field>
         </div>
       </Panel>
@@ -3551,12 +3589,13 @@ export default function GymBot() {
 
   const records = useMemo(() => personalRecords(workouts), [workouts]);
   const exerciseNames = useMemo(() => exercisesByFrequency(workouts), [workouts]);
-  const plans = useMemo(() => buildAutopilotPlans(workouts, settings), [workouts, settings]);
 
   const setRepRange = (name, range) => setSettings((s) => ({ ...s, repRanges: { ...s.repRanges, [name]: range } }));
 
   const loaded = workoutsLoaded && settingsLoaded && chatLoaded && formChecksLoaded && sessionLoaded;
   const learnedMuscles = useLearnedMuscles({ enabled: loaded, exerciseNames });
+  useInjuryAreas({ enabled: loaded, settings, setSettings });
+  const plans = useMemo(() => buildAutopilotPlans(workouts, settings, learnedMuscles), [workouts, settings, learnedMuscles]);
   const exerciseContext = useMemo(() => ({ learnedMuscles, showDetails: setDetailsFor }), [learnedMuscles]);
   const coachContext = useMemo(
     () => buildCoachContext(settings, workouts, plans, learnedMuscles, session),

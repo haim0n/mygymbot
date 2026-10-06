@@ -69,6 +69,19 @@ test("Autopilot: pain reported after the last session holds the weight instead o
   assert.equal(statusWith(null).status, "increase");
 });
 
+test("Autopilot: lifts that work a muscle hurt per the profile's injury note hold the weight", () => {
+  const log = [workout("1", daysAgo(3), [ex("Bench Press", [[80, 8], [80, 8]]), ex("Back Squat", [[100, 8], [100, 8]])])];
+  const ranges = { "Bench Press": [5, 8], "Back Squat": [5, 8] };
+  const withNote = (notes, injuryAreas) => ({ ...settingsWith(ranges), profile: { unit: "kg", notes }, injuryAreas });
+  const shoulder = app.buildAutopilotPlans(log, withNote("Left shoulder sore", { notes: "Left shoulder sore", muscles: ["shoulders"] }));
+  assert.equal(planFor(shoulder, "Bench Press").status, "hold"); // shoulders help on bench
+  assert.equal(planFor(shoulder, "Back Squat").status, "increase");
+  assert.match(shoulder.find((p) => p.name === "Bench Press").reason, /Easy on your shoulders/);
+  // A note changed since it was read (here: the injury is gone) holds nothing until it's read again.
+  const stale = app.buildAutopilotPlans(log, withNote("", { notes: "Left shoulder sore", muscles: ["shoulders"] }));
+  assert.equal(planFor(stale, "Bench Press").status, "increase");
+});
+
 test("Coach context: pain from recent check-ins is listed up front, older or pain-free ones aren't", () => {
   const settings = { profile: { unit: "kg", experience: "Intermediate", daysPerWeek: 3, focus: "Strength", coachStyle: "Encouraging" }, goals: [] };
   const workouts = [

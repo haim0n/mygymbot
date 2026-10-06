@@ -54,3 +54,22 @@ test("today card: planned workout first, and the daily note becomes a pep talk",
   assert.ok(note.messages[0].content.includes("Workout planned today at 20:00"));
   assert.deepEqual(errors, []);
 });
+
+test("injuries: the profile note is read into muscles, and Autopilot holds the lifts that work them", async (t) => {
+  const { page, errors, claudeRequests } = await openApp(t, {
+    seed: { "gymbot:workouts": [userWorkout] },
+    claude: (body) => (body.system.startsWith("Below is an athlete's note") ? '{"muscles":["shoulders","nonsense"]}' : "OK"),
+  });
+  await page.getByRole("button", { name: "Goals", exact: true }).tap();
+  await page.getByPlaceholder(/Left shoulder gets cranky/).fill("Left shoulder sore since last week");
+  await page.getByText("Autopilot keeps the weight on lifts that work your shoulders.").waitFor();
+  assert.equal(claudeRequests.filter((b) => b.system.startsWith("Below is an athlete's note")).length, 1); // once, after typing stopped
+  await settle(page);
+  assert.deepEqual((await stored(page, "gymbot:settings")).injuryAreas, { notes: "Left shoulder sore since last week", muscles: ["shoulders"] });
+
+  await page.getByRole("button", { name: /^Log/ }).tap();
+  const bench = page.locator("li", { hasText: "Bench Press (Dumbbell)" }).first();
+  await bench.getByText("Hold for pain").waitFor();
+  assert.match(await bench.innerText(), /Easy on your shoulders/);
+  assert.deepEqual(errors, []);
+});
