@@ -21,7 +21,7 @@ const EXPERIENCE_LEVELS = ["Beginner", "Intermediate", "Advanced"];
 const TRAINING_FOCUSES = ["Strength", "Muscle growth", "Fat loss", "General fitness"];
 
 const DEFAULT_SETTINGS = {
-  profile: { unit: "kg", bodyweight: "", experience: "Intermediate", daysPerWeek: 4, focus: "Strength", coachStyle: "Encouraging", notes: "", foodNotes: "", trainingDays: [], trainingTime: "" },
+  profile: { name: "", unit: "kg", bodyweight: "", experience: "Intermediate", daysPerWeek: 4, focus: "Strength", coachStyle: "Encouraging", notes: "", foodNotes: "", trainingDays: [], trainingTime: "" },
   goals: [],
   repRanges: {}, // per-exercise overrides, e.g. { "Bench Press": [5, 8] }
 };
@@ -258,6 +258,8 @@ const GLOBAL_CSS = `
 
 /* ───────────────────────────── Prompts ───────────────────────────── */
 
+const NAME_RULE = `Use the athlete's first name where a person would (a greeting, a welcome back, praise), not in every reply. Without a name, don't guess one.`;
+
 const COACH_PROMPT = `You are GymBot, a direct, knowledgeable strength coach.
 Base every answer on the athlete's data below and cite specific dates, weights and reps.
 Replies are read on a phone: keep them short, use "- " bullets and **bold** for key numbers.
@@ -265,6 +267,7 @@ If the data can't answer the question, say exactly what to log.
 When planning a session, use the autopilot targets unless something the athlete told you (check-in notes, the athlete's profile, this chat) gives a reason to change them, and say what you changed and why.
 Pain and injuries (RECENT PAIN, INJURIES AND EQUIPMENT, this chat) always change the plan: lighten, swap or skip exercises that load the sore area, and ask how it feels now.
 Match the coaching style given in the athlete profile.
+${NAME_RULE}
 The athlete may also run, swim, cycle or do yoga and Pilates. Count those in recovery, planning and food advice (for example, a hard run the day before heavy squats).
 For food questions, suggest simple meals and snacks that fit the athlete's food preferences and today's training: carbs around training, protein spread over the day (about 1.6-2.2 g per kg of bodyweight suits strength and muscle goals). No crash diets or very low-calorie advice; for medical conditions, allergies or eating concerns, keep it general and suggest a registered dietitian.
 When a technique video would genuinely help (learning a lift, fixing form), put [video: Exercise Name] on its own line, at most 2 per reply, choosing only exercises from the VIDEO LIBRARY below. The app shows the matching video. Never write URLs yourself.
@@ -298,13 +301,15 @@ Ignore equipment, and injuries described as fully healed. Use an empty list when
 const MOTIVATION_PROMPT = `You are GymBot, the athlete's strength coach. Write today's motivation note: 1-2 sentences, under 40 words, plain text.
 Build it on one specific fact from the data: a recent best, a streak, a lift going up next time, a goal getting close, or time since the last session.
 No generic quotes, emojis or hashtags. Never guilt or shame; if they've been away, make coming back feel easy.
+${NAME_RULE}
 If a workout is planned today and not done yet, make the note a short pep talk for that session that names one specific target from the autopilot targets.
 If RECENT PAIN or an injury is listed, don't push for more weight on that area; acknowledge it and encourage a pain-free session instead.`;
 
 const CHECK_IN_PROMPT = `You are GymBot, the athlete's strength coach, checking in after a workout. Reply in 3-4 short sentences, plain text.
 Acknowledge how it felt and mention one specific thing from the session. Give one recovery tip and one meal or snack idea that fits their food preferences.
 If they report pain, tell them to rest that area and to see a professional if it's sharp or doesn't ease within a few days.
-Match the coaching style given in the athlete profile. Never guilt or shame.`;
+Match the coaching style given in the athlete profile. Never guilt or shame.
+${NAME_RULE}`;
 
 const FORM_PROMPT = `You are an expert strength coach reviewing exercise technique from images.
 Answer in this structure:
@@ -1303,13 +1308,14 @@ function buildCoachContext({ profile, goals }, workouts, plans, learnedMuscles, 
   const goalLines = goals.map((g) => `- ${g.exercise} ${g.target}${u} 1RM${g.deadline ? ` by ${g.deadline}` : ""}`);
   const recent = sortNewestFirst(workouts).slice(0, 40).map(formatWorkout);
   const pain = recentPainLines(workouts);
+  const name = profile.name?.trim() ? `name ${profile.name.trim()}, ` : "";
   const targets = plans.map(
     (p) => `- ${p.name}: ${p.target.sets}x${p.target.reps} @ ${p.target.weight}${u} (${PLAN_STATUS[p.status].label.toLowerCase()}, rep range ${formatRange(p.range)}, rest ${formatClock(p.rest)})`
   );
 
   return [
     `Today is ${today()}. Weights are in ${u}, written weight x reps; dumbbell weights are per dumbbell.`,
-    `ATHLETE: ${profile.experience}, bodyweight ${profile.bodyweight || "unknown"}${u}, ${schedule}, focus: ${profile.focus}, coaching style: ${COACH_STYLES[profile.coachStyle ?? DEFAULT_SETTINGS.profile.coachStyle]}.`,
+    `ATHLETE: ${name}${profile.experience}, bodyweight ${profile.bodyweight || "unknown"}${u}, ${schedule}, focus: ${profile.focus}, coaching style: ${COACH_STYLES[profile.coachStyle ?? DEFAULT_SETTINGS.profile.coachStyle]}.`,
     profile.notes && `INJURIES AND EQUIPMENT (from the athlete's profile; plan around these): ${profile.notes}`,
     profile.foodNotes && `FOOD PREFERENCES: ${profile.foodNotes}`,
     pain.length > 0 && `RECENT PAIN (from post-workout check-ins; adapt plans around it):\n${pain.join("\n")}`,
@@ -3329,6 +3335,9 @@ function GoalsView({ settings, setSettings, records, workouts }) {
           <p className="-mt-1 text-sm text-zinc-500">Your coach uses this to tailor advice.</p>
         </div>
         <div className="grid grid-cols-2 gap-3">
+          <Field label="Your name" className="col-span-2">
+            <input value={profile.name ?? ""} onChange={(e) => updateProfile("name")(e.target.value)} placeholder="What your coach calls you" className={inputClass} />
+          </Field>
           <Field label="Units">
             <Select value={profile.unit} options={["kg", "lb"]} onChange={updateProfile("unit")} />
           </Field>

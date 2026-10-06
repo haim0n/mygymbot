@@ -96,6 +96,14 @@ test("Coach context: pain from recent check-ins is listed up front, older or pai
   assert.ok(!app.buildCoachContext(settings, workouts.slice(1), [], {}, null).includes("RECENT PAIN"));
 });
 
+test("Coach context: the athlete's name comes from the profile, when given", () => {
+  const settings = (name) => ({ profile: { name, unit: "kg", experience: "Intermediate", daysPerWeek: 3, focus: "Strength" }, goals: [] });
+  const athleteLine = (name) => app.buildCoachContext(settings(name), [], [], {}, null).split("\n\n").find((block) => block.startsWith("ATHLETE:"));
+  assert.match(athleteLine(" Haim "), /^ATHLETE: name Haim, Intermediate/);
+  assert.match(athleteLine(""), /^ATHLETE: Intermediate/);
+  assert.match(athleteLine(undefined), /^ATHLETE: Intermediate/); // profiles saved before the field existed
+});
+
 test("Autopilot: lighter warm-up/back-off sets are ignored; weights land on real equipment steps", () => {
   const top = (name, weight) => workout(name, daysAgo(3), [ex(name, [[weight, 12], [weight, 12]])]);
   const names = ["Bench Press (Dumbbell)", "Goblet Squat (Kettlebell)", "Lat Pulldown (Cable)", "Bench Press", "Back Squat", "Leg Press (Machine)"];
