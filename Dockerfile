@@ -6,6 +6,7 @@ WORKDIR /app
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 COPY package.json package-lock.json ./
 RUN npm ci
+COPY tailwind.config.js ./
 COPY web web
 COPY src src
 RUN npm run build

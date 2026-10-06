@@ -15,7 +15,7 @@ A React front end (`src/`, bundled by esbuild) served on Cloud Run by a Python (
 | Sign-in | Google accounts through Identity-Aware Proxy (IAP), whose access list is the allowlist; the server verifies IAP's signed identity on every request |
 | Persistence | `usePersistentState` → `/api/storage/<key>` → one `<email>.json` per user in a mounted, versioned bucket (also copied daily at startup) |
 | AI | `askAI` → `POST /api/ask` → Gemini on Vertex AI, billed to the `mygymbot` project, no API key |
-| Styling | Tailwind utility classes from the Play CDN |
+| Styling | Tailwind utility classes, built to one CSS file with the bundle |
 | Libraries | react, recharts, lucide-react 0.383.0, papaparse |
 
 One instance at most, so there's one writer per file; during a deploy the old and new revisions briefly overlap. Goals → Your data exports every `gymbot:*` key in that same file format.
@@ -231,7 +231,6 @@ All JSON answers go through `askAIForJson`, which reads the outermost `{…}` so
 | Moved to Cloud Run only, split into modules | One copy to maintain; the artifact's limits (one file, its libraries, its API) no longer apply |
 | Rules instead of AI for Autopilot, forecasts, muscle rules, video lookup | Instant, offline, same answer every time; trustworthy between sets |
 | Video library instead of web search | No runtime search; the AI can't invent links |
-| `createImageBitmap` for images; `data:` fallback for video | claude.ai's sandbox blocked `blob:` URLs; kept for sandboxed browsers |
 | Screenshot tiles instead of shrinking | Shrinking a 1272×4915 capture to 768 px made "11" and "7" unreadable |
 | One request per screenshot | Keeps each answer short (the artifact capped answers at 1000 tokens) |
 | Invisible real file input over the drop zone, plus paste-CSV | Labels forwarding to hidden inputs fail in in-app browsers |

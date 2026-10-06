@@ -7,9 +7,8 @@
 
 ## Next: make the codebase easier to grow
 
-1. A Tailwind build step instead of the Play CDN.
-2. Make activities editable; convert stored weights when the unit setting changes.
-3. Grow the unit tests along with the domain code.
+1. Make activities editable; convert stored weights when the unit setting changes.
+2. Grow the unit tests along with the domain code.
 
 ## Later: standalone app (global launch)
 

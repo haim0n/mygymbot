@@ -13,7 +13,7 @@ gcloud auth application-default login   # once, for real coach replies (Gemini i
 npm run dev                          # http://localhost:5173, bundle rebuilds on save, data in data/dev.json
 ```
 
-Locally there's one user, `dev`: the Python server (`server/`) keeps the data in a JSON file (`data/`, gitignored, with a daily backup in `data/backups/`) and answers AI calls (`/api/ask`) with Gemini. Without Google credentials it sends a placeholder reply. Tailwind comes from the Play CDN, so the page needs internet for styling.
+Locally there's one user, `dev`: the Python server (`server/`) keeps the data in a JSON file (`data/`, gitignored, with a daily backup in `data/backups/`) and answers AI calls (`/api/ask`) with Gemini. Without Google credentials it sends a placeholder reply.
 
 ## Hosted copy (Cloud Run)
 
@@ -72,7 +72,7 @@ Browser tests start the Python server with seeded data (`tests/fixtures.mjs`) an
 
 ```
 src/                the app: domain modules (*.js, pure logic plus storage and AI calls), ui/ (components), App.jsx
-web/                the page and entry point (bundled to web/dist/)
+web/                the page, entry point and styles (built to web/dist/; tailwind.config.js)
 server/             Python backend (FastAPI): static files, storage, Gemini, access gate
 pyproject.toml      Python dependencies (uv)
 Dockerfile          the hosted copy: Node builds the bundle, Python serves it

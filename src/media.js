@@ -16,60 +16,32 @@ export function waitFor(element, eventName) {
   });
 }
 
-// Sandboxed pages may block blob: URLs ("The source image cannot be decoded" in claude.ai, where GymBot used to run),
-// so images are decoded straight from the file and videos fall back to a data: URL.
-export const readAsDataUrl = (file) =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error("Couldn't read that file."));
-    reader.readAsDataURL(file);
-  });
-
 // The AI reads images, not video, so we sample evenly spaced frames from the set.
-export async function sampleVideoFrames(src) {
-  const video = Object.assign(document.createElement("video"), { muted: true, playsInline: true, preload: "auto", src });
-  await waitFor(video, "loadedmetadata");
-  if (!Number.isFinite(video.duration)) throw new Error("Couldn't read the video length. Try a different recording.");
-  const frames = [];
-  for (let i = 0; i < FRAME_COUNT; i++) {
-    const seeked = waitFor(video, "seeked");
-    video.currentTime = (video.duration * (i + 0.5)) / FRAME_COUNT;
-    await seeked;
-    frames.push(toJpegBase64(video, video.videoWidth, video.videoHeight));
-  }
-  return frames;
-}
-
 export async function videoToFrames(file) {
-  const blobUrl = URL.createObjectURL(file);
+  const src = URL.createObjectURL(file);
   try {
-    return await sampleVideoFrames(blobUrl); // fast path
-  } catch {
-    return await sampleVideoFrames(await readAsDataUrl(file)); // works where blob: URLs are blocked
+    const video = Object.assign(document.createElement("video"), { muted: true, playsInline: true, preload: "auto", src });
+    await waitFor(video, "loadedmetadata");
+    if (!Number.isFinite(video.duration)) throw new Error("Couldn't read the video length. Try a different recording.");
+    const frames = [];
+    for (let i = 0; i < FRAME_COUNT; i++) {
+      const seeked = waitFor(video, "seeked");
+      video.currentTime = (video.duration * (i + 0.5)) / FRAME_COUNT;
+      await seeked;
+      frames.push(toJpegBase64(video, video.videoWidth, video.videoHeight));
+    }
+    return frames;
   } finally {
-    URL.revokeObjectURL(blobUrl);
-  }
-}
-
-export async function decodeImage(file) {
-  try {
-    return await createImageBitmap(file); // no URL involved, so sandbox rules don't apply
-  } catch {
-    const image = new Image(); // older browsers: go through a data: URL
-    const loaded = waitFor(image, "load");
-    image.src = await readAsDataUrl(file);
-    await loaded;
-    return image;
+    URL.revokeObjectURL(src);
   }
 }
 
 export async function withImage(file, draw) {
-  const image = await decodeImage(file);
+  const image = await createImageBitmap(file);
   try {
-    return draw(image, { width: image.naturalWidth ?? image.width, height: image.naturalHeight ?? image.height });
+    return draw(image, { width: image.width, height: image.height });
   } finally {
-    image.close?.(); // frees ImageBitmap memory
+    image.close(); // frees the bitmap's memory
   }
 }
 

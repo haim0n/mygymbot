@@ -18,7 +18,7 @@ npm run deploy       # ship to Haim's hosted copy on Cloud Run (only after npm r
 - `src/`: the app (JS, front end only).
   - Domain modules at the top level (`config.js`, `autopilot.js`, `workout.js`, ...): pure functions and constants, no JSX, nothing from `src/ui/`. `storage.js` and `ai.js` are the only ones that talk to the server.
   - `src/ui/*.jsx`: the components, one file per area; `App.jsx` holds the app state and the tabs.
-- `web/`: the page (`index.html`) and entry point (`main.jsx`), built to `web/dist/` by esbuild.
+- `web/`: the page (`index.html`), entry point (`main.jsx`) and `styles.css`, built to `web/dist/` by esbuild and Tailwind (`tailwind.config.js`).
 - `server/`: the Python backend (FastAPI): serves `web/`, stores each user's data (`storage.py`), answers AI calls with Gemini (`gemini.py`), and identifies users from IAP (`iap.py`). **Backend code is Python only.**
 - `tests/`: `domain.test.mjs` (imports the domain modules directly), `server/` (pytest), `e2e/` (Playwright driving the Python server).
 
@@ -32,7 +32,7 @@ Run `npm test` after any logic change and `npm run test:all` before handing work
 - **AI**: `askAI` / `askAIForJson` (`ai.js`) post `{ system, messages: [{ role, content, images? }] }` to `/api/ask` and get `{ text }`; images are base64 JPEG. The server answers with Gemini (`server/gemini.py`).
 - **The AI never produces links.** Video recommendations are `[video: Exercise]` tags resolved against `VIDEO_LIBRARY`; suggested workout plans are `[plan: Name: Exercise, ...]` tags shown with a Save button.
 - **File inputs**: the real `<input>` sits invisibly over its drop zone (`FilePicker`); a `<label>` forwarding taps to a hidden input fails in in-app browsers.
-- **Styling**: Tailwind utility classes, from the Play CDN in `web/index.html`.
+- **Styling**: Tailwind (v3) utility classes. `npm run build` writes only the classes it finds in `src/` to `web/dist/app.css`, so write class names whole (`"bg-blue-700"`, never `` `bg-${color}-700` ``).
 
 ## Conventions
 
