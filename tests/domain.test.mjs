@@ -12,6 +12,7 @@ const app = await loadApp([
   "sessionSetCounts", "sessionToWorkout", "workoutToSession",
   "goalForecast", "forecastText", "todayPlan", "pendingCheckIn",
   "paceText", "sanitizeActivities", "activitySummary", "summaryText", "sessionsInWeekOf", "lastGymWorkout",
+  "buildCoachContext",
 ]);
 
 const daysAgo = (n) => {
@@ -56,6 +57,30 @@ test("Autopilot: add weight, add reps, repeat, deload (missed twice), deload (lo
   assert.deepEqual(planFor(plans, "Overhead Press"), { status: "deload", sets: 3, reps: 8, weight: 45 });
   assert.deepEqual(planFor(plans, "Barbell Row"), { status: "repeat", sets: 3, reps: 8, weight: 70 });
   assert.deepEqual(planFor(plans, "Deadlift"), { status: "deload", sets: 3, reps: 8, weight: 125 });
+});
+
+test("Autopilot: pain reported after the last session holds the weight instead of adding to it", () => {
+  const benchAt = (checkIn) => [workout("1", daysAgo(3), [ex("Bench Press", [[80, 8], [80, 8], [80, 8]])], checkIn ? { checkIn } : {})];
+  const statusWith = (checkIn) => planFor(app.buildAutopilotPlans(benchAt(checkIn), settingsWith({ "Bench Press": [5, 8] })), "Bench Press");
+  assert.deepEqual(statusWith({ effort: "Hard", pain: "A little", note: "" }), { status: "hold", sets: 3, reps: 8, weight: 80 });
+  assert.deepEqual(statusWith({ effort: "Hard", pain: "Yes", note: "elbow" }), { status: "hold", sets: 3, reps: 8, weight: 80 });
+  assert.equal(statusWith({ effort: "Hard", pain: "No", note: "" }).status, "increase");
+  assert.equal(statusWith({ skipped: true }).status, "increase");
+  assert.equal(statusWith(null).status, "increase");
+});
+
+test("Coach context: pain from recent check-ins is listed up front, older or pain-free ones aren't", () => {
+  const settings = { profile: { unit: "kg", experience: "Intermediate", daysPerWeek: 3, focus: "Strength", coachStyle: "Encouraging" }, goals: [] };
+  const workouts = [
+    workout("1", daysAgo(2), [ex("Back Squat", [[100, 5]])], { checkIn: { effort: "Hard", pain: "Yes", note: "left knee" } }),
+    workout("2", daysAgo(5), [ex("Bench Press", [[80, 8]])], { checkIn: { effort: "Easy", pain: "No", note: "" } }),
+    workout("3", daysAgo(30), [ex("Deadlift", [[140, 5]])], { checkIn: { effort: "Hard", pain: "A little", note: "lower back" } }),
+  ];
+  const context = app.buildCoachContext(settings, workouts, [], {}, null);
+  const painBlock = context.split("\n\n").find((block) => block.startsWith("RECENT PAIN"));
+  assert.equal(painBlock.split("\n").length, 2);
+  assert.match(painBlock, new RegExp(`${daysAgo(2)}: pain "Yes" after Back Squat; note: left knee`));
+  assert.ok(!app.buildCoachContext(settings, workouts.slice(1), [], {}, null).includes("RECENT PAIN"));
 });
 
 test("Autopilot: lighter warm-up/back-off sets are ignored; weights land on real equipment steps", () => {

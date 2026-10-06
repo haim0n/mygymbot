@@ -67,6 +67,7 @@ const PLAN_STATUS = {
   reps: { label: "Add reps", className: "bg-blue-50 text-blue-700" },
   repeat: { label: "Repeat", className: "bg-zinc-100 text-zinc-600" },
   deload: { label: "Deload", className: "bg-amber-50 text-amber-700" },
+  hold: { label: "Hold for pain", className: "bg-rose-50 text-rose-700" },
 };
 
 const CHAT_CONTEXT_SIZE = 12; // messages sent to the coach per request
@@ -203,6 +204,7 @@ const LATE_AFTER_HOURS = 2;
 const CHECK_IN_WINDOW_DAYS = 2;
 const EFFORT_OPTIONS = ["Easy", "Just right", "Hard", "Too much"];
 const PAIN_OPTIONS = ["No", "A little", "Yes"];
+const PAIN_LOOKBACK_DAYS = 14; // pain reported in check-ins this recent is put in front of the coach
 const FORECAST_LOOKBACK_DAYS = 84;
 const FORECAST_MIN_SESSIONS = 3;
 const FORECAST_MIN_SPAN_DAYS = 14;
@@ -259,7 +261,8 @@ const COACH_PROMPT = `You are GymBot, a direct, knowledgeable strength coach.
 Base every answer on the athlete's data below and cite specific dates, weights and reps.
 Replies are read on a phone: keep them short, use "- " bullets and **bold** for key numbers.
 If the data can't answer the question, say exactly what to log.
-When planning a session, use the autopilot targets unless the athlete's notes give a reason to change them, and say why.
+When planning a session, use the autopilot targets unless something the athlete told you (RECENT PAIN, athlete notes, check-in notes, this chat) gives a reason to change them, and say what you changed and why.
+Reported pain always changes the plan: lighten, swap or skip exercises that load the sore area, and ask how it feels now.
 Match the coaching style given in the athlete profile.
 The athlete may also run, swim, cycle or do yoga and Pilates. Count those in recovery, planning and food advice (for example, a hard run the day before heavy squats).
 For food questions, suggest simple meals and snacks that fit the athlete's food preferences and today's training: carbs around training, protein spread over the day (about 1.6-2.2 g per kg of bodyweight suits strength and muscle goals). No crash diets or very low-calorie advice; for medical conditions, allergies or eating concerns, keep it general and suggest a registered dietitian.
@@ -289,7 +292,8 @@ Use only these muscle ids: chest, shoulders, biceps, triceps, forearms, core, tr
 const MOTIVATION_PROMPT = `You are GymBot, the athlete's strength coach. Write today's motivation note: 1-2 sentences, under 40 words, plain text.
 Build it on one specific fact from the data: a recent best, a streak, a lift going up next time, a goal getting close, or time since the last session.
 No generic quotes, emojis or hashtags. Never guilt or shame; if they've been away, make coming back feel easy.
-If a workout is planned today and not done yet, make the note a short pep talk for that session that names one specific target from the autopilot targets.`;
+If a workout is planned today and not done yet, make the note a short pep talk for that session that names one specific target from the autopilot targets.
+If RECENT PAIN is listed, don't push for more weight; acknowledge it and encourage an easy, pain-free session instead.`;
 
 const CHECK_IN_PROMPT = `You are GymBot, the athlete's strength coach, checking in after a workout. Reply in 3-4 short sentences, plain text.
 Acknowledge how it felt and mention one specific thing from the session. Give one recovery tip and one meal or snack idea that fits their food preferences.
@@ -653,7 +657,8 @@ function workingSetHistory(workouts, name) {
     const sets = workout.exercises.filter((e) => e.name === name).flatMap((e) => e.sets);
     if (!sets.length) return [];
     const weight = Math.max(...sets.map((s) => s.weight));
-    return [{ date: workout.date, weight, reps: sets.filter((s) => s.weight === weight).map((s) => s.reps) }];
+    const pain = workout.checkIn?.skipped ? undefined : workout.checkIn?.pain;
+    return [{ date: workout.date, weight, reps: sets.filter((s) => s.weight === weight).map((s) => s.reps), pain }];
   });
 }
 
@@ -669,6 +674,9 @@ function prescribe(history, [min, max], step) {
 
   if (daysOff > MAX_DAYS_BEFORE_EASING_BACK && last.weight > 0)
     return plan("deload", min, deloadWeight, `${daysOff} days since you last did this. Drop 10% to ease back in.`);
+  // ponytail: the check-in doesn't ask where it hurt, so pain holds every lift of that session; a body-area question would narrow it.
+  if (last.pain && last.pain !== "No")
+    return plan("hold", Math.min(max, Math.max(min, lowestReps)), last.weight, "You reported pain after the last session. Keep the weight until it's gone.");
   if (lowestReps >= max) return plan("increase", min, nextWeightUp(last.weight, step), `Every set reached ${max} reps.`);
   if (!missedRange(last)) return plan("reps", Math.min(max, lowestReps + 1), last.weight, `Stay at this weight until every set reaches ${max}.`);
   if (previous && previous.weight === last.weight && missedRange(previous) && last.weight > 0)
@@ -1252,6 +1260,13 @@ function formatWorkoutLine(w) {
   return `${w.date}: ${[...lifts, ...activities].join("; ")}` + (w.notes ? ` (notes: ${w.notes})` : "") + checkIn;
 }
 
+// Check-ins from the last two weeks that reported pain, newest first, so the coach can't miss them among the workouts.
+function recentPainLines(workouts) {
+  return sortNewestFirst(workouts)
+    .filter((w) => w.checkIn?.pain && w.checkIn.pain !== "No" && !w.checkIn.skipped && daysBetween(w.date, today()) <= PAIN_LOOKBACK_DAYS)
+    .map((w) => `- ${w.date}: pain "${w.checkIn.pain}" after ${w.exercises.map((e) => e.name).join(", ") || "this session"}${w.checkIn.note ? `; note: ${w.checkIn.note}` : ""}`);
+}
+
 function buildCoachContext({ profile, goals }, workouts, plans, learnedMuscles, session) {
   const u = profile.unit;
   const formatWorkout = formatWorkoutLine;
@@ -1272,6 +1287,7 @@ function buildCoachContext({ profile, goals }, workouts, plans, learnedMuscles, 
   );
   const goalLines = goals.map((g) => `- ${g.exercise} ${g.target}${u} 1RM${g.deadline ? ` by ${g.deadline}` : ""}`);
   const recent = sortNewestFirst(workouts).slice(0, 40).map(formatWorkout);
+  const pain = recentPainLines(workouts);
   const targets = plans.map(
     (p) => `- ${p.name}: ${p.target.sets}x${p.target.reps} @ ${p.target.weight}${u} (${PLAN_STATUS[p.status].label.toLowerCase()}, rep range ${formatRange(p.range)}, rest ${formatClock(p.rest)})`
   );
@@ -1281,6 +1297,7 @@ function buildCoachContext({ profile, goals }, workouts, plans, learnedMuscles, 
     `ATHLETE: ${profile.experience}, bodyweight ${profile.bodyweight || "unknown"}${u}, ${schedule}, focus: ${profile.focus}, coaching style: ${COACH_STYLES[profile.coachStyle ?? DEFAULT_SETTINGS.profile.coachStyle]}.`,
     profile.notes && `ATHLETE NOTES: ${profile.notes}`,
     profile.foodNotes && `FOOD PREFERENCES: ${profile.foodNotes}`,
+    pain.length > 0 && `RECENT PAIN (from post-workout check-ins; adapt plans around it):\n${pain.join("\n")}`,
     `TODAY: ${todayLine}.`,
     `GOALS:\n${goalLines.join("\n") || "none set"}`,
     goals.length > 0 && `GOAL FORECASTS (straight line from the last 12 weeks; gains usually slow over time):\n${forecasts.join("\n")}`,
