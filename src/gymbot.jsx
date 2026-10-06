@@ -8,7 +8,7 @@ import { MessageCircle, Dumbbell, Video, TrendingUp, Target, Send, Trash2, Plus,
 const MODEL = "claude-sonnet-4-6";
 
 // Shown under Goals, so users and developers can tell which build they run. Bump it with package.json's "version" on every release.
-const APP_VERSION = "0.2.0";
+const APP_VERSION = "0.3.0";
 
 const STORAGE_KEYS = {
   workouts: "gymbot:workouts",
@@ -28,6 +28,7 @@ const DEFAULT_SETTINGS = {
   profile: { name: "", unit: "kg", bodyweight: "", experience: "Intermediate", daysPerWeek: 4, focus: "Strength", coachStyle: "Encouraging", notes: "", foodNotes: "", trainingDays: [], trainingTime: "" },
   goals: [],
   repRanges: {}, // per-exercise overrides, e.g. { "Bench Press": [5, 8] }
+  routines: [], // saved workout plans, done in turn: [{ name: "A", exercises: ["Back Squat", ...] }]
 };
 
 // Autopilot: double progression. Hit the top of the rep range on every set, then add weight.
@@ -52,6 +53,7 @@ const REST_BY_REP_RANGE = [[6, 180], [10, 120], [15, 90], [Infinity, 60]]; // [r
 const BIG_LIFT_EXTRA_REST = 60; // seconds, for squats, deadlifts and hip thrusts
 const MAX_DAYS_BEFORE_EASING_BACK = 21;
 const PLAN_LOOKBACK_DAYS = 56; // only plan lifts trained in the last 8 weeks
+const NEW_EXERCISE_TARGET = { sets: 3, reps: 8 }; // a workout plan's exercise without an Autopilot target starts here; you fill in the weight
 
 // Import: header names used by Strong, Hevy and similar apps (matched case-insensitively).
 const COLUMN_ALIASES = {
@@ -128,6 +130,7 @@ const MUSCLE_RULES = [
 // so nothing is searched on the web and no link is ever invented. To add a video, add a line.
 // Matched against exercise names in order, so specific patterns come first.
 const VIDEO_MARKER = /^\s*\[video:\s*(.+?)\]\s*$/i; // the coach writes [video: Exercise Name] on its own line
+const ROUTINE_MARKER = /^\s*\[plan:\s*([^:\]]+?)\s*:\s*(.+?)\]\s*$/i; // the coach writes [plan: Name: Exercise, Exercise, ...] on its own line
 const VIDEO_LIBRARY = [
   { exercise: "Incline press", match: /incline.*(press|bench)/, videos: [{ id: "SrqOu55lrYU", channel: "Jeff Nippard" }] },
   { exercise: "Dumbbell bench press", match: /bench.*dumbbell|dumbbell.*bench/, videos: [{ id: "WLTU1j7Ur8M", channel: "BarBend" }] },
@@ -217,7 +220,7 @@ const FORECAST_MIN_SPAN_DAYS = 14;
 const FORECAST_MIN_WEEKLY_GAIN = 0.1; // below this, progress counts as flat
 const FORECAST_MAX_DAYS = 365;
 
-const QUICK_PROMPTS = ["What should I eat today?", "Analyze my last 4 weeks", "Am I on track for my goals?", "Plan my next session", "Where am I stalling?"];
+const QUICK_PROMPTS = ["What should I eat today?", "Analyze my last 4 weeks", "Am I on track for my goals?", "Plan my next session", "Suggest workout plans", "Where am I stalling?"];
 
 // Competition plate colours, heaviest first.
 const PLATES = {
@@ -269,7 +272,8 @@ const COACH_PROMPT = `You are GymBot, a direct, knowledgeable strength coach.
 Base every answer on the athlete's data below and cite specific dates, weights and reps.
 Replies are read on a phone: keep them short, use "- " bullets and **bold** for key numbers.
 If the data can't answer the question, say exactly what to log.
-When planning a session, use the autopilot targets unless something the athlete told you (check-in notes, the athlete's profile, this chat) gives a reason to change them, and say what you changed and why.
+When planning a session, follow the next of the WORKOUT PLANS if there are any, and use the autopilot targets unless something the athlete told you (check-in notes, the athlete's profile, this chat) gives a reason to change them, and say what you changed and why.
+To suggest a workout plan, or a fix to one (a muscle group left out, an exercise that hurts, a lift that stalled), put [plan: Name: Exercise, Exercise, ...] on its own line, exercises in workout order, using the athlete's exercise names where they exist. The app shows it with a button to save it; the name of an existing plan replaces that plan. For a split like A/B, write one line per plan.
 Pain and injuries (RECENT PAIN, INJURIES AND EQUIPMENT, this chat) always change the plan: lighten, swap or skip exercises that load the sore area, and ask how it feels now.
 Match the coaching style given in the athlete profile.
 ${NAME_RULE}
@@ -802,13 +806,14 @@ function todayFacts({ workouts, settings, records, plans }) {
   const streak = weeklyStreak(workouts, target);
   const increases = plans.filter((p) => p.status === "increase").map((p) => p.name);
   const plan = todayPlan(profile, workouts);
+  const next = nextRoutine(settings.routines ?? [], workouts);
   const checkIn = pendingCheckIn(workouts);
   const START = { label: "Start", tab: "log" };
 
   return [
     plan.status === "planned" && {
       tone: "plan",
-      text: `Workout planned today${plan.time ? ` at ${plan.time}` : ""}. ${plans.length} exercises are ready in Up next.`,
+      text: `Workout planned today${plan.time ? ` at ${plan.time}` : ""}. ${next ? `Next up: ${next.name}.` : `${plans.length} exercises are ready in Up next.`}`,
       action: START,
     },
     plan.status === "late" && { tone: "nudge", text: `Today's ${plan.time} session hasn't happened yet. A shorter one still counts.`, action: START },
@@ -923,12 +928,43 @@ const planExercise = (plan) => sessionExercise(plan.name, repeatSet(plan.target.
 // Everything in Up next, in that order, at Autopilot's targets. Remove, reorder or edit once started.
 const planSession = (plans) => ({ ...startSession(), exercises: plans.map(planExercise) });
 
-// Your last workout's exercises, in the same order, at today's Autopilot targets where there is one.
+// One exercise at today's Autopilot target where there is one, else at `sets`.
+function targetExercise(name, plans, sets) {
+  const plan = plans.find((p) => p.name === name);
+  return plan ? planExercise(plan) : sessionExercise(name, sets);
+}
+
+// Your last workout's exercises, in the same order, at today's Autopilot targets where there is one. A repeat counts as the same workout plan.
 function repeatLastWorkout(workouts, plans) {
   const last = lastGymWorkout(workouts);
-  const planFor = (name) => plans.find((plan) => plan.name === name);
-  const exercises = (last?.exercises ?? []).map((e) => (planFor(e.name) ? planExercise(planFor(e.name)) : sessionExercise(e.name, e.sets)));
-  return { ...startSession(), exercises };
+  return { ...startSession(), routine: last?.routine, exercises: (last?.exercises ?? []).map((e) => targetExercise(e.name, plans, e.sets)) };
+}
+
+// Saved workout plans are "routines" in code, since Autopilot's per-exercise targets are already "plans".
+// A routine's exercises in its order, at Autopilot's targets. The workout keeps the routine's name, which decides the next one.
+function routineSession(routine, plans) {
+  const newExerciseSets = repeatSet(NEW_EXERCISE_TARGET.sets, { reps: NEW_EXERCISE_TARGET.reps, weight: "" });
+  return { ...startSession(), routine: routine.name, exercises: routine.exercises.map((name) => targetExercise(name, plans, newExerciseSets)) };
+}
+
+// Routines are done in turn: the one after the latest workout's routine, else the first.
+function nextRoutine(routines, workouts) {
+  const lastName = sortNewestFirst(workouts).find((w) => w.routine)?.routine;
+  return routines[(routines.findIndex((r) => r.name === lastName) + 1) % routines.length] ?? null;
+}
+
+// Saving under an existing name (any case) replaces that routine; that's how routines are edited.
+function saveRoutine(routines, { name, exercises }) {
+  const routine = { name: name.trim(), exercises };
+  const index = routines.findIndex((r) => r.name.toLowerCase() === routine.name.toLowerCase());
+  return index < 0 ? [...routines, routine] : routines.map((r, i) => (i === index ? routine : r));
+}
+
+// "[plan: B: deadlift, Overhead Press]" → { name: "B", exercises: ["Deadlift", "Overhead Press"] }; null for any other line.
+function parseRoutineTag(line) {
+  const match = line.match(ROUTINE_MARKER);
+  const exercises = [...new Set((match?.[2] ?? "").split(",").map(cleanExerciseName).filter(Boolean))];
+  return exercises.length ? { name: match[1], exercises } : null;
 }
 
 // Small, pure updates. Each returns a new session.
@@ -986,6 +1022,7 @@ function sessionToWorkout(session, { allSets = false } = {}) {
     date: session.date,
     notes: session.notes.trim(),
     exercises: session.exercises.map((e) => ({ name: e.name, sets: doneSets(e.sets) })).filter((e) => e.sets.length),
+    ...(session.routine && { routine: session.routine }),
   };
 }
 
@@ -1300,7 +1337,7 @@ function recentPainLines(workouts) {
     .map((w) => `- ${w.date}: pain "${w.checkIn.pain}" after ${w.exercises.map((e) => e.name).join(", ") || "this session"}${w.checkIn.note ? `; note: ${w.checkIn.note}` : ""}`);
 }
 
-function buildCoachContext({ profile, goals }, workouts, plans, learnedMuscles, session, bodyweightLog = []) {
+function buildCoachContext({ profile, goals, routines = [] }, workouts, plans, learnedMuscles, session, bodyweightLog = []) {
   const u = profile.unit;
   const formatWorkout = formatWorkoutLine;
   const schedule = (profile.trainingDays ?? []).length
@@ -1325,6 +1362,9 @@ function buildCoachContext({ profile, goals }, workouts, plans, learnedMuscles, 
   const targets = plans.map(
     (p) => `- ${p.name}: ${p.target.sets}x${p.target.reps} @ ${p.target.weight}${u} (${PLAN_STATUS[p.status].label.toLowerCase()}, rep range ${formatRange(p.range)}, rest ${formatClock(p.rest)})`
   );
+  const next = nextRoutine(routines, workouts);
+  const lastDone = (routine) => sortNewestFirst(workouts).find((w) => w.routine === routine.name)?.date;
+  const routineLines = routines.map((r) => `- ${r.name}: ${r.exercises.join(", ")}${lastDone(r) ? ` (last done ${lastDone(r)})` : ""}`);
 
   return [
     `Today is ${today()}. Weights are in ${u}, written weight x reps; dumbbell weights are per dumbbell.`,
@@ -1339,6 +1379,7 @@ function buildCoachContext({ profile, goals }, workouts, plans, learnedMuscles, 
     goals.length > 0 && `GOAL FORECASTS (straight line from the last 12 weeks; gains usually slow over time):\n${forecasts.join("\n")}`,
     `BEST LIFTS:\n${records.join("\n") || "none yet"}`,
     `AUTOPILOT TARGETS FOR NEXT TIME (double progression):\n${targets.join("\n") || "none yet"}`,
+    `WORKOUT PLANS (done in turn${next ? `, next: ${next.name}` : ""}):\n${routineLines.join("\n") || "none saved"}`,
     session &&
       `WORKOUT IN PROGRESS (in order, weight x reps): ${
         session.exercises
@@ -1472,8 +1513,8 @@ function renderBold(text) {
   );
 }
 
-// Minimal markdown: headings, "- " bullets and **bold**.
-function RichText({ text }) {
+// Minimal markdown: headings, "- " bullets and **bold**, plus the coach's video and plan tags.
+function RichText({ text, onSaveRoutine }) {
   const lines = text.split("\n").filter((line) => line.trim());
   return (
     <div className="space-y-1.5 leading-relaxed">
@@ -1484,6 +1525,8 @@ function RichText({ text }) {
           const guide = guideFor(videoExercise);
           return guide ? <VideoGuides key={i} guide={guide} /> : null; // not in the library: show nothing
         }
+        const routine = parseRoutineTag(line);
+        if (routine) return <RoutineSuggestion key={i} routine={routine} onSave={onSaveRoutine} />;
         const isHeading = /^#{1,4}\s/.test(line);
         const content = renderBold(line.replace(/^\s*[-*•]\s+/, "").replace(/^#{1,4}\s/, ""));
         if (isHeading) return <p key={i} className="font-semibold text-zinc-900 pt-1">{content}</p>;
@@ -1496,6 +1539,36 @@ function RichText({ text }) {
           );
         return <p key={i}>{content}</p>;
       })}
+    </div>
+  );
+}
+
+// A workout plan the coach suggested. Only the coach chat can save it.
+function RoutineSuggestion({ routine, onSave }) {
+  const [saved, setSaved] = useState(false);
+  return (
+    <div className="rounded-xl border-2 border-zinc-200 p-3">
+      <div className="font-semibold text-zinc-900">{routine.name}</div>
+      <ol className="text-sm">
+        {routine.exercises.map((name, i) => (
+          <li key={name}>
+            {i + 1}. {name}
+          </li>
+        ))}
+      </ol>
+      {onSave && (
+        <button
+          onClick={() => {
+            onSave(routine);
+            setSaved(true);
+          }}
+          disabled={saved}
+          aria-label={`Save plan ${routine.name}`}
+          className="mt-2 rounded-full border border-blue-700 px-3 py-1 text-sm font-semibold text-blue-700 disabled:opacity-40"
+        >
+          {saved ? "Saved" : "Save plan"}
+        </button>
+      )}
     </div>
   );
 }
@@ -2114,7 +2187,7 @@ function ActivityWeek({ workouts }) {
 
 /* ───────────────────────────── Coach ───────────────────────────── */
 
-function CoachView({ chat, setChat, context, briefing, onNavigate }) {
+function CoachView({ chat, setChat, context, briefing, onNavigate, onSaveRoutine }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -2170,7 +2243,7 @@ function CoachView({ chat, setChat, context, briefing, onNavigate }) {
             </div>
           ) : (
             <div key={i} className="rounded-2xl rounded-bl-md bg-white px-4 py-3 text-zinc-700">
-              <RichText text={message.content} />
+              <RichText text={message.content} onSaveRoutine={onSaveRoutine} />
             </div>
           )
         )}
@@ -2241,17 +2314,44 @@ function IconButton({ label, onClick, disabled = false, children }) {
   );
 }
 
-function StartWorkoutPanel({ planCount, lastWorkout, onStartPlan, onRepeatLast, onStartEmpty }) {
+function StartWorkoutPanel({ routines, next, planCount, lastWorkout, onStartRoutine, onDeleteRoutine, onStartPlan, onRepeatLast, onStartEmpty }) {
   const plural = (n) => `${n} ${n === 1 ? "exercise" : "exercises"}`;
+  const outlineButton = "w-full rounded-lg border border-blue-700 py-2.5 font-semibold text-blue-700";
+  const upNext = `Start with Up next (${plural(planCount)})`;
   return (
     <Panel className="space-y-3">
       <SectionTitle>Start a workout</SectionTitle>
       <p className="-mt-1 text-sm text-zinc-500">
         Once started, you can edit sets, reorder and remove exercises, and check off sets as you go. Nothing is lost if you close the app.
       </p>
-      {planCount > 0 && <PrimaryButton onClick={onStartPlan}>Start with Up next ({plural(planCount)})</PrimaryButton>}
+      {routines.length > 0 ? (
+        <ul className="divide-y divide-zinc-200">
+          {routines.map((routine) => (
+            <li key={routine.name} className="flex items-center gap-3 py-2">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-zinc-900">{routine.name}</span>
+                  {routine === next && <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">Next</span>}
+                </div>
+                <p className="text-sm text-zinc-500">{routine.exercises.join(", ")}</p>
+              </div>
+              <DeleteButton label={`Delete plan ${routine.name}`} onConfirm={() => onDeleteRoutine(routine.name)} />
+              <button
+                onClick={() => onStartRoutine(routine)}
+                aria-label={`Start plan ${routine.name}`}
+                className={`shrink-0 rounded-lg px-4 py-2 font-semibold ${routine === next ? "bg-blue-700 text-white" : "border border-blue-700 text-blue-700"}`}
+              >
+                Start
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-zinc-500">Doing the same workouts in turn, like A and B? Save one as a plan while you train it, or ask your coach to suggest some.</p>
+      )}
+      {planCount > 0 && (routines.length ? <button onClick={onStartPlan} className={outlineButton}>{upNext}</button> : <PrimaryButton onClick={onStartPlan}>{upNext}</PrimaryButton>)}
       {lastWorkout && (
-        <button onClick={onRepeatLast} className="w-full rounded-lg border border-blue-700 py-2.5 font-semibold text-blue-700">
+        <button onClick={onRepeatLast} className={outlineButton}>
           Repeat your {formatShortDate(lastWorkout.date)} workout ({plural(lastWorkout.exercises.length)})
         </button>
       )}
@@ -2457,7 +2557,35 @@ function SessionDetails({ session, setSession }) {
   );
 }
 
-function WorkoutPanel({ session, setSession, unit, onFinish, onStartRest }) {
+// Saves the workout's exercises, in order, as a plan to start from next time. An existing plan's name updates that plan.
+function SaveRoutineForm({ session, setSession, onSave }) {
+  const [name, setName] = useState(null); // null while closed
+  const [savedAs, setSavedAs] = useState("");
+
+  function save() {
+    onSave({ name, exercises: [...new Set(session.exercises.map((e) => e.name))] });
+    setSession((s) => ({ ...s, routine: name.trim() })); // this workout counts as that plan, so the next one comes after it
+    setSavedAs(name.trim());
+    setName(null);
+  }
+
+  if (name === null)
+    return (
+      <button onClick={() => setName(session.routine ?? "")} className="text-sm font-semibold text-blue-700">
+        {savedAs ? `Saved as plan ${savedAs}` : "Save as a plan"}
+      </button>
+    );
+  return (
+    <div className="flex gap-2">
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Plan name, like A" aria-label="Plan name" className={inputClass} />
+      <button onClick={save} disabled={!name.trim()} className="shrink-0 rounded-lg bg-zinc-900 px-4 font-semibold text-white disabled:opacity-40">
+        Save
+      </button>
+    </div>
+  );
+}
+
+function WorkoutPanel({ session, setSession, unit, onFinish, onStartRest, onSaveRoutine }) {
   const [discardArmed, armDiscard] = useArmed();
   const now = useNow(30_000);
   const { done, total } = sessionSetCounts(session);
@@ -2471,13 +2599,14 @@ function WorkoutPanel({ session, setSession, unit, onFinish, onStartRest }) {
   return (
     <Panel className="space-y-3">
       <div className="flex items-baseline justify-between gap-3">
-        <SectionTitle>Workout</SectionTitle>
+        <SectionTitle>{session.routine ? `Workout ${session.routine}` : "Workout"}</SectionTitle>
         <span className="text-sm text-zinc-500 tabular-nums">
           {minutes} min, {done} of {total} sets
         </span>
       </div>
       {session.exercises.length === 0 && <p className="-mt-1 text-sm text-zinc-500">Add exercises from Up next or the form below.</p>}
       <ExerciseList session={session} setSession={setSession} unit={unit} mode="live" onSetDone={onSetDone} />
+      {session.exercises.length > 0 && <SaveRoutineForm session={session} setSession={setSession} onSave={onSaveRoutine} />}
       <SessionDetails session={session} setSession={setSession} />
       <PrimaryButton onClick={onFinish} disabled={done === 0}>
         Finish and save {done} {done === 1 ? "set" : "sets"}
@@ -2511,7 +2640,7 @@ function WorkoutEditor({ workout, unit, onSave, onCancel }) {
   );
 }
 
-function LogView({ workouts, setWorkouts, session, setSession, settings, plans, learnedMuscles, coachContext, onRangeChange, onStartRest, unit }) {
+function LogView({ workouts, setWorkouts, session, setSession, settings, plans, learnedMuscles, coachContext, onRangeChange, onStartRest, onSaveRoutine, onDeleteRoutine, unit }) {
   const [description, setDescription] = useState("");
   const [manual, setManual] = useState({ name: "", sets: "3", reps: "8", weight: "" });
   const [busy, setBusy] = useState(false);
@@ -2520,6 +2649,7 @@ function LogView({ workouts, setWorkouts, session, setSession, settings, plans, 
   const [highlights, setHighlights] = useState(null);
   const [coachReply, setCoachReply] = useState(null);
   const checkInWorkout = pendingCheckIn(workouts);
+  const routines = settings.routines ?? [];
 
   function saveCheckIn(checkIn) {
     setWorkouts((all) => all.map((w) => (w.id === checkInWorkout.id ? { ...w, checkIn } : w)));
@@ -2590,9 +2720,13 @@ function LogView({ workouts, setWorkouts, session, setSession, settings, plans, 
       {showImport && <ImportPanel workouts={workouts} setWorkouts={setWorkouts} unit={unit} />}
 
       {session ? (
-        <WorkoutPanel session={session} setSession={setSession} unit={unit} onFinish={finishWorkout} onStartRest={onStartRest} />
+        <WorkoutPanel session={session} setSession={setSession} unit={unit} onFinish={finishWorkout} onStartRest={onStartRest} onSaveRoutine={onSaveRoutine} />
       ) : (
         <StartWorkoutPanel
+          routines={routines}
+          next={nextRoutine(routines, workouts)}
+          onStartRoutine={(routine) => setSession(routineSession(routine, plans))}
+          onDeleteRoutine={onDeleteRoutine}
           planCount={plans.length}
           lastWorkout={lastGymWorkout(workouts)}
           onStartPlan={() => setSession(planSession(plans))}
@@ -3671,6 +3805,8 @@ export default function GymBot() {
   const exerciseNames = useMemo(() => exercisesByFrequency(workouts), [workouts]);
 
   const setRepRange = (name, range) => setSettings((s) => ({ ...s, repRanges: { ...s.repRanges, [name]: range } }));
+  const storeRoutine = (routine) => setSettings((s) => ({ ...s, routines: saveRoutine(s.routines ?? [], routine) }));
+  const deleteRoutine = (name) => setSettings((s) => ({ ...s, routines: (s.routines ?? []).filter((r) => r.name !== name) }));
 
   const loaded = workoutsLoaded && settingsLoaded && chatLoaded && formChecksLoaded && sessionLoaded && bodyweightLoaded;
   const learnedMuscles = useLearnedMuscles({ enabled: loaded, exerciseNames });
@@ -3687,9 +3823,9 @@ export default function GymBot() {
   const { unit, daysPerWeek, notes } = settings.profile;
 
   const views = {
-    coach: <CoachView chat={chat} setChat={setChat} context={coachContext} briefing={{ facts, note: dailyNote }} onNavigate={setTab} />,
+    coach: <CoachView chat={chat} setChat={setChat} context={coachContext} briefing={{ facts, note: dailyNote }} onNavigate={setTab} onSaveRoutine={storeRoutine} />,
     log: (
-      <LogView workouts={workouts} setWorkouts={setWorkouts} session={session} setSession={setSession} settings={settings} coachContext={coachContext} plans={plans} learnedMuscles={learnedMuscles} onRangeChange={setRepRange} onStartRest={restTimer.start} unit={unit} />
+      <LogView workouts={workouts} setWorkouts={setWorkouts} session={session} setSession={setSession} settings={settings} coachContext={coachContext} plans={plans} learnedMuscles={learnedMuscles} onRangeChange={setRepRange} onStartRest={restTimer.start} onSaveRoutine={storeRoutine} onDeleteRoutine={deleteRoutine} unit={unit} />
     ),
     form: <FormCheckView profileNotes={notes} formChecks={formChecks} setFormChecks={setFormChecks} />,
     progress: <ProgressView workouts={workouts} records={records} exerciseNames={exerciseNames} learnedMuscles={learnedMuscles} unit={unit} daysPerWeek={daysPerWeek} onNavigate={setTab}

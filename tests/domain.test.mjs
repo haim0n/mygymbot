@@ -14,6 +14,7 @@ const app = await loadApp([
   "goalForecast", "forecastText", "todayPlan", "pendingCheckIn",
   "paceText", "sanitizeActivities", "activitySummary", "summaryText", "sessionsInWeekOf", "lastGymWorkout",
   "buildCoachContext", "logBodyweight", "currentBodyweight", "APP_VERSION",
+  "routineSession", "nextRoutine", "saveRoutine", "parseRoutineTag",
 ]);
 
 const daysAgo = (n) => {
@@ -234,6 +235,39 @@ test("Live workout: repeat keeps order, reorder respects the ends, only done set
 
   const edited = app.sessionToWorkout(app.workoutToSession(saved), { allSets: true });
   assert.deepEqual(edited.exercises, saved.exercises);
+});
+
+test("Workout plans: done in turn, started at Autopilot's targets, edited by name, suggested by the coach", () => {
+  const a = { name: "A", exercises: ["Bench Press (Dumbbell)", "Zercher Squat"] };
+  const b = { name: "B", exercises: ["Lat Pulldown (Cable)"] };
+  const tagged = (id, n, routine) => workout(id, daysAgo(n), [ex("Lat Pulldown (Cable)", [[45, 10]])], routine && { routine });
+  assert.equal(app.nextRoutine([a, b], []), a);
+  assert.equal(app.nextRoutine([a, b], [tagged("1", 3, "A"), tagged("2", 1)]), b); // untagged workouts don't count
+  assert.equal(app.nextRoutine([a, b], [tagged("1", 3, "A"), tagged("2", 1, "B")]), a);
+  assert.equal(app.nextRoutine([a, b], [tagged("1", 1, "Deleted")]), a);
+  assert.equal(app.nextRoutine([], [tagged("1", 1, "A")]), null);
+
+  const plans = app.buildAutopilotPlans([userWorkout(daysAgo(3))], settingsWith());
+  const session = app.routineSession(a, plans);
+  assert.equal(session.routine, "A");
+  assert.deepEqual(session.exercises.map((e) => [e.name, e.sets.map((x) => [x.weight, x.reps])]), [
+    ["Bench Press (Dumbbell)", [[44, 10], [44, 10]]],
+    ["Zercher Squat", [["", 8], ["", 8], ["", 8]]], // no target yet: weight left to fill in
+  ]);
+  assert.equal(app.sessionToWorkout(session).routine, "A");
+  assert.equal(app.sessionToWorkout({ ...session, routine: undefined }).routine, undefined);
+  assert.equal(app.repeatLastWorkout([tagged("1", 1, "B")], plans).routine, "B");
+
+  assert.deepEqual(app.saveRoutine([a, b], { name: " a ", exercises: ["Deadlift"] }), [{ name: "a", exercises: ["Deadlift"] }, b]);
+  assert.deepEqual(app.saveRoutine([a], { name: "C", exercises: ["Deadlift"] }), [a, { name: "C", exercises: ["Deadlift"] }]);
+
+  assert.deepEqual(app.parseRoutineTag("  [plan: Pull day: deadlift, Lat Pulldown (Cable), deadlift ]"), { name: "Pull day", exercises: ["Deadlift", "Lat Pulldown (Cable)"] });
+  assert.equal(app.parseRoutineTag("Try [plan: A: Deadlift] next week"), null);
+  assert.equal(app.parseRoutineTag("[video: Deadlift]"), null);
+
+  const context = app.buildCoachContext({ ...settingsWith(), routines: [a, b] }, [tagged("1", 3, "A")], [], {}, null);
+  assert.ok(context.includes(`WORKOUT PLANS (done in turn, next: B):\n- A: Bench Press (Dumbbell), Zercher Squat (last done ${daysAgo(3)})\n- B: Lat Pulldown (Cable)`));
+  assert.ok(app.buildCoachContext(settingsWith(), [], [], {}, null).includes("WORKOUT PLANS (done in turn):\nnone saved"));
 });
 
 test("Forecasts: dates, deadlines, and honest refusals", () => {

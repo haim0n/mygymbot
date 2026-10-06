@@ -33,6 +33,7 @@ type Workout = {
   activities?: Activity[];   // non-gym; an activity-only entry has exercises: []
   notes: string;
   source?: "import";
+  routine?: string;          // the workout plan it was started from (or saved as); decides which plan is next
   checkIn?: { effort: "Easy" | "Just right" | "Hard" | "Too much"; pain: "No" | "A little" | "Yes"; note: string; reply: string } | { skipped: true };
 };
 
@@ -56,10 +57,11 @@ type Settings = {
   };
   goals: { id: string; exercise: string; target: number /* est. 1RM */; deadline: string }[];
   repRanges: Record<string, [number, number]>; // explicit per-exercise overrides
+  routines?: { name: string; exercises: string[] }[]; // saved workout plans (A/B...), done in turn; "routines" in code
 };
 
 type Session = { // the workout in progress
-  date: string; startedAt: number | null; notes: string;
+  date: string; startedAt: number | null; notes: string; routine?: string;
   exercises: { id: string; name: string; rest: number /* s */; sets: { id: string; weight: number | string; reps: number | string; done: boolean }[] }[];
 }; // weights/reps may be strings while typed; sessionToWorkout() turns them into numbers
 ```
@@ -159,7 +161,7 @@ The latest workout from the last 2 days gets a "How did it go?" card: effort, pa
 ### Video guides
 - **Library:** a fixed `VIDEO_LIBRARY` of 36 exercises, each linked to tutorials from established coaches.
 - **Matching:** by regex after name cleanup. Exercises it doesn't cover get no video.
-- **Coach recommendations:** the coach writes `[video: Exercise]` tags, the app resolves them against the library, and anything else, including raw URLs, is never made into a link.
+- **Coach recommendations:** the coach writes `[video: Exercise]` tags, the app resolves them against the library, and anything else, including raw URLs, is never made into a link. Workout plans it suggests or fixes are `[plan: Name: Exercise, ...]` lines, shown with a Save plan button (same name replaces that plan).
 
 ### Import
 - **CSV:**
@@ -215,7 +217,7 @@ All JSON answers go through `askClaudeForJson`, which reads the outermost `{…}
 ## 7. UI map
 
 - **Coach:** Today card (note and facts) · chat with quick prompts (incl. "What should I eat today?") · input fixed above the tab bar.
-- **Log:** Import history (toggle) · Session saved · check-in card · coach reply · Workout or Start a workout · Log an activity · Up next · Add exercises (describe in words, or manual) · History (folded).
+- **Log:** Import history (toggle) · Session saved · check-in card · coach reply · Workout (with Save as a plan) or Start a workout (saved plans, the next one first in line) · Log an activity · Up next · Add exercises (describe in words, or manual) · History (folded).
 - **Form:** exercise, focus note, file picker, frames, feedback, past checks.
 - **Progress:** stats · Activities (last 7 days) · muscle heatmap · estimated 1RM chart with trend line · weekly volume · best lifts.
 - **Goals:** goal cards (barbell loaded with plates you've lifted, forecast) · new goal · About you (units, bodyweight, experience, sessions per week, training days, usual time, food preferences, coaching style, main focus, injuries and equipment). · Your data (export as text)
