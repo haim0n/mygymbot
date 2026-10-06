@@ -2,7 +2,7 @@
 
 An AI workout coach: live workout logging with set check-offs and rest timer, Autopilot progression targets, form checks from video, history import from other apps, muscle maps, goal forecasts, a coach that checks in after workouts, and non-gym activities.
 
-The app is a single React file (`src/gymbot.jsx`) that runs as a **Claude.ai artifact**, so friends can use it with no server and no API costs to the creator: each person uses their own Claude account. Haim's own copy runs the same file on Cloud Run behind a Python backend that stores the data and answers AI calls with Gemini.
+A React front end (`src/`) runs on Cloud Run behind a Python backend that stores each user's data and answers AI calls with Gemini. Haim and invited friends sign in with Google.
 
 ## Quick start
 
@@ -13,7 +13,7 @@ gcloud auth application-default login   # once, for real coach replies (Gemini i
 npm run dev                          # http://localhost:5173, bundle rebuilds on save, data in data/dev.json
 ```
 
-`web/shims.js` stands in for claude.ai: `window.storage` goes to the Python server (`server/`), which keeps it in a JSON file (`data/`, gitignored, with a daily backup in `data/backups/`), and Claude calls go to `/api/messages`, which the server answers with Gemini in the same reply shape. Without Google credentials the server sends a placeholder reply. Tailwind comes from the Play CDN, so the page needs internet for styling.
+Locally there's one user, `dev`: the Python server (`server/`) keeps the data in a JSON file (`data/`, gitignored, with a daily backup in `data/backups/`) and answers AI calls (`/api/ask`) with Gemini. Without Google credentials it sends a placeholder reply. Tailwind comes from the Play CDN, so the page needs internet for styling.
 
 ## Hosted copy (Cloud Run)
 
@@ -26,7 +26,7 @@ Users sign in with their Google account through Identity-Aware Proxy (IAP). IAP'
 No deploy is needed, and it works for any Google account (Gmail or not).
 
 1. **Get the email of the Google account they'll sign in with.** It has to be exactly that account; any other one gets "You don't have access".
-2. **Bring their claude.ai history over (optional, and before their first visit).** They open GymBot on claude.ai, go to Goals → Your data → Export data, and send you the text. (Older copies on claude.ai have no Export button; share the current `src/gymbot.jsx` there first, see CLAUDE.md.) Save it as `<email>.json` (the email in lowercase) and upload it:
+2. **Bring their claude.ai history over (optional, and before their first visit).** GymBot used to run as a claude.ai artifact. Friends who used it there open their copy, go to Goals → Your data → Export data, and send you the text. (Copies without an Export button need the last artifact version, `git show ade439e:src/gymbot.jsx`, uploaded to claude.ai first.) Save it as `<email>.json` (the email in lowercase) and upload it:
    ```bash
    gcloud storage cp FRIEND@gmail.com.json \
      gs://mygymbot-data/FRIEND@gmail.com.json --project=mygymbot
@@ -61,7 +61,7 @@ gcloud run deploy gymbot --source . --project=mygymbot --region=me-west1 --max-i
 
 ```bash
 npm test             # JS unit tests for the app's pure logic
-npm run test:server  # Python tests: storage, access gate, Gemini translation (no network)
+npm run test:server  # Python tests: storage, access gate, the AI endpoint and its Gemini translation (no network)
 npm run test:e2e     # browser tests: live workout, history edit, activities, check-in, video links, Today card, export
 npm run test:all     # all three
 ```
@@ -71,13 +71,13 @@ Browser tests start the Python server with seeded data (`tests/fixtures.mjs`) an
 ## Layout
 
 ```
-src/gymbot.jsx      the app (the only file that ships to claude.ai)
-web/                the page around it for the hosted copy: entry point, storage and AI shims (bundled to web/dist/)
+src/                the app: domain modules (*.js, pure logic plus storage and AI calls), ui/ (components), App.jsx
+web/                the page and entry point (bundled to web/dist/)
 server/             Python backend (FastAPI): static files, storage, Gemini, access gate
 pyproject.toml      Python dependencies (uv)
 Dockerfile          the hosted copy: Node builds the bundle, Python serves it
 data/               your data when run locally (gitignored)
-tests/              JS unit tests (load-app.mjs bundles the app so its functions can be called), server/ (pytest), e2e/ (browser), fixtures
+tests/              JS unit tests (on the domain modules), server/ (pytest), e2e/ (browser), fixtures
 docs/DESIGN.md      data model, architecture, AI touchpoints, decision log, known limitations
 docs/ROADMAP.md     next steps, standalone app plan, monetization notes
 CLAUDE.md           working rules for Claude Code

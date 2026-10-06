@@ -1,6 +1,6 @@
 # GymBot
 
-AI workout coach. The app is one React file that runs as a **Claude.ai artifact** (friends dogfood it there) and, for Haim, on Cloud Run behind a **Python backend** with **Gemini**; a standalone, publicly available app comes later. Full design: `docs/DESIGN.md`. Plans: `docs/ROADMAP.md`.
+AI workout coach: a React front end on Cloud Run, behind a **Python backend** that stores each user's data and answers AI calls with **Gemini**. Haim and invited friends dogfood it; a standalone, publicly available app comes later. Full design: `docs/DESIGN.md`. Plans: `docs/ROADMAP.md`.
 
 ## Commands
 
@@ -15,45 +15,46 @@ npm run deploy       # ship to Haim's hosted copy on Cloud Run (only after npm r
 
 ## Layout
 
-- `src/gymbot.jsx`: the whole app (JS, front end only).
-- `web/`: the page around it for the hosted copy (`index.html`, `main.jsx`, `shims.js` standing in for the artifact's `window.storage` and Claude API). Built to `web/dist/` by esbuild.
+- `src/`: the app (JS, front end only).
+  - Domain modules at the top level (`config.js`, `autopilot.js`, `workout.js`, ...): pure functions and constants, no JSX, nothing from `src/ui/`. `storage.js` and `ai.js` are the only ones that talk to the server.
+  - `src/ui/*.jsx`: the components, one file per area; `App.jsx` holds the app state and the tabs.
+- `web/`: the page (`index.html`) and entry point (`main.jsx`), built to `web/dist/` by esbuild.
 - `server/`: the Python backend (FastAPI): serves `web/`, stores each user's data (`storage.py`), answers AI calls with Gemini (`gemini.py`), and identifies users from IAP (`iap.py`). **Backend code is Python only.**
-- `tests/`: `domain.test.mjs` (JS logic), `server/` (pytest), `e2e/` (Playwright driving the Python server).
+- `tests/`: `domain.test.mjs` (imports the domain modules directly), `server/` (pytest), `e2e/` (Playwright driving the Python server).
 
 Run `npm test` after any logic change and `npm run test:all` before handing work back.
 
-## Hard constraints: `src/gymbot.jsx` must keep running as a claude.ai artifact
+## Front end rules
 
-- **One file**, default export `GymBot`, no local imports. `web/`, `server/` and `tests/` are around it and never ship to claude.ai.
-- **Libraries available in artifacts**: react, recharts, lucide-react **0.383.0** (pinned; newer icon names don't exist there), papaparse, lodash, d3, mathjs. Nothing else.
-- **Tailwind core utility classes only.** No arbitrary values (`w-[37px]`) and no opacity modifiers (`bg-black/40`): use inline `style` for those.
-- **No localStorage/sessionStorage.** Persist through `usePersistentState` (wraps `window.storage`, personal scope, writes debounced 300 ms). State that must survive tab switches lives in `GymBot` (App), not in a tab.
-- **Claude API**: `fetch("https://api.anthropic.com/v1/messages")`, no API key, model `claude-sonnet-4-6`, `max_tokens: 1000`. Keep requests small enough that answers fit: compact JSON, one request per screenshot, classify in batches of 20. The hosted copy sends the same requests to the Python server, which answers them with Gemini (`server/gemini.py` translates both ways), so only text and base64 JPEG blocks are supported.
-- **Never load images or video through `blob:` URLs** (the sandbox blocks them: "The source image cannot be decoded"). Use `createImageBitmap(file)`; fall back to `data:` URLs.
-- **The AI never produces links.** Video recommendations are `[video: Exercise]` tags resolved against `VIDEO_LIBRARY`.
+- **Imports keep their extension** (`./dates.js`, `./ui/log.jsx`): Node runs the unit tests on the domain modules as they are. Domain modules never import UI.
+- **Libraries**: react, recharts, lucide-react (pinned at 0.383.0; newer icon names don't exist in it), papaparse. Add one only when a few lines of code won't do.
+- **Storage**: persist through `usePersistentState` (`storage.js`: one JSON value per key on the server, writes debounced 300 ms). A read that fails is retried, never taken as "nothing stored", or the app would save its defaults over the user's data. State that must survive tab switches lives in `App.jsx`, not in a tab. No localStorage.
+- **AI**: `askAI` / `askAIForJson` (`ai.js`) post `{ system, messages: [{ role, content, images? }] }` to `/api/ask` and get `{ text }`; images are base64 JPEG. The server answers with Gemini (`server/gemini.py`).
+- **The AI never produces links.** Video recommendations are `[video: Exercise]` tags resolved against `VIDEO_LIBRARY`; suggested workout plans are `[plan: Name: Exercise, ...]` tags shown with a Save button.
 - **File inputs**: the real `<input>` sits invisibly over its drop zone (`FilePicker`); a `<label>` forwarding taps to a hidden input fails in in-app browsers.
+- **Styling**: Tailwind utility classes, from the Play CDN in `web/index.html`.
 
 ## Conventions
 
 - **Simplicity and readability first; clean data architecture second.**
-- Domain logic is pure functions (no React, no I/O) in the sections between "Dates & formatting" and "Coach context". New logic goes there and gets a test in `tests/domain.test.mjs` (functions are reached via `loadApp([...names])`).
-- Tunable numbers are named constants in **Config** with a comment saying what they mean. Prompts live in **Prompts**.
+- Domain logic is pure functions (no React, no I/O) in the domain modules. New logic goes there and gets a test in `tests/domain.test.mjs`.
+- Tunable numbers are named constants in `config.js` with a comment saying what they mean. Prompts live in `prompts.js`.
 - Deterministic rules wherever an answer must be consistent (Autopilot, forecasts, muscle rules, video lookup). Use the AI for language, images and unknown inputs, and cache what it classifies.
-- **Version**: `APP_VERSION` in Config (shown at the bottom of Goals) and `version` in `package.json` stay equal (a unit test checks). Bump both for every release, i.e. before a deploy or a claude.ai upload that changes the app. The hosted copy also shows the git commit it was deployed from (`npm run deploy` sets `GYMBOT_COMMIT`, the server puts it in the page), with `-dirty` if there were uncommitted changes, so deploy after committing.
+- **Version**: `APP_VERSION` in `config.js` (shown at the bottom of Goals) and `version` in `package.json` stay equal (a unit test checks). Bump both for every release, i.e. before a deploy that changes the app. The hosted copy also shows the git commit it was deployed from (`npm run deploy` sets `GYMBOT_COMMIT`, the server puts it in the page), with `-dirty` if there were uncommitted changes, so deploy after committing.
 - Stored data stays backward compatible: new fields are optional and read with defaults (`profile.trainingDays ?? []`). Never rename storage keys without a migration.
 - Comments explain *why*. Names are full words.
 - UI: mobile first (393 px wide), sentence case, plain words, no exclamation marks, no middle-dot separators. Small by default, expand on tap.
 - Haim codes mostly in Python and likes Polars: all backend and analytics code is Python (uv, type hints, reST docstrings, dataclasses); JS is only for the front end.
 
-## Code map (sections of `src/gymbot.jsx`, in file order)
+## Code map (`src/`)
 
-Config · Prompts · Persistence · Claude client · Media · Dates & formatting · Training domain · Autopilot · Motivation · Muscles · Live workout · Schedule, check-ins & forecasts · Activities · Import · Coach context · UI primitives · Motivation UI · Muscle visuals · Video guides · Exercise thumbnails & details · Check-in · Activities UI · Coach · Log (Live workout UI, Import history) · Form check · Progress · Goals · Rest timer · App
-
-Each section starts with a `/* ──── Name ──── */` banner; search for it.
+- **Server access**: `storage.js` (`usePersistentState`, export), `ai.js` (`askAI`), `media.js` (video frames, screenshot tiles).
+- **Domain**: `config.js` · `prompts.js` · `dates.js` (dates and formatting) · `training.js` (records, volume, exercise names, video lookup) · `autopilot.js` · `motivation.js` (Today facts, highlights) · `muscles.js` · `workout.js` (live workout, workout plans) · `schedule.js` (schedule, check-ins, forecasts) · `activities.js` · `import.js` · `coach-context.js`.
+- **UI** (`src/ui/`): `primitives` · `motivation` (Today card) · `muscles` (figures, heatmap) · `videos` · `exercises` (thumbnails, details sheet) · `check-in` · `activities` · `coach` · `log` (live workout, Start a workout, Up next, history) · `import-history` · `form-check` · `progress` · `goals` (with the data export) · `rest-timer`; `App.jsx` puts them together.
 
 ## Haim's hosted copy (Cloud Run)
 
-Haim dogfoods the app on Cloud Run: service `gymbot`, project `mygymbot`, region `me-west1`, built from the `Dockerfile` (bundle with Node, serve with Python). `window.storage` is backed by one `<email>.json` per user in the bucket `gs://mygymbot-data` (mounted at `/data`, versioned, plus a daily copy in `backups/`). AI is Gemini (`GEMINI_MODEL` in `server/gemini.py`) on Vertex AI through the service account; no API key. Users sign in with Google through IAP; IAP's access list (`roles/iap.httpsResourceAccessor`, see README) is the allowlist, and the server verifies IAP's signed token (`server/iap.py`) and uses the email to pick the file. Changing who has access is Haim's step (README → Letting a friend in).
+Haim dogfoods the app on Cloud Run: service `gymbot`, project `mygymbot`, region `me-west1`, built from the `Dockerfile` (bundle with Node, serve with Python). Each user's data is one `<email>.json` in the bucket `gs://mygymbot-data` (mounted at `/data`, versioned, plus a daily copy in `backups/`). AI is Gemini (`GEMINI_MODEL` in `server/gemini.py`) on Vertex AI through the service account; no API key. Users sign in with Google through IAP; IAP's access list (`roles/iap.httpsResourceAccessor`, see README) is the allowlist, and the server verifies IAP's signed token (`server/iap.py`) and uses the email to pick the file. Changing who has access is Haim's step (README → Letting a friend in).
 
 - **`mygymbot` is the only GCP project to touch.** Pass `--project=mygymbot` literally on every gcloud call (the machine default is Haim's work project; `.claude/settings.json` also sets `CLOUDSDK_CORE_PROJECT`). Python passes the project and quota project explicitly.
 - `gs://mygymbot-data/*.json` are real workout histories, one per email: read them freely (`gcloud storage cat`) to debug or tune; never write or delete it. Try changes with `npm run dev`.
@@ -65,8 +66,8 @@ Haim dogfoods the app on Cloud Run: service `gymbot`, project `mygymbot`, region
 ## Gemini notes
 
 - `gemini-3.8-flash` at location `global`. Newer models: list `publishers/google/models` on `aiplatform.googleapis.com/v1beta1` with a gcloud access token and `x-goog-user-project: mygymbot`.
-- `thinking_level="minimal"` is rejected; `"low"` is the floor. Thinking takes roughly 300 to 500 tokens on top of the answer, which is why the server ignores the app's `max_tokens: 1000` and uses `MAX_OUTPUT_TOKENS`.
-- Gemini wraps JSON answers in code fences; `askClaudeForJson` already cuts to the outermost `{…}`.
+- `thinking_level="minimal"` is rejected; `"low"` is the floor. Thinking takes roughly 300 to 500 tokens on top of the answer, which `MAX_OUTPUT_TOKENS` leaves room for.
+- Gemini wraps JSON answers in code fences; `askAIForJson` already cuts to the outermost `{…}`.
 - With Google credentials on this machine, `npm run dev` makes real Gemini calls, billed to `mygymbot`.
 
 ## Working with Haim
@@ -76,7 +77,3 @@ Haim dogfoods the app on Cloud Run: service `gymbot`, project `mygymbot`, region
 - **Commands for him to paste**: long single lines get split when pasted, so break them with a trailing `\`. For `! command`, the `!` must be the very first character, or it arrives as a chat message and nothing runs.
 - **The shell is zsh**: an unquoted `$VAR` holding several words is passed as one argument. Write flags literally (a `--project` flag kept in a variable once created a bucket in his work project).
 - **Verify, don't assume**: esbuild strips comments, so test a rebuild with a real code change; check cloud results by reading them back.
-
-## Deploying a change to claude.ai
-
-Upload `src/gymbot.jsx` to a chat in the **CustomWorkout** project and ask Claude to present it as an artifact; share or publish it from there. Friends' data stays in their own Claude accounts (personal storage), so storage keys and data shapes must stay compatible between versions.

@@ -1,4 +1,4 @@
-"""The app's ``window.storage`` keys and values, kept in one JSON file per user."""
+"""The app's storage keys and values, kept in one JSON file per user."""
 
 import json
 import shutil

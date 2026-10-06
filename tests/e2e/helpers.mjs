@@ -1,4 +1,4 @@
-// Shared setup for browser tests: a phone-sized Chromium, a fixed clock, seeded storage and a fake Claude.
+// Shared setup for browser tests: a phone-sized Chromium, a fixed clock, seeded storage and a fake AI.
 // One-time setup: npx playwright install chromium, uv sync. The bundle comes from npm run build (test:e2e runs it).
 import { chromium, devices } from "playwright";
 import { spawn } from "node:child_process";
@@ -49,31 +49,31 @@ async function startServer(seed) {
   };
 }
 
-// `claude(body)` returns the text the fake Claude replies with; every request body is kept in `claudeRequests`.
-export async function openApp(t, { seed = {}, claude = () => "OK" } = {}) {
+// `ai(body)` returns the text the fake AI replies with; every request body is kept in `aiRequests`.
+export async function openApp(t, { seed = {}, ai = () => "OK" } = {}) {
   const server = await startServer(seed); // data kept across reloads, like the real app
   const browser = await chromium.launch();
   const page = await browser.newPage({ ...devices["Pixel 5"] });
   const errors = [];
-  const claudeRequests = [];
+  const aiRequests = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.clock.install({ time: NOW });
-  await page.route("**/api/messages", async (route) => {
+  await page.route("**/api/ask", async (route) => {
     const body = route.request().postDataJSON();
-    claudeRequests.push(body);
-    await route.fulfill({ json: { content: [{ type: "text", text: claude(body) }] } });
+    aiRequests.push(body);
+    await route.fulfill({ json: { text: ai(body) } });
   });
   await page.goto(server.url);
   t.after(async () => {
     await browser.close();
     await server.close();
   });
-  return { page, errors, claudeRequests };
+  return { page, errors, aiRequests };
 }
 
 export const section = (page, heading) =>
   page.locator("section", { has: page.getByRole("heading", typeof heading === "string" ? { name: heading, exact: true } : { name: heading }) });
-export const stored = (page, key) => page.evaluate(async (k) => JSON.parse((await window.storage.get(k)).value), key);
+export const stored = (page, key) => page.evaluate(async (k) => (await fetch(`/api/storage/${encodeURIComponent(k)}`)).json(), key);
 export const settle = (page) => page.waitForTimeout(400); // storage writes are debounced by 300 ms
 export const isCoachChat = (body) => body.system.startsWith("You are GymBot, a direct");
 export const exerciseNames = (list) =>

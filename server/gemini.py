@@ -1,12 +1,9 @@
-"""Answers the app's AI requests with Gemini on Vertex AI.
-
-The app (``src/gymbot.jsx``) speaks the Anthropic Messages format, because it also runs as a claude.ai
-artifact. This module translates both ways, so the app itself doesn't change.
-"""
+"""Answers the app's AI requests (``POST /api/ask``) with Gemini on Vertex AI."""
 
 import base64
+from dataclasses import dataclass, field
 from functools import cache
-from typing import Any
+from typing import Literal
 
 import google.auth
 from google import genai
@@ -16,8 +13,7 @@ from google.genai import types
 GCP_PROJECT = "mygymbot"  # the only GCP project GymBot uses
 GEMINI_LOCATION = "global"
 GEMINI_MODEL = "gemini-3.8-flash"
-# The app asks for 1000 tokens (an artifact limit); Gemini's thinking needs room on top of the answer.
-MAX_OUTPUT_TOKENS = 4096
+MAX_OUTPUT_TOKENS = 4096  # thinking takes roughly 300 to 500 of these on top of the answer
 THINKING_LEVEL = "low"  # the lowest this model accepts; replies come back between sets
 PLACEHOLDER_REPLY = "(Dev mode: no Google credentials. Run `gcloud auth application-default login` for real coach replies.)"
 
@@ -26,31 +22,35 @@ class EmptyReplyError(RuntimeError):
     """Gemini returned no text, for example when a safety filter stopped the answer."""
 
 
-def to_gemini_contents(messages: list[dict[str, Any]]) -> list[types.Content]:
-    """Convert Anthropic-style messages (text and base64 image blocks) to Gemini contents."""
+@dataclass
+class Message:
+    """One turn of the conversation, with any images (form-check frames, screenshots) as base64 JPEG."""
+
+    role: Literal["user", "assistant"]
+    content: str
+    images: list[str] = field(default_factory=list)
+
+
+@dataclass
+class Question:
+    """What the app asks: the instructions, then the conversation so far."""
+
+    system: str
+    messages: list[Message]
+
+
+def to_gemini_contents(messages: list[Message]) -> list[types.Content]:
+    """Gemini's form of the conversation: each turn's images, then its text."""
     return [
-        types.Content(role="model" if message["role"] == "assistant" else "user", parts=_parts(message["content"]))
+        types.Content(
+            role="model" if message.role == "assistant" else "user",
+            parts=[
+                *(types.Part.from_bytes(data=base64.b64decode(image), mime_type="image/jpeg") for image in message.images),
+                types.Part.from_text(text=message.content),
+            ],
+        )
         for message in messages
     ]
-
-
-def _parts(content: str | list[dict[str, Any]]) -> list[types.Part]:
-    """Convert one message's content, a string or a list of blocks, to Gemini parts."""
-    if isinstance(content, str):
-        return [types.Part.from_text(text=content)]
-    parts = []
-    for block in content:
-        if block["type"] == "image":
-            source = block["source"]
-            parts.append(types.Part.from_bytes(data=base64.b64decode(source["data"]), mime_type=source["media_type"]))
-        else:
-            parts.append(types.Part.from_text(text=block["text"]))
-    return parts
-
-
-def claude_reply(text: str) -> dict[str, Any]:
-    """Wrap ``text`` the way the Anthropic API answers, which is what the app reads."""
-    return {"content": [{"type": "text", "text": text}]}
 
 
 @cache
@@ -68,16 +68,16 @@ def _client() -> genai.Client | None:
     return genai.Client(vertexai=True, project=GCP_PROJECT, location=GEMINI_LOCATION, credentials=credentials)
 
 
-def answer(body: dict[str, Any]) -> dict[str, Any]:
-    """Answer an Anthropic Messages request body with Gemini, in the Anthropic reply shape."""
+def answer(question: Question) -> str:
+    """Gemini's reply to ``question``."""
     client = _client()
     if client is None:
-        return claude_reply(PLACEHOLDER_REPLY)
+        return PLACEHOLDER_REPLY
     response = client.models.generate_content(
         model=GEMINI_MODEL,
-        contents=to_gemini_contents(body["messages"]),
+        contents=to_gemini_contents(question.messages),
         config=types.GenerateContentConfig(
-            system_instruction=body.get("system") or None,
+            system_instruction=question.system or None,
             max_output_tokens=MAX_OUTPUT_TOKENS,
             thinking_config=types.ThinkingConfig(thinking_level=THINKING_LEVEL),
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),  # no tools
@@ -85,4 +85,4 @@ def answer(body: dict[str, Any]) -> dict[str, Any]:
     )
     if not response.text:
         raise EmptyReplyError(f"Gemini returned no text (finish reason: {response.candidates[0].finish_reason})")
-    return claude_reply(response.text)
+    return response.text

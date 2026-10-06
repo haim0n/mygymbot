@@ -3,7 +3,7 @@
   "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "AI workout coach. The app runs as a single-file Claude.ai artifact; this repo adds the web shell, a Python backend for the hosted copy, and tests.",
+  "description": "AI workout coach: a React front end served by a Python backend (storage, Gemini, Google sign-in through IAP) on Cloud Run.",
   "scripts": {
     "build": "esbuild web/main.jsx --bundle --jsx=automatic --sourcemap --outfile=web/dist/app.js --log-level=warning",
     "dev": "npm run build -- --watch=forever & uv run python -m server",

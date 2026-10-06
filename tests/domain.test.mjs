@@ -1,21 +1,21 @@
-// Unit tests for GymBot's pure logic (no browser). Run: npm test
+// Unit tests for GymBot's pure logic, imported straight from its modules (no browser). Run: npm test
 // Dates are built relative to the real today, because the app's logic reads today's date.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { loadApp } from "./load-app.mjs";
+import * as config from "../src/config.js";
+import * as dates from "../src/dates.js";
+import * as training from "../src/training.js";
+import * as autopilot from "../src/autopilot.js";
+import * as motivation from "../src/motivation.js";
+import * as muscles from "../src/muscles.js";
+import * as liveWorkout from "../src/workout.js";
+import * as schedule from "../src/schedule.js";
+import * as activities from "../src/activities.js";
+import * as importing from "../src/import.js";
+import * as coach_context from "../src/coach-context.js";
 
-const app = await loadApp([
-  "toDateKey", "today", "buildAutopilotPlans", "formatRange", "restSeconds", "personalRecords", "sessionHighlights",
-  "detectColumns", "hasRequiredColumns", "rowsToWorkouts", "dateKeyFromText", "withoutDuplicates",
-  "ruleMuscles", "describeMuscles", "guideFor",
-  "repeatLastWorkout", "moveExercise", "toggleSet", "editSet", "addSet", "completeExercise", "currentExerciseId",
-  "sessionSetCounts", "sessionToWorkout", "workoutToSession",
-  "goalForecast", "forecastText", "todayPlan", "pendingCheckIn",
-  "paceText", "sanitizeActivities", "activitySummary", "summaryText", "sessionsInWeekOf", "lastGymWorkout",
-  "buildCoachContext", "logBodyweight", "currentBodyweight", "APP_VERSION",
-  "routineSession", "nextRoutine", "saveRoutine", "parseRoutineTag",
-]);
+const app = { ...config, ...dates, ...training, ...autopilot, ...motivation, ...muscles, ...liveWorkout, ...schedule, ...activities, ...importing, ...coach_context };
 
 const daysAgo = (n) => {
   const d = new Date();

@@ -8,18 +8,19 @@ Users: Haim and friends (dogfooding), later the public.
 
 ## 2. Runtime
 
-`src/gymbot.jsx` is a single React component file running as a **Claude.ai artifact**:
+A React front end (`src/`, bundled by esbuild) served on Cloud Run by a Python (FastAPI) server in `server/` (`Dockerfile`, `npm run deploy`):
 
-| Need | How the artifact gets it |
+| Need | How |
 |---|---|
-| Persistence | `window.storage` (async key-value, personal scope per user) through `usePersistentState` |
-| AI | `fetch` to the Anthropic Messages API without a key; usage counts against the *viewer's* Claude plan |
-| Styling | Tailwind core utility classes (prebuilt; no arbitrary values or opacity modifiers) |
+| Sign-in | Google accounts through Identity-Aware Proxy (IAP), whose access list is the allowlist; the server verifies IAP's signed identity on every request |
+| Persistence | `usePersistentState` → `/api/storage/<key>` → one `<email>.json` per user in a mounted, versioned bucket (also copied daily at startup) |
+| AI | `askAI` → `POST /api/ask` → Gemini on Vertex AI, billed to the `mygymbot` project, no API key |
+| Styling | Tailwind utility classes from the Play CDN |
 | Libraries | react, recharts, lucide-react 0.383.0, papaparse |
 
-Consequences: no server, no API costs for the creator, every user's data private to their account, no notifications while the app is closed, and no access to other users' data (including for migration).
+One instance at most, so there's one writer per file; during a deploy the old and new revisions briefly overlap. Goals → Your data exports every `gymbot:*` key in that same file format.
 
-Haim's own copy runs the same file on Cloud Run behind a Python (FastAPI) server in `server/` (`Dockerfile`, `npm run deploy`): `window.storage` becomes `<user>.json` in a mounted, versioned bucket (also copied daily at startup), the app's Claude calls are answered by Gemini on Vertex AI (`server/gemini.py` translates the Anthropic request and reply shapes, so the app is unchanged), and users sign in with Google through Identity-Aware Proxy, whose access list is the allowlist; the server verifies IAP's signed identity on every request and keeps one file per email, so storage is per user while the page and the AI are shared. One instance at most, so there's one writer; during a deploy the old and new revisions briefly overlap. Goals → Your data exports every `gymbot:*` key in that same file format, so a history can move from claude.ai to this copy.
+GymBot started as a single-file claude.ai artifact (`window.storage` and the Claude API, no server). Friends' copies there are frozen at that version; their data comes over through the export (README → Letting a friend in). Storage keys and data shapes are unchanged from that version.
 
 ## 3. Data model
 
@@ -82,13 +83,12 @@ A stale `gymbot:video-guides` key may exist from an earlier version that searche
 
 ## 4. Architecture
 
-One file, ordered so each section only depends on the ones above it:
+Modules in `src/`, with no import cycles; domain modules import nothing from `src/ui/`:
 
-1. **Config**: every tunable number, list and table (rep ranges, equipment steps, rest times, muscle rules, video library, activity types, forecast thresholds).
-2. **Prompts**: the 8 system prompts.
-3. **Persistence** (`usePersistentState`), **Claude client** (`askClaude`, `askClaudeForJson`), **Media** (frames, tiles, image decoding).
-4. **Pure domain logic**: Dates & formatting, Training domain, Autopilot, Motivation, Muscles, Live workout, Schedule/check-ins/forecasts, Activities, Import, Coach context.
-5. **UI**: primitives, feature components, tabs, rest timer, `GymBot` (App).
+1. **`config.js`**: every tunable number, list and table (rep ranges, equipment steps, rest times, muscle rules, video library, activity types, forecast thresholds). **`prompts.js`**: the system prompts.
+2. **Server access**: `storage.js` (`usePersistentState`), `ai.js` (`askAI`, `askAIForJson`), and `media.js` (frames, tiles, image decoding) for what goes to the AI.
+3. **Pure domain logic**: `dates.js`, `training.js`, `autopilot.js`, `motivation.js`, `muscles.js`, `workout.js`, `schedule.js`, `activities.js`, `import.js`, `coach-context.js`. No JSX and nothing from the UI, so the unit tests import them directly.
+4. **UI** (`src/ui/`): primitives, feature components, tabs, rest timer; `App.jsx` (`GymBot`) holds the app state.
 
 App-level state: workouts, settings, chat, form checks, session, rest timer, open details sheet, and the derived values (`records`, `plans`, `coachContext`, Today facts, daily note, learned muscles). `ExerciseContext` gives every thumbnail the learned muscles and the details-sheet opener without passing them down.
 
@@ -212,7 +212,7 @@ The chat sends the last 12 messages.
 | `MOTIVATION_PROMPT` | Daily note | Once a day per style, cached |
 | `CHECK_IN_PROMPT` | Post-workout check-in reply | Stored on the workout |
 
-All JSON answers go through `askClaudeForJson`, which reads the outermost `{…}` so extra prose or code fences don't break parsing.
+All JSON answers go through `askAIForJson`, which reads the outermost `{…}` so extra prose or code fences don't break parsing.
 
 ## 7. UI map
 
@@ -227,12 +227,13 @@ All JSON answers go through `askClaudeForJson`, which reads the outermost `{…}
 
 | Decision | Why |
 |---|---|
-| Single-file artifact | Friends can use it with no server or API cost to the creator |
+| Started as a single-file claude.ai artifact | Friends could use it with no server or API cost to the creator |
+| Moved to Cloud Run only, split into modules | One copy to maintain; the artifact's limits (one file, its libraries, its API) no longer apply |
 | Rules instead of AI for Autopilot, forecasts, muscle rules, video lookup | Instant, offline, same answer every time; trustworthy between sets |
 | Video library instead of web search | No runtime search; the AI can't invent links |
-| `createImageBitmap` for images; `data:` fallback for video | The sandbox blocks `blob:` URLs |
+| `createImageBitmap` for images; `data:` fallback for video | claude.ai's sandbox blocked `blob:` URLs; kept for sandboxed browsers |
 | Screenshot tiles instead of shrinking | Shrinking a 1272×4915 capture to 768 px made "11" and "7" unreadable |
-| One request per screenshot | Answers are capped at 1000 tokens |
+| One request per screenshot | Keeps each answer short (the artifact capped answers at 1000 tokens) |
 | Invisible real file input over the drop zone, plus paste-CSV | Labels forwarding to hidden inputs fail in in-app browsers |
 | Session state in App, persisted | Tab switches unmount tabs; the debounced save would be lost |
 | Reorder in a compact list | Tall cards moved out from under the finger, so repeated taps hit other exercises |
@@ -242,14 +243,14 @@ All JSON answers go through `askClaudeForJson`, which reads the outermost `{…}
 | Weekly target counts training days | A gym session and a swim on the same day are one day |
 | Explicit `distanceUnit` on every activity | Units can differ between sports and users |
 | Original simplified figures | Commercial exercise illustrations need a license |
-| Hosted backend in Python, front end stays JS | Haim works in Python; the app file must stay a JS artifact |
-| Gemini on Vertex AI for the hosted copy, behind the app's Claude request shape | Billed to the `mygymbot` project with no API key; the artifact keeps calling Claude unchanged |
-| Hosted users: Google sign-in through IAP, IAP's IAM list as the allowlist, one data file per email | No login screen, passwords or user table to build; adding or removing someone is one IAM change; the app and its storage keys stay unchanged |
+| Backend in Python, front end in JS | Haim works in Python; the browser runs JS |
+| Gemini on Vertex AI behind the app's own `/api/ask` | Billed to the `mygymbot` project with no API key; the front end doesn't depend on the AI vendor |
+| Users: Google sign-in through IAP, IAP's IAM list as the allowlist, one data file per email | No login screen, passwords or user table to build; adding or removing someone is one IAM change |
 
 ## 9. Known limitations
 
-- **No notifications** while the app is closed (it's a web artifact). Calendar reminders are the workaround.
-- **Hosted copy: a save that fails offline is only retried by the next change.** Losing signal and then closing the tab loses what was logged since the last successful save.
+- **No notifications** while the app is closed (it's a web page). Calendar reminders are the workaround.
+- **A save that fails offline is only retried by the next change.** Losing signal and then closing the tab loses what was logged since the last successful save.
 - **Changing kg/lb doesn't convert** past entries.
 - **Activities can't be edited** (delete and re-log).
 - **Video links weren't verified as still online.** YouTube blocks automated checks. Each is one line in `VIDEO_LIBRARY`.
@@ -258,6 +259,6 @@ All JSON answers go through `askClaudeForJson`, which reads the outermost `{…}
 
 ## 10. Testing
 
-- `npm test`: unit tests for Autopilot, equipment steps, rep-range stability, rest, import, muscle rules, video library, live workout, forecasts, schedule and check-ins, activities and highlights. `tests/load-app.mjs` bundles the app with an extra export line and empty stand-ins for UI libraries.
-- `npm run test:server`: pytest for the backend: storage round-trip, daily backup, corrupt-file refusal, access gate, Claude-to-Gemini translation, and errors becoming 502 (no network).
-- `npm run test:e2e`: Playwright on a Pixel 5-sized screen with a fixed clock (Sat 3 Oct 2026, 18:00), seeded storage, and a fake Claude that records requests. Each test starts the Python server with its own seeded data file. Covers live workout (reorder, check-off, reload, finish), history edit, activities, check-in, video-tag resolution, the Today card and export.
+- `npm test`: unit tests for Autopilot, equipment steps, rep-range stability, rest, import, muscle rules, video library, live workout, forecasts, schedule and check-ins, activities and highlights. They import the domain modules directly.
+- `npm run test:server`: pytest for the backend: storage round-trip, daily backup, corrupt-file refusal, access gate, the `/api/ask` request checks and Gemini translation, and errors becoming 502 (no network).
+- `npm run test:e2e`: Playwright on a Pixel 5-sized screen with a fixed clock (Sat 3 Oct 2026, 18:00), seeded storage, and a fake AI that records requests. Each test starts the Python server with its own seeded data file. Covers live workout (reorder, check-off, reload, finish), history edit, activities, check-in, video-tag resolution, the Today card and export.

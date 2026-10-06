@@ -1,6 +1,6 @@
 # Haim's hosted copy on Cloud Run (npm run deploy). The bucket with his data is mounted at /data.
 
-# The web app: bundle src/gymbot.jsx with its web shell.
+# The web app: bundle src/ with its page.
 FROM node:22-slim AS web
 WORKDIR /app
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1

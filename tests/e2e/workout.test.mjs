@@ -59,9 +59,9 @@ test("history: folded by default, then edit a saved workout", async (t) => {
 test("workout plans: the next one starts in a tap, a workout saves over a plan, the coach suggests one", async (t) => {
   const a = { name: "A", exercises: ["Bench Press (Dumbbell)", "Front Squat (Kettlebell)"] };
   const b = { name: "B", exercises: ["Lat Pulldown (Cable)", "Seated Row (Close Grip) (Machine)", "Hammer Curl (Dumbbell)"] };
-  const { page, errors, claudeRequests } = await openApp(t, {
+  const { page, errors, aiRequests } = await openApp(t, {
     seed: { "gymbot:workouts": [{ ...userWorkout, routine: "A" }], "gymbot:settings": { ...settings(), routines: [a, b] } },
-    claude: (body) => (isCoachChat(body) ? "Add legs to B.\n[plan: B: Lat Pulldown (Cable), back squat]" : "OK"),
+    ai: (body) => (isCoachChat(body) ? "Add legs to B.\n[plan: B: Lat Pulldown (Cable), back squat]" : "OK"),
   });
   await page.getByRole("button", { name: /^Log/ }).tap();
   const start = section(page, "Start a workout");
@@ -83,6 +83,6 @@ test("workout plans: the next one starts in a tap, a workout saves over a plan, 
   await page.getByRole("button", { name: "Save plan B" }).tap();
   await settle(page);
   assert.deepEqual((await stored(page, "gymbot:settings")).routines, [a, { name: "B", exercises: ["Lat Pulldown (Cable)", "Back Squat"] }]);
-  assert.match(claudeRequests.find(isCoachChat).system, /WORKOUT PLANS \(done in turn, next: B\):\n- A: .*\(last done 2026-09-23\)\n- B: Lat Pulldown \(Cable\), Seated Row \(Close Grip\) \(Machine\)\n/);
+  assert.match(aiRequests.find(isCoachChat).system, /WORKOUT PLANS \(done in turn, next: B\):\n- A: .*\(last done 2026-09-23\)\n- B: Lat Pulldown \(Cable\), Seated Row \(Close Grip\) \(Machine\)\n/);
   assert.deepEqual(errors, []);
 });

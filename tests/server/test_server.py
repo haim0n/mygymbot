@@ -1,4 +1,4 @@
-"""Backend tests: storage, the access gate, per-user data, and the translation to and from Gemini. No network."""
+"""Backend tests: storage, the access gate, per-user data, and the AI endpoint's translation to Gemini. No network."""
 
 import base64
 import json
@@ -90,35 +90,30 @@ def test_each_user_sees_only_their_own_data(data_file: Path, sign) -> None:
     assert json.loads((data_file.parent / "haim@example.com.json").read_text()) == {"gymbot:workouts": ["haim"]}
 
 
-def test_messages_answers_in_the_claude_shape_and_reports_failures(data_file: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_ask_answers_with_text_and_reports_failures(data_file: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     client = client_for(data_file)
-    monkeypatch.setattr(gemini, "answer", lambda body: gemini.claude_reply(f"echo {body['messages'][0]['content']}"))
-    body = {"model": "claude-sonnet-4-6", "max_tokens": 1000, "system": "Coach", "messages": [{"role": "user", "content": "hi"}]}
-    assert client.post("/api/messages", json=body).json() == {"content": [{"type": "text", "text": "echo hi"}]}
+    monkeypatch.setattr(gemini, "answer", lambda question: f"echo {question.messages[0].content}")
+    body = {"system": "Coach", "messages": [{"role": "user", "content": "hi"}]}
+    assert client.post("/api/ask", json=body).json() == {"text": "echo hi"}
+    assert client.post("/api/ask", json={"system": "Coach", "messages": [{"role": "robot", "content": "hi"}]}).status_code == 422
 
-    def fail(body: dict) -> dict:
+    def fail(question: gemini.Question) -> str:
         raise gemini.EmptyReplyError("blocked")
 
     monkeypatch.setattr(gemini, "answer", fail)
-    assert client.post("/api/messages", json=body).status_code == 502
+    assert client.post("/api/ask", json=body).status_code == 502
 
 
-def test_gemini_contents_from_claude_messages() -> None:
+def test_gemini_contents_from_the_conversation() -> None:
     jpeg = b"\xff\xd8 fake jpeg"
     contents = gemini.to_gemini_contents(
         [
-            {"role": "user", "content": "How was my bench?"},
-            {"role": "assistant", "content": "Solid."},
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": "Check my form"},
-                    {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": base64.b64encode(jpeg).decode()}},
-                ],
-            },
+            gemini.Message("user", "How was my bench?"),
+            gemini.Message("assistant", "Solid."),
+            gemini.Message("user", "Check my form", images=[base64.b64encode(jpeg).decode()]),
         ]
     )
     assert [content.role for content in contents] == ["user", "model", "user"]
     assert contents[1].parts[0].text == "Solid."
-    image = contents[2].parts[1].inline_data
-    assert (image.mime_type, image.data) == ("image/jpeg", jpeg)
+    image, text = contents[2].parts
+    assert (image.inline_data.mime_type, image.inline_data.data, text.text) == ("image/jpeg", jpeg, "Check my form")

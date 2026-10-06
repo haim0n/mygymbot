@@ -71,10 +71,10 @@ def create_app(stores: Stores, iap_audience: str | None, commit: str | None = No
         await asyncio.to_thread(stores.for_user(request.state.user).delete, key)
         return Response(status_code=204)
 
-    @app.post("/api/messages")
-    def messages(body: dict[str, Any]) -> Response:
+    @app.post("/api/ask")
+    def ask(question: gemini.Question) -> Response:
         try:
-            return JSONResponse(gemini.answer(body))
+            return JSONResponse({"text": gemini.answer(question)})
         except Exception as error:  # any Gemini failure: the app then shows "the coach didn't respond"
             logger.exception("Gemini request failed")
             return JSONResponse({"error": str(error)}, status_code=502)

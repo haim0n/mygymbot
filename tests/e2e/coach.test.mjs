@@ -4,9 +4,9 @@ import { openApp, section, stored, settle } from "./helpers.mjs";
 import { userWorkout, yesterdayWorkout, settings } from "../fixtures.mjs";
 
 test("check-in: asks about the latest workout, sends, saves, then goes away", async (t) => {
-  const { page, errors, claudeRequests } = await openApp(t, {
+  const { page, errors, aiRequests } = await openApp(t, {
     seed: { "gymbot:workouts": [userWorkout, yesterdayWorkout] },
-    claude: (body) => (body.system.includes("checking in after a workout") ? "Good session. Rest the knee." : "OK"),
+    ai: (body) => (body.system.includes("checking in after a workout") ? "Good session. Rest the knee." : "OK"),
   });
   await page.getByRole("button", { name: /^Log/ }).tap();
   const card = section(page, "How did it go?");
@@ -19,7 +19,7 @@ test("check-in: asks about the latest workout, sends, saves, then goes away", as
   await page.getByText("Rest the knee.").waitFor();
   await settle(page);
 
-  const sent = claudeRequests.find((b) => b.system.includes("checking in after a workout")).messages[0].content;
+  const sent = aiRequests.find((b) => b.system.includes("checking in after a workout")).messages[0].content;
   assert.ok(sent.startsWith("CHECK-IN for the 2026-10-02 workout: effort Hard; pain A little; note: left knee a bit sore"));
   const saved = (await stored(page, "gymbot:workouts")).find((w) => w.id === "oct2").checkIn;
   assert.deepEqual({ ...saved, reply: undefined }, { effort: "Hard", pain: "A little", note: "left knee a bit sore", reply: undefined });
@@ -30,7 +30,7 @@ test("check-in: asks about the latest workout, sends, saves, then goes away", as
 test("coach: video tags become library links; anything else is dropped", async (t) => {
   const { page, errors } = await openApp(t, {
     seed: { "gymbot:workouts": [userWorkout] },
-    claude: (body) => (body.system.startsWith("You are GymBot, a direct") ? "Neutral grip.\n[video: Hammer Curl]\n[video: Zercher Squat]\nhttps://example.com/fake" : "OK"),
+    ai: (body) => (body.system.startsWith("You are GymBot, a direct") ? "Neutral grip.\n[video: Hammer Curl]\n[video: Zercher Squat]\nhttps://example.com/fake" : "OK"),
   });
   await page.getByPlaceholder("Message your coach").fill("how do I do hammer curls?");
   await page.getByRole("button", { name: "Send" }).tap();
@@ -42,28 +42,28 @@ test("coach: video tags become library links; anything else is dropped", async (
 });
 
 test("today card: planned workout first, and the daily note becomes a pep talk", async (t) => {
-  const { page, errors, claudeRequests } = await openApp(t, {
+  const { page, errors, aiRequests } = await openApp(t, {
     seed: { "gymbot:workouts": [userWorkout], "gymbot:settings": settings({ trainingDays: [6], trainingTime: "20:00" }) },
-    claude: (body) => (body.system.includes("motivation note") ? "Big one tonight." : "OK"),
+    ai: (body) => (body.system.includes("motivation note") ? "Big one tonight." : "OK"),
   });
   await page.getByText("Big one tonight.").waitFor();
   const facts = await section(page, "Today").locator("li").allInnerTexts();
   assert.match(facts[0], /^Workout planned today at 20:00/);
-  const note = claudeRequests.find((b) => b.system.includes("motivation note"));
+  const note = aiRequests.find((b) => b.system.includes("motivation note"));
   assert.ok(note.system.includes("pep talk"));
   assert.ok(note.messages[0].content.includes("Workout planned today at 20:00"));
   assert.deepEqual(errors, []);
 });
 
 test("injuries: the profile note is read into muscles, and Autopilot holds the lifts that work them", async (t) => {
-  const { page, errors, claudeRequests } = await openApp(t, {
+  const { page, errors, aiRequests } = await openApp(t, {
     seed: { "gymbot:workouts": [userWorkout] },
-    claude: (body) => (body.system.startsWith("Below is an athlete's note") ? '{"muscles":["shoulders","nonsense"]}' : "OK"),
+    ai: (body) => (body.system.startsWith("Below is an athlete's note") ? '{"muscles":["shoulders","nonsense"]}' : "OK"),
   });
   await page.getByRole("button", { name: "Goals", exact: true }).tap();
   await page.getByPlaceholder(/Left shoulder gets cranky/).fill("Left shoulder sore since last week");
   await page.getByText("Autopilot keeps the weight on lifts that work your shoulders.").waitFor();
-  assert.equal(claudeRequests.filter((b) => b.system.startsWith("Below is an athlete's note")).length, 1); // once, after typing stopped
+  assert.equal(aiRequests.filter((b) => b.system.startsWith("Below is an athlete's note")).length, 1); // once, after typing stopped
   await settle(page);
   assert.deepEqual((await stored(page, "gymbot:settings")).injuryAreas, { notes: "Left shoulder sore since last week", muscles: ["shoulders"] });
 
@@ -73,3 +73,22 @@ test("injuries: the profile note is read into muscles, and Autopilot holds the l
   assert.match(await bench.innerText(), /Easy on your shoulders/);
   assert.deepEqual(errors, []);
 });
+
+test("form check: photos go to the AI as base64 JPEG images next to the request", async (t) => {
+  const { page, errors, aiRequests } = await openApp(t, {
+    ai: (body) => (body.system.startsWith("You are an expert strength coach") ? "**Verdict**: solid lockout." : "OK"),
+  });
+  await page.getByRole("button", { name: "Form", exact: true }).tap();
+  await page.getByPlaceholder("Back Squat").fill("Deadlift");
+  await page.getByLabel("Upload a video or photos").setInputFiles({ name: "lockout.png", mimeType: "image/png", buffer: Buffer.from(PNG_1PX, "base64") });
+  await page.getByAltText("Frame 1").waitFor();
+  await page.getByRole("button", { name: "Check my form" }).tap();
+  await page.getByText("solid lockout.").first().waitFor(); // the feedback, and the same text under Past checks
+  const [message] = aiRequests.find((b) => b.system.startsWith("You are an expert strength coach")).messages;
+  assert.match(message.content, /^Exercise: Deadlift\./);
+  assert.equal(message.images.length, 1);
+  assert.ok(Buffer.from(message.images[0], "base64").subarray(0, 2).equals(Buffer.from([0xff, 0xd8]))); // re-encoded as JPEG
+  assert.deepEqual(errors, []);
+});
+
+const PNG_1PX = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
