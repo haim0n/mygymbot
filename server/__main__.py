@@ -7,6 +7,7 @@ Settings come from the environment:
 - ``GYMBOT_IAP_AUDIENCE``: the service's IAP audience, ``/projects/<number>/locations/<region>/services/<name>``.
   Required on any other ``HOST``, since whoever reaches the server can use the AI and the data. Without it
   there is one user, ``dev``.
+- ``GYMBOT_COMMIT``: the git commit this copy was deployed from (set by ``npm run deploy``), shown in the app.
 """
 
 import os
@@ -30,7 +31,7 @@ def main() -> None:
     data_dir = Path(os.environ.get("GYMBOT_DATA_DIR", ROOT / "data"))
     data_dir.mkdir(parents=True, exist_ok=True)
     print(f"GymBot data: {data_dir}")
-    uvicorn.run(create_app(Stores(data_dir), iap_audience), host=host, port=int(os.environ.get("PORT", "5173")))
+    uvicorn.run(create_app(Stores(data_dir), iap_audience, os.environ.get("GYMBOT_COMMIT")), host=host, port=int(os.environ.get("PORT", "5173")))
 
 
 if __name__ == "__main__":

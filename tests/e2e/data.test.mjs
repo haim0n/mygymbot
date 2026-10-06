@@ -1,12 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { openApp, section, settle, stored } from "./helpers.mjs";
+import { readFile } from "node:fs/promises";
+import { COMMIT, openApp, section, settle, stored } from "./helpers.mjs";
 import { userWorkout, settings } from "../fixtures.mjs";
 
-test("export: every gymbot key as one JSON object", async (t) => {
+test("export: every gymbot key as one JSON object, next to the app version and commit", async (t) => {
   const seed = { "gymbot:workouts": [userWorkout], "gymbot:settings": settings() };
   const { page, errors } = await openApp(t, { seed });
   await page.getByRole("button", { name: "Goals", exact: true }).tap();
+  const { version } = JSON.parse(await readFile(new URL("../../package.json", import.meta.url), "utf8"));
+  await page.getByText(`GymBot ${version} ${COMMIT}`).waitFor();
   await page.getByRole("button", { name: "Export data" }).tap();
   const exported = JSON.parse(await page.getByLabel("Exported data").inputValue());
   assert.deepEqual(exported["gymbot:workouts"], seed["gymbot:workouts"]);

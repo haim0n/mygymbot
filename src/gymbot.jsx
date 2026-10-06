@@ -7,6 +7,9 @@ import { MessageCircle, Dumbbell, Video, TrendingUp, Target, Send, Trash2, Plus,
 
 const MODEL = "claude-sonnet-4-6";
 
+// Shown under Goals, so users and developers can tell which build they run. Bump it with package.json's "version" on every release.
+const APP_VERSION = "0.2.0";
+
 const STORAGE_KEYS = {
   workouts: "gymbot:workouts",
   settings: "gymbot:settings",
@@ -3466,9 +3469,13 @@ function GoalsView({ settings, setSettings, records, workouts }) {
       </Panel>
 
       <ExportPanel />
+      <p className="text-center text-xs text-zinc-400">GymBot {[APP_VERSION, deployedCommit()].filter(Boolean).join(" ")}</p>
     </div>
   );
 }
+
+// The git commit the hosted copy was deployed from, which its server puts in the page; claude.ai has none.
+const deployedCommit = () => document.querySelector('meta[name="gymbot-commit"]')?.content;
 
 // Shows the export as text: downloads and clipboard access can be blocked inside the artifact sandbox.
 function ExportPanel() {

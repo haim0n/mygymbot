@@ -1,13 +1,14 @@
 """The web server: the app's page and bundle, its per-user storage API, its AI endpoint, all behind IAP."""
 
 import asyncio
+import html
 import json
 import logging
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from server import gemini, iap
@@ -19,13 +20,17 @@ DEV_USER = "dev"  # the only user without IAP (local dev); data in data/dev.json
 logger = logging.getLogger(__name__)
 
 
-def create_app(stores: Stores, iap_audience: str | None) -> FastAPI:
+def create_app(stores: Stores, iap_audience: str | None, commit: str | None = None) -> FastAPI:
     """Build the server around each user's ``stores``.
 
     With ``iap_audience`` set, every request must carry IAP's signed identity for this service, and the
     signed-in email decides whose data the storage API uses. Without it, everyone is the single user ``dev``.
+    ``commit``, the git commit this copy was deployed from, goes into the page for the app to show.
     """
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    page = (WEB_DIR / "index.html").read_text()
+    if commit:
+        page = page.replace("<head>", f'<head>\n    <meta name="gymbot-commit" content="{html.escape(commit)}" />', 1)
 
     @app.middleware("http")
     async def identify_user(request: Request, call_next: Any) -> Response:
@@ -41,8 +46,8 @@ def create_app(stores: Stores, iap_audience: str | None) -> FastAPI:
         return await call_next(request)
 
     @app.get("/")
-    def index() -> FileResponse:
-        return FileResponse(WEB_DIR / "index.html")
+    def index() -> HTMLResponse:
+        return HTMLResponse(page)
 
     @app.get("/api/storage/{key:path}")
     def read_value(key: str, request: Request) -> Response:

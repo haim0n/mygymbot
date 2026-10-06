@@ -8,6 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+export const COMMIT = "abc1234-dirty"; // as if deployed with uncommitted changes
 export const NOW = new Date("2026-10-03T18:00:00"); // a Saturday evening
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -25,7 +26,7 @@ async function startServer(seed) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "gymbot-test-"));
   await writeFile(path.join(dir, "dev.json"), JSON.stringify(seed));
   const port = await freePort();
-  const env = { ...process.env, PORT: String(port), GYMBOT_DATA_DIR: dir, GYMBOT_IAP_AUDIENCE: "" };
+  const env = { ...process.env, PORT: String(port), GYMBOT_DATA_DIR: dir, GYMBOT_IAP_AUDIENCE: "", GYMBOT_COMMIT: COMMIT };
   const server = spawn(path.join(ROOT, ".venv/bin/python"), ["-m", "server"], { cwd: ROOT, env, stdio: ["ignore", "ignore", "pipe"] });
   let log = "";
   server.stderr.on("data", (chunk) => (log += chunk));

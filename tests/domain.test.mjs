@@ -2,6 +2,7 @@
 // Dates are built relative to the real today, because the app's logic reads today's date.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { loadApp } from "./load-app.mjs";
 
 const app = await loadApp([
@@ -12,7 +13,7 @@ const app = await loadApp([
   "sessionSetCounts", "sessionToWorkout", "workoutToSession",
   "goalForecast", "forecastText", "todayPlan", "pendingCheckIn",
   "paceText", "sanitizeActivities", "activitySummary", "summaryText", "sessionsInWeekOf", "lastGymWorkout",
-  "buildCoachContext", "logBodyweight", "currentBodyweight",
+  "buildCoachContext", "logBodyweight", "currentBodyweight", "APP_VERSION",
 ]);
 
 const daysAgo = (n) => {
@@ -314,4 +315,9 @@ test("Highlights: new bests, earned increases, longest activities", () => {
   assert.ok(facts.some((t) => t.startsWith("New best on Bench Press")));
   assert.ok(facts.includes("Bench Press goes up to 85 kg next time."));
   assert.ok(facts.includes("Your longest run yet, beating 5 km."));
+});
+
+test("Version: the app shows the same version as package.json", async () => {
+  const { version } = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(app.APP_VERSION, version);
 });

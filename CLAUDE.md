@@ -39,6 +39,7 @@ Run `npm test` after any logic change and `npm run test:all` before handing work
 - Domain logic is pure functions (no React, no I/O) in the sections between "Dates & formatting" and "Coach context". New logic goes there and gets a test in `tests/domain.test.mjs` (functions are reached via `loadApp([...names])`).
 - Tunable numbers are named constants in **Config** with a comment saying what they mean. Prompts live in **Prompts**.
 - Deterministic rules wherever an answer must be consistent (Autopilot, forecasts, muscle rules, video lookup). Use the AI for language, images and unknown inputs, and cache what it classifies.
+- **Version**: `APP_VERSION` in Config (shown at the bottom of Goals) and `version` in `package.json` stay equal (a unit test checks). Bump both for every release, i.e. before a deploy or a claude.ai upload that changes the app. The hosted copy also shows the git commit it was deployed from (`npm run deploy` sets `GYMBOT_COMMIT`, the server puts it in the page), with `-dirty` if there were uncommitted changes, so deploy after committing.
 - Stored data stays backward compatible: new fields are optional and read with defaults (`profile.trainingDays ?? []`). Never rename storage keys without a migration.
 - Comments explain *why*. Names are full words.
 - UI: mobile first (393 px wide), sentence case, plain words, no exclamation marks, no middle-dot separators. Small by default, expand on tap.
