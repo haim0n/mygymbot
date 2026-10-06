@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { Trash2, Loader2, Upload } from "lucide-react";
-import { VIDEO_MARKER } from "../config.js";
+import { IMPORT_MARKER, VIDEO_MARKER } from "../config.js";
 import { parseRoutineTag } from "../workout.js";
+import { parseProfileTag } from "../coach-context.js";
 import { VideoGuides } from "./videos.jsx";
 import { guideFor } from "../training.js";
 
@@ -120,8 +121,8 @@ export function renderBold(text) {
   );
 }
 
-// Minimal markdown: headings, "- " bullets and **bold**, plus the coach's video and plan tags.
-export function RichText({ text, onSaveRoutine }) {
+// Minimal markdown: headings, "- " bullets and **bold**, plus the coach's video, plan, profile and import tags.
+export function RichText({ text, onSaveRoutine, onSaveProfile, onOpenImport }) {
   const lines = text.split("\n").filter((line) => line.trim());
   return (
     <div className="space-y-1.5 leading-relaxed">
@@ -134,6 +135,14 @@ export function RichText({ text, onSaveRoutine }) {
         }
         const routine = parseRoutineTag(line);
         if (routine) return <RoutineSuggestion key={i} routine={routine} onSave={onSaveRoutine} />;
+        if (IMPORT_MARKER.test(line))
+          return onOpenImport ? (
+            <button key={i} onClick={onOpenImport} className="rounded-full border border-blue-700 px-3 py-1 text-sm font-semibold text-blue-700">
+              Import history
+            </button>
+          ) : null;
+        const profile = parseProfileTag(line);
+        if (profile) return onSaveProfile ? <ProfileSuggestion key={i} profile={profile} onSave={onSaveProfile} /> : null;
         const isHeading = /^#{1,4}\s/.test(line);
         const content = renderBold(line.replace(/^\s*[-*•]\s+/, "").replace(/^#{1,4}\s/, ""));
         if (isHeading) return <p key={i} className="font-semibold text-zinc-900 pt-1">{content}</p>;
@@ -146,6 +155,36 @@ export function RichText({ text, onSaveRoutine }) {
           );
         return <p key={i}>{content}</p>;
       })}
+    </div>
+  );
+}
+
+const PROFILE_LABELS = { name: "Name", experience: "Experience", daysPerWeek: "Sessions per week", focus: "Main focus", notes: "Injuries and equipment", music: "Workout music" };
+
+// What the coach learned in a new athlete's interview, saved to their profile with one tap.
+export function ProfileSuggestion({ profile, onSave }) {
+  const [saved, setSaved] = useState(false);
+  return (
+    <div className="rounded-xl border-2 border-zinc-200 p-3">
+      <div className="font-semibold text-zinc-900">Your profile</div>
+      <dl className="text-sm">
+        {Object.entries(profile).map(([field, value]) => (
+          <div key={field}>
+            <dt className="inline text-zinc-500">{PROFILE_LABELS[field]}: </dt>
+            <dd className="inline">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <button
+        onClick={() => {
+          onSave(profile);
+          setSaved(true);
+        }}
+        disabled={saved}
+        className="mt-2 rounded-full border border-blue-700 px-3 py-1 text-sm font-semibold text-blue-700 disabled:opacity-40"
+      >
+        {saved ? "Saved" : "Save to profile"}
+      </button>
     </div>
   );
 }

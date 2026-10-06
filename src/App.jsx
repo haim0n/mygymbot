@@ -7,7 +7,7 @@ import { exercisesByFrequency, logBodyweight, personalRecords } from "./training
 import { buildAutopilotPlans } from "./autopilot.js";
 import { todayFacts } from "./motivation.js";
 import { saveRoutine } from "./workout.js";
-import { buildCoachContext } from "./coach-context.js";
+import { buildCoachContext, isNewAthlete } from "./coach-context.js";
 import { useDailyNote } from "./ui/motivation.jsx";
 import { useInjuryAreas, useLearnedMuscles } from "./ui/muscles.jsx";
 import { ExerciseContext, ExerciseSheet } from "./ui/exercises.jsx";
@@ -56,6 +56,7 @@ export default function GymBot() {
   const [tab, setTab] = useState("coach");
   const restTimer = useRestTimer();
   const [detailsFor, setDetailsFor] = useState(null); // exercise shown in the details sheet
+  const [showImport, setShowImport] = useState(false); // Import history open in Log; the coach can open it
   const [workouts, setWorkouts, workoutsLoaded] = usePersistentState(STORAGE_KEYS.workouts, []);
   const [settings, setSettings, settingsLoaded] = usePersistentState(STORAGE_KEYS.settings, DEFAULT_SETTINGS);
   const [chat, setChat, chatLoaded] = usePersistentState(STORAGE_KEYS.chat, []);
@@ -68,6 +69,11 @@ export default function GymBot() {
 
   const setRepRange = (name, range) => setSettings((s) => ({ ...s, repRanges: { ...s.repRanges, [name]: range } }));
   const storeRoutine = (routine) => setSettings((s) => ({ ...s, routines: saveRoutine(s.routines ?? [], routine) }));
+  const storeProfile = (fields) => setSettings((s) => ({ ...s, profile: { ...s.profile, ...fields } }));
+  const openImport = () => {
+    setShowImport(true);
+    setTab("log");
+  };
   const deleteRoutine = (name) => setSettings((s) => ({ ...s, routines: (s.routines ?? []).filter((r) => r.name !== name) }));
 
   const loaded = workoutsLoaded && settingsLoaded && chatLoaded && formChecksLoaded && sessionLoaded && bodyweightLoaded;
@@ -81,13 +87,13 @@ export default function GymBot() {
   );
   const facts = useMemo(() => todayFacts({ workouts, settings, records, plans }), [workouts, settings, records, plans]);
   const coachStyle = settings.profile.coachStyle ?? DEFAULT_SETTINGS.profile.coachStyle;
-  const dailyNote = useDailyNote({ enabled: loaded, facts, context: coachContext, style: coachStyle });
+  const dailyNote = useDailyNote({ enabled: loaded && workouts.length > 0, facts, context: coachContext, style: coachStyle });
   const { unit, daysPerWeek, notes } = settings.profile;
 
   const views = {
-    coach: <CoachView chat={chat} setChat={setChat} context={coachContext} briefing={{ facts, note: dailyNote }} onNavigate={setTab} onSaveRoutine={storeRoutine} />,
+    coach: <CoachView chat={chat} setChat={setChat} context={coachContext} briefing={{ facts, note: dailyNote }} newAthlete={isNewAthlete(settings, workouts)} onNavigate={setTab} onSaveRoutine={storeRoutine} onSaveProfile={storeProfile} onOpenImport={openImport} />,
     log: (
-      <LogView workouts={workouts} setWorkouts={setWorkouts} session={session} setSession={setSession} settings={settings} coachContext={coachContext} plans={plans} learnedMuscles={learnedMuscles} onRangeChange={setRepRange} onStartRest={restTimer.start} onSaveRoutine={storeRoutine} onDeleteRoutine={deleteRoutine} unit={unit} />
+      <LogView workouts={workouts} setWorkouts={setWorkouts} session={session} setSession={setSession} settings={settings} coachContext={coachContext} plans={plans} learnedMuscles={learnedMuscles} onRangeChange={setRepRange} onStartRest={restTimer.start} onSaveRoutine={storeRoutine} onDeleteRoutine={deleteRoutine} showImport={showImport} setShowImport={setShowImport} unit={unit} />
     ),
     form: <FormCheckView profileNotes={notes} formChecks={formChecks} setFormChecks={setFormChecks} />,
     progress: <ProgressView workouts={workouts} records={records} exerciseNames={exerciseNames} learnedMuscles={learnedMuscles} unit={unit} daysPerWeek={daysPerWeek} onNavigate={setTab}

@@ -1,4 +1,5 @@
-import { BODYWEIGHT_CONTEXT_ENTRIES, COACH_STYLES, DEFAULT_SETTINGS, MUSCLE_LABELS, PAIN_LOOKBACK_DAYS, PLAN_STATUS, WEEKDAYS } from "./config.js";
+import { BODYWEIGHT_CONTEXT_ENTRIES, COACH_STYLES, DEFAULT_SETTINGS, EXPERIENCE_LEVELS, MUSCLE_LABELS, PAIN_LOOKBACK_DAYS, PLAN_STATUS, PROFILE_MARKER, TRAINING_FOCUSES, WEEKDAYS } from "./config.js";
+import { ONBOARDING_PROMPT } from "./prompts.js";
 import { daysBetween, formatClock, today } from "./dates.js";
 import { currentBodyweight, personalRecords, sortNewestFirst } from "./training.js";
 import { formatRange } from "./autopilot.js";
@@ -19,6 +20,33 @@ export function recentPainLines(workouts) {
   return sortNewestFirst(workouts)
     .filter((w) => w.checkIn?.pain && w.checkIn.pain !== "No" && !w.checkIn.skipped && daysBetween(w.date, today()) <= PAIN_LOOKBACK_DAYS)
     .map((w) => `- ${w.date}: pain "${w.checkIn.pain}" after ${w.exercises.map((e) => e.name).join(", ") || "this session"}${w.checkIn.note ? `; note: ${w.checkIn.note}` : ""}`);
+}
+
+// No workouts and no plans: the coach interviews them and suggests a first plan. Saving a plan or logging anything ends it.
+export const isNewAthlete = (settings, workouts) => !workouts.length && !(settings.routines ?? []).length;
+
+const pickFrom = (options) => (value) => options.find((option) => option.toLowerCase() === value.toLowerCase());
+const asIs = (value) => value;
+// The profile fields a [profile: ...] tag may set, each with a check that returns the value to store, or nothing.
+const PROFILE_TAG_FIELDS = {
+  name: asIs,
+  experience: pickFrom(EXPERIENCE_LEVELS),
+  daysPerWeek: (value) => [1, 2, 3, 4, 5, 6, 7].find((days) => days === Number(value)),
+  focus: pickFrom(TRAINING_FOCUSES),
+  notes: asIs,
+  music: asIs,
+};
+
+// "[profile: experience: beginner; daysPerWeek: 3]" → { experience: "Beginner", daysPerWeek: 3 }; null for any other line, or if nothing in it is valid.
+export function parseProfileTag(line) {
+  const fields = {};
+  for (const pair of line.match(PROFILE_MARKER)?.[1].split(";") ?? []) {
+    const [key, ...value] = pair.split(":");
+    const field = Object.keys(PROFILE_TAG_FIELDS).find((name) => name.toLowerCase() === key.trim().toLowerCase());
+    const checked = field && PROFILE_TAG_FIELDS[field](value.join(":").trim());
+    if (checked) fields[field] = checked;
+  }
+  return Object.keys(fields).length ? fields : null;
 }
 
 export function buildCoachContext({ profile, goals, routines = [] }, workouts, plans, learnedMuscles, session, bodyweightLog = []) {
@@ -55,6 +83,7 @@ export function buildCoachContext({ profile, goals, routines = [] }, workouts, p
     `ATHLETE: ${name}${profile.experience}, bodyweight ${currentBodyweight(bodyweightLog, profile) ?? "unknown"}${u}, ${schedule}, focus: ${profile.focus}, coaching style: ${COACH_STYLES[profile.coachStyle ?? DEFAULT_SETTINGS.profile.coachStyle]}.`,
     profile.notes && `INJURIES AND EQUIPMENT (from the athlete's profile; plan around these): ${profile.notes}`,
     profile.foodNotes && `FOOD PREFERENCES: ${profile.foodNotes}`,
+    profile.music && `WORKOUT MUSIC: ${profile.music}`,
     pain.length > 0 && `RECENT PAIN (from post-workout check-ins; adapt plans around it):\n${pain.join("\n")}`,
     `TODAY: ${todayLine}.`,
     bodyweightLog.length > 1 &&
@@ -75,6 +104,7 @@ export function buildCoachContext({ profile, goals, routines = [] }, workouts, p
       .join(", ")}`,
     `ACTIVITIES, LAST 7 DAYS: ${activitySummary(workouts).map((s) => `${s.type}: ${summaryText(s)}`).join("; ") || "none"}`,
     `RECENT WORKOUTS (newest first):\n${recent.join("\n") || "none logged yet"}`,
+    isNewAthlete({ routines }, workouts) && ONBOARDING_PROMPT,
   ]
     .filter(Boolean)
     .join("\n\n");

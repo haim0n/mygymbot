@@ -162,6 +162,9 @@ export function GoalsView({ settings, setSettings, records, workouts }) {
               className={inputClass}
             />
           </Field>
+          <Field label="Workout music" className="col-span-2">
+            <input value={profile.music ?? ""} onChange={(e) => updateProfile("music")(e.target.value)} placeholder="Rock, hip hop, fast techno" className={inputClass} />
+          </Field>
           <Field label="Coaching style" className="col-span-2">
             <Select value={profile.coachStyle ?? DEFAULT_SETTINGS.profile.coachStyle} options={Object.keys(COACH_STYLES)} onChange={updateProfile("coachStyle")} />
           </Field>

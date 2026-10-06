@@ -58,17 +58,21 @@ export function weekProgressFact(count, target) {
 // Each fact: { tone: "celebrate" | "nudge" | "info", text, action?: { label, tab } }
 export function todayFacts({ workouts, settings, records, plans }) {
   const { profile, goals } = settings;
+  const next = nextRoutine(settings.routines ?? [], workouts);
+  const START = { label: "Start", tab: "log" };
   if (!workouts.length) {
-    return [{ tone: "nudge", text: "Log your first workout and Autopilot will set your targets.", action: { label: "Log one", tab: "log" } }];
+    return [
+      next
+        ? { tone: "plan", text: `Your first workout is ready: ${next.name}.`, action: START }
+        : { tone: "nudge", text: "Log your first workout and Autopilot will set your targets.", action: { label: "Log one", tab: "log" } },
+    ];
   }
   const target = weeklyTarget(profile);
   const daysAway = daysBetween(sortNewestFirst(workouts)[0].date, today());
   const streak = weeklyStreak(workouts, target);
   const increases = plans.filter((p) => p.status === "increase").map((p) => p.name);
   const plan = todayPlan(profile, workouts);
-  const next = nextRoutine(settings.routines ?? [], workouts);
   const checkIn = pendingCheckIn(workouts);
-  const START = { label: "Start", tab: "log" };
 
   return [
     plan.status === "planned" && {

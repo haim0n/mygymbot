@@ -362,12 +362,11 @@ export function WorkoutEditor({ workout, unit, onSave, onCancel }) {
   );
 }
 
-export function LogView({ workouts, setWorkouts, session, setSession, settings, plans, learnedMuscles, coachContext, onRangeChange, onStartRest, onSaveRoutine, onDeleteRoutine, unit }) {
+export function LogView({ workouts, setWorkouts, session, setSession, settings, plans, learnedMuscles, coachContext, onRangeChange, onStartRest, onSaveRoutine, onDeleteRoutine, showImport, setShowImport, unit }) {
   const [description, setDescription] = useState("");
   const [manual, setManual] = useState({ name: "", sets: "3", reps: "8", weight: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [showImport, setShowImport] = useState(false);
   const [highlights, setHighlights] = useState(null);
   const [coachReply, setCoachReply] = useState(null);
   const checkInWorkout = pendingCheckIn(workouts);

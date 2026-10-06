@@ -270,6 +270,25 @@ test("Workout plans: done in turn, started at Autopilot's targets, edited by nam
   assert.ok(app.buildCoachContext(settingsWith(), [], [], {}, null).includes("WORKOUT PLANS (done in turn):\nnone saved"));
 });
 
+test("Onboarding: a new athlete is interviewed until a plan is saved or a workout logged, and the profile tag is checked", () => {
+  const a = { name: "A", exercises: ["Goblet Squat"] };
+  assert.equal(app.isNewAthlete(settingsWith(), []), true);
+  assert.equal(app.isNewAthlete({ ...settingsWith(), routines: [a] }, []), false);
+  assert.equal(app.isNewAthlete(settingsWith(), [userWorkout(daysAgo(3))]), false);
+  assert.ok(app.buildCoachContext(settingsWith(), [], [], {}, null).includes("NEW ATHLETE"));
+  assert.ok(!app.buildCoachContext({ ...settingsWith(), routines: [a] }, [], [], {}, null).includes("NEW ATHLETE"));
+
+  assert.deepEqual(app.parseProfileTag(" [profile: name: Dana; experience: beginner; DAYSPERWEEK: 3; focus: fat loss; notes: home gym: dumbbells; music: rock] "), {
+    name: "Dana", experience: "Beginner", daysPerWeek: 3, focus: "Fat loss", notes: "home gym: dumbbells", music: "rock",
+  });
+  assert.deepEqual(app.parseProfileTag("[profile: experience: Expert; daysPerWeek: 9; focus: ; unit: lb; constructor: x; music: jazz]"), { music: "jazz" }); // invalid or unknown: left out
+  assert.equal(app.parseProfileTag("[profile: daysPerWeek: 2.5]"), null);
+  assert.equal(app.parseProfileTag("Saved [profile: name: Dana]"), null);
+
+  const { routines, ...noPlans } = settingsWith();
+  assert.deepEqual(app.todayFacts({ workouts: [], settings: { ...noPlans, routines: [a] }, records: {}, plans: [] }).map((f) => f.text), ["Your first workout is ready: A."]);
+});
+
 test("Forecasts: dates, deadlines, and honest refusals", () => {
   const bench = (n, weight) => workout(`b${n}`, daysAgo(n), [ex("Bench Press (Dumbbell)", [[weight, 10]])]);
   const steady = [56, 49, 42, 35, 28, 21, 14, 7].map((n, i) => bench(n, 40 + i * 0.75)); // ~+1 kg est. 1RM a week

@@ -1,18 +1,20 @@
 import { useState, useEffect, useRef } from "react";
 import { Send, Loader2 } from "lucide-react";
 import { CHAT_CONTEXT_SIZE, CHAT_HISTORY_SIZE, QUICK_PROMPTS } from "../config.js";
-import { COACH_PROMPT } from "../prompts.js";
+import { COACH_PROMPT, ONBOARDING_GREETING } from "../prompts.js";
 import { askAI, recentTurns } from "../ai.js";
 import { ErrorText, RichText, ViewTitle, inputClass } from "./primitives.jsx";
 import { TodayCard } from "./motivation.jsx";
 
-export function CoachView({ chat, setChat, context, briefing, onNavigate, onSaveRoutine }) {
+export function CoachView({ chat, setChat, context, briefing, newAthlete, onNavigate, onSaveRoutine, onSaveProfile, onOpenImport }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const bottomRef = useRef(null);
 
   const hasMounted = useRef(false);
+  // A new athlete's chat opens with the coach's first question, kept in the chat once they answer.
+  const shown = newAthlete && chat.length === 0 ? [{ role: "assistant", content: ONBOARDING_GREETING }] : chat;
 
   // Follow new messages, but open at the top so the Today card is the first thing you see.
   useEffect(() => {
@@ -23,14 +25,14 @@ export function CoachView({ chat, setChat, context, briefing, onNavigate, onSave
   async function send(text) {
     const content = text.trim();
     if (!content || busy) return;
-    const conversation = [...chat, { role: "user", content }];
+    const conversation = [...shown, { role: "user", content }];
     setChat(conversation);
     setInput("");
     setBusy(true);
     setError("");
     try {
       const reply = await askAI(`${COACH_PROMPT}\n\n${context}`, recentTurns(conversation, CHAT_CONTEXT_SIZE));
-      setChat(recentTurns([...conversation, { role: "assistant", content: reply }], CHAT_HISTORY_SIZE));
+      setChat([...conversation, { role: "assistant", content: reply }].slice(-CHAT_HISTORY_SIZE)); // may start with the coach; requests trim to a user turn
     } catch (err) {
       setChat(chat); // roll back the unanswered question…
       setInput(content); // …so it can be sent again
@@ -50,19 +52,19 @@ export function CoachView({ chat, setChat, context, briefing, onNavigate, onSave
     <div>
       <ViewTitle action={clearButton}>Coach</ViewTitle>
       <TodayCard facts={briefing.facts} note={briefing.note} onNavigate={onNavigate} />
-      {chat.length === 0 && (
+      {shown.length === 0 && (
         <p className="text-zinc-600 mb-4">Ask anything about your training. Your coach sees your goals, profile and recent workouts.</p>
       )}
 
       <div className="space-y-3 pb-36">
-        {chat.map((message, i) =>
+        {shown.map((message, i) =>
           message.role === "user" ? (
             <div key={i} className="flex justify-end">
               <p className="max-w-xs rounded-2xl rounded-br-md bg-blue-700 text-white px-4 py-2.5">{message.content}</p>
             </div>
           ) : (
             <div key={i} className="rounded-2xl rounded-bl-md bg-white px-4 py-3 text-zinc-700">
-              <RichText text={message.content} onSaveRoutine={onSaveRoutine} />
+              <RichText text={message.content} onSaveRoutine={onSaveRoutine} onSaveProfile={onSaveProfile} onOpenImport={onOpenImport} />
             </div>
           )
         )}
@@ -77,7 +79,7 @@ export function CoachView({ chat, setChat, context, briefing, onNavigate, onSave
 
       <div className="fixed inset-x-0 bottom-16 bg-zinc-100 border-t border-zinc-200">
         <div className="max-w-md mx-auto px-4 pt-2 pb-3">
-          <div className="flex gap-2 overflow-x-auto pb-2">
+          {!newAthlete && <div className="flex gap-2 overflow-x-auto pb-2">
             {QUICK_PROMPTS.map((prompt) => (
               <button
                 key={prompt}
@@ -88,7 +90,7 @@ export function CoachView({ chat, setChat, context, briefing, onNavigate, onSave
                 {prompt}
               </button>
             ))}
-          </div>
+          </div>}
           <div className="flex gap-2">
             <input
               value={input}

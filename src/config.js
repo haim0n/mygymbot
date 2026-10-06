@@ -1,7 +1,7 @@
 import { Footprints, Mountain, Bike, Waves, PersonStanding, Activity } from "lucide-react";
 
 // Shown under Goals, so users and developers can tell which build they run. Bump it with package.json's "version" on every release.
-export const APP_VERSION = "0.3.0";
+export const APP_VERSION = "0.4.0";
 
 export const STORAGE_KEYS = {
   workouts: "gymbot:workouts",
@@ -124,6 +124,8 @@ export const MUSCLE_RULES = [
 // Matched against exercise names in order, so specific patterns come first.
 export const VIDEO_MARKER = /^\s*\[video:\s*(.+?)\]\s*$/i; // the coach writes [video: Exercise Name] on its own line
 export const ROUTINE_MARKER = /^\s*\[plan:\s*([^:\]]+?)\s*:\s*(.+?)\]\s*$/i; // the coach writes [plan: Name: Exercise, Exercise, ...] on its own line
+export const IMPORT_MARKER = /^\s*\[import\]\s*$/i; // the coach writes [import] on its own line for a button that opens Import history
+export const PROFILE_MARKER = /^\s*\[profile:\s*(.+?)\]\s*$/i; // a new athlete's interview ends with [profile: field: value; field: value; ...]
 export const VIDEO_LIBRARY = [
   { exercise: "Incline press", match: /incline.*(press|bench)/, videos: [{ id: "SrqOu55lrYU", channel: "Jeff Nippard" }] },
   { exercise: "Dumbbell bench press", match: /bench.*dumbbell|dumbbell.*bench/, videos: [{ id: "WLTU1j7Ur8M", channel: "BarBend" }] },

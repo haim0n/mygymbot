@@ -53,6 +53,7 @@ type Settings = {
     coachStyle: "Encouraging" | "Hype" | "Calm" | "Tough love";
     notes: string;            // injuries and equipment
     foodNotes: string;        // food preferences
+    music?: string;           // what they like to train to
     trainingDays: number[];   // Date.getDay() numbers (0 = Sunday)
     trainingTime: string;     // "HH:MM" or ""
   };
@@ -135,7 +136,7 @@ App-level state: workouts, settings, chat, form checks, session, rest timer, ope
   - goals within 10% of the target, or due within 14 days
   - a streak of 2+ weeks
   - progress toward this week's target
-- **Daily note.** One coach note per day per coaching style, cached. On a planned day it's a pep talk naming a target.
+- **Daily note.** One coach note per day per coaching style, cached. On a planned day it's a pep talk naming a target. None until the first workout is logged.
 - **After saving.** "Session saved" highlights: new bests, earned increases, milestones, weekly target, and for activities pace and "longest yet."
 - **Weekly target and streak** count *training days* (distinct dates).
 
@@ -161,7 +162,7 @@ The latest workout from the last 2 days gets a "How did it go?" card: effort, pa
 ### Video guides
 - **Library:** a fixed `VIDEO_LIBRARY` of 36 exercises, each linked to tutorials from established coaches.
 - **Matching:** by regex after name cleanup. Exercises it doesn't cover get no video.
-- **Coach recommendations:** the coach writes `[video: Exercise]` tags, the app resolves them against the library, and anything else, including raw URLs, is never made into a link. Workout plans it suggests or fixes are `[plan: Name: Exercise, ...]` lines, shown with a Save plan button (same name replaces that plan).
+- **Coach recommendations:** the coach writes `[video: Exercise]` tags, the app resolves them against the library, and anything else, including raw URLs, is never made into a link. Workout plans it suggests or fixes are `[plan: Name: Exercise, ...]` lines, shown with a Save plan button (same name replaces that plan). A new athlete's interview ends with a `[profile: field: value; ...]` line (name, experience, daysPerWeek, focus, notes, music; each value checked by `parseProfileTag`), shown with a Save to profile button. `[import]` is a button that opens Import history in Log.
 
 ### Import
 - **CSV:**
@@ -186,9 +187,13 @@ The latest workout from the last 2 days gets a "How did it go?" card: effort, pa
 - **Coach:** sees a 7-day activity summary and the activities in recent workouts.
 - **Not editable yet:** delete and re-log to fix one.
 
+### Onboarding (`isNewAthlete`)
+- **Who**: no workouts and no saved plans. Saving a plan or logging anything ends it, so existing users never see it.
+- **How**: the chat opens with the coach's first message (`ONBOARDING_GREETING`, no AI call): an offer to import history from another app, then the first question. `ONBOARDING_PROMPT` joins the coach context and has the coach ask one question per message (goal, experience, days a week, injuries, equipment, music), then write a profile tag and the first plans. The Today card then says "Your first workout is ready".
+
 ### Coach context (`buildCoachContext`)
 Sent with every coach chat, check-in and daily note:
-- the athlete's profile, schedule and food preferences
+- the athlete's profile, schedule, food preferences and workout music
 - today's status
 - goals, with forecasts
 - best lifts
@@ -204,6 +209,7 @@ The chat sends the last 12 messages.
 | Prompt | Used for | Notes |
 |---|---|---|
 | `COACH_PROMPT` | Coach chat | Includes video-tag rules, food rules, coaching style |
+| `ONBOARDING_PROMPT` | Coach chat, new athletes only | Interview, then profile and plan tags |
 | `LOG_PARSER_PROMPT` | "Describe what you did" | Returns exercises + activities as JSON |
 | `FORM_PROMPT` | Form check | Frames or photos as images |
 | `COLUMN_MAPPER_PROMPT` | Unknown CSV layouts | Only header + 5 rows leave the device |
@@ -216,11 +222,11 @@ All JSON answers go through `askAIForJson`, which reads the outermost `{…}` so
 
 ## 7. UI map
 
-- **Coach:** Today card (note and facts) · chat with quick prompts (incl. "What should I eat today?") · input fixed above the tab bar.
+- **Coach:** Today card (note and facts) · for a new athlete, the coach's first question instead of quick prompts · chat with quick prompts (incl. "What should I eat today?") · input fixed above the tab bar.
 - **Log:** Import history (toggle) · Session saved · check-in card · coach reply · Workout (with Save as a plan) or Start a workout (saved plans, the next one first in line) · Log an activity · Up next · Add exercises (describe in words, or manual) · History (folded).
 - **Form:** exercise, focus note, file picker, frames, feedback, past checks.
 - **Progress:** stats · Activities (last 7 days) · muscle heatmap · estimated 1RM chart with trend line · weekly volume · best lifts.
-- **Goals:** goal cards (barbell loaded with plates you've lifted, forecast) · new goal · About you (units, bodyweight, experience, sessions per week, training days, usual time, food preferences, coaching style, main focus, injuries and equipment). · Your data (export as text)
+- **Goals:** goal cards (barbell loaded with plates you've lifted, forecast) · new goal · About you (units, bodyweight, experience, sessions per week, training days, usual time, food preferences, workout music, coaching style, main focus, injuries and equipment). · Your data (export as text)
 - **Everywhere:** rest timer bar (top), tab bar with a dot while a workout is in progress, exercise details sheet.
 
 ## 8. Decision log

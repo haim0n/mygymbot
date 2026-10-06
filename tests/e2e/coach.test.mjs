@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { openApp, section, stored, settle } from "./helpers.mjs";
+import { isCoachChat, openApp, section, stored, settle } from "./helpers.mjs";
 import { userWorkout, yesterdayWorkout, settings } from "../fixtures.mjs";
 
 test("check-in: asks about the latest workout, sends, saves, then goes away", async (t) => {
@@ -38,6 +38,46 @@ test("coach: video tags become library links; anything else is dropped", async (
   const reply = page.locator("div.rounded-bl-md").last();
   assert.deepEqual(await reply.getByRole("link").evaluateAll((links) => links.map((a) => a.href)), ["https://www.youtube.com/watch?v=zC3nLlEvin4"]);
   assert.ok(!(await reply.innerText()).includes("Zercher"));
+  assert.deepEqual(errors, []);
+});
+
+test("onboarding: a new athlete's coach asks first, then the profile and plans it suggests are saved", async (t) => {
+  const { page, errors, aiRequests } = await openApp(t, {
+    ai: (body) =>
+      isCoachChat(body)
+        ? "Here's your start.\n[profile: experience: Beginner; daysPerWeek: 3; focus: General fitness; music: hip hop]\n[plan: A: Goblet Squat, Push-up]\n[plan: B: Romanian Deadlift, Lat Pulldown]"
+        : "OK",
+  });
+  await page.getByText("A few quick questions first").waitFor();
+  assert.equal(await page.getByRole("button", { name: "Clear chat" }).count(), 0);
+  assert.equal(await page.getByRole("button", { name: "Analyze my last 4 weeks" }).count(), 0); // no quick prompts about data they don't have
+  await page.getByPlaceholder("Message your coach").fill("Just feel fitter");
+  await page.getByRole("button", { name: "Send" }).tap();
+  await page.getByText("Here's your start.").waitFor();
+
+  const sent = aiRequests.find(isCoachChat);
+  assert.ok(sent.system.includes("NEW ATHLETE"));
+  assert.deepEqual(sent.messages, [{ role: "user", content: "Just feel fitter" }]); // the opening question is in the prompt, not a turn
+  await page.getByRole("button", { name: "Save to profile" }).tap();
+  await page.getByRole("button", { name: "Save plan A" }).tap();
+  await page.getByRole("button", { name: "Save plan B" }).tap();
+  await page.getByText("Your first workout is ready: A.").waitFor();
+  await page.getByText("A few quick questions first").waitFor(); // still in the chat
+  await settle(page);
+
+  const saved = await stored(page, "gymbot:settings");
+  assert.deepEqual([saved.profile.experience, saved.profile.daysPerWeek, saved.profile.focus, saved.profile.music], ["Beginner", 3, "General fitness", "hip hop"]);
+  assert.deepEqual(saved.routines.map((r) => r.name), ["A", "B"]);
+  assert.equal(aiRequests.filter((b) => b.system.includes("motivation note")).length, 0); // no daily note before there's anything to say
+  assert.deepEqual(errors, []);
+});
+
+test("onboarding: the coach's first message offers to import history from another app", async (t) => {
+  const { page, errors } = await openApp(t);
+  await page.getByText("Already logging workouts in another app").waitFor();
+  await page.getByRole("button", { name: "Import history" }).tap();
+  await section(page, "Import history").getByText("Export a CSV from Strong, Hevy").waitFor(); // Log, with the import open
+  assert.equal(await page.getByRole("button", { name: "Close import" }).count(), 1);
   assert.deepEqual(errors, []);
 });
 
