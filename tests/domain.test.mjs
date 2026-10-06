@@ -12,7 +12,7 @@ const app = await loadApp([
   "sessionSetCounts", "sessionToWorkout", "workoutToSession",
   "goalForecast", "forecastText", "todayPlan", "pendingCheckIn",
   "paceText", "sanitizeActivities", "activitySummary", "summaryText", "sessionsInWeekOf", "lastGymWorkout",
-  "buildCoachContext",
+  "buildCoachContext", "logBodyweight", "currentBodyweight",
 ]);
 
 const daysAgo = (n) => {
@@ -102,6 +102,22 @@ test("Coach context: the athlete's name comes from the profile, when given", () 
   assert.match(athleteLine(" Haim "), /^ATHLETE: name Haim, Intermediate/);
   assert.match(athleteLine(""), /^ATHLETE: Intermediate/);
   assert.match(athleteLine(undefined), /^ATHLETE: Intermediate/); // profiles saved before the field existed
+});
+
+test("Bodyweight: one entry per day, kept in date order; the coach sees the current weight and the log", () => {
+  let log = app.logBodyweight([], "2026-10-03", 81);
+  log = app.logBodyweight(log, "2026-09-20", 82.5);
+  log = app.logBodyweight(log, "2026-10-03", 80.5); // same day: replaces
+  assert.deepEqual(log, [{ date: "2026-09-20", weight: 82.5 }, { date: "2026-10-03", weight: 80.5 }]);
+  assert.equal(app.currentBodyweight(log, { bodyweight: "90" }), 80.5);
+  assert.equal(app.currentBodyweight([], { bodyweight: "90" }), 90); // profiles from before the log
+  assert.equal(app.currentBodyweight([], { bodyweight: "" }), null);
+
+  const settings = { profile: { unit: "kg", experience: "Intermediate", daysPerWeek: 3, focus: "Strength", bodyweight: "90" }, goals: [] };
+  const context = app.buildCoachContext(settings, [], [], {}, null, log);
+  assert.match(context, /ATHLETE: Intermediate, bodyweight 80.5kg/);
+  assert.match(context, /BODYWEIGHT LOG \(kg, oldest first\): 2026-09-20 82.5, 2026-10-03 80.5/);
+  assert.match(app.buildCoachContext(settings, [], [], {}, null), /bodyweight 90kg/);
 });
 
 test("Autopilot: lighter warm-up/back-off sets are ignored; weights land on real equipment steps", () => {

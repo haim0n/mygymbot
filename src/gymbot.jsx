@@ -15,6 +15,7 @@ const STORAGE_KEYS = {
   session: "gymbot:session",
   dailyNote: "gymbot:daily-note",
   muscleMap: "gymbot:muscle-map",
+  bodyweight: "gymbot:bodyweight", // [{ date, weight }], oldest first, one per day
 };
 
 const EXPERIENCE_LEVELS = ["Beginner", "Intermediate", "Advanced"];
@@ -72,6 +73,7 @@ const PLAN_STATUS = {
 
 const CHAT_CONTEXT_SIZE = 12; // messages sent to the coach per request
 const CHAT_HISTORY_SIZE = 60; // messages kept on device
+const BODYWEIGHT_CONTEXT_ENTRIES = 30; // latest bodyweight entries the coach sees
 const FRAME_COUNT = 6; // frames sampled from a form-check video
 const FRAME_MAX_SIDE = 768; // px, keeps image uploads small
 
@@ -595,6 +597,14 @@ function exerciseTrend(workouts, name) {
     return [{ date: formatShortDate(workout.date), e1rm: round1(Math.max(...sets.map(estimate1RM))) }];
   });
 }
+
+// Logging again on the same day replaces that day's entry.
+function logBodyweight(log, date, weight) {
+  return [...log.filter((entry) => entry.date !== date), { date, weight }].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// The latest logged weight, else the single value profiles had before the log existed.
+const currentBodyweight = (log, profile) => log.at(-1)?.weight ?? (Number(profile.bodyweight) || null);
 
 function weeklyVolume(workouts, weeks = 8) {
   const totals = {};
@@ -1287,7 +1297,7 @@ function recentPainLines(workouts) {
     .map((w) => `- ${w.date}: pain "${w.checkIn.pain}" after ${w.exercises.map((e) => e.name).join(", ") || "this session"}${w.checkIn.note ? `; note: ${w.checkIn.note}` : ""}`);
 }
 
-function buildCoachContext({ profile, goals }, workouts, plans, learnedMuscles, session) {
+function buildCoachContext({ profile, goals }, workouts, plans, learnedMuscles, session, bodyweightLog = []) {
   const u = profile.unit;
   const formatWorkout = formatWorkoutLine;
   const schedule = (profile.trainingDays ?? []).length
@@ -1315,11 +1325,13 @@ function buildCoachContext({ profile, goals }, workouts, plans, learnedMuscles, 
 
   return [
     `Today is ${today()}. Weights are in ${u}, written weight x reps; dumbbell weights are per dumbbell.`,
-    `ATHLETE: ${name}${profile.experience}, bodyweight ${profile.bodyweight || "unknown"}${u}, ${schedule}, focus: ${profile.focus}, coaching style: ${COACH_STYLES[profile.coachStyle ?? DEFAULT_SETTINGS.profile.coachStyle]}.`,
+    `ATHLETE: ${name}${profile.experience}, bodyweight ${currentBodyweight(bodyweightLog, profile) ?? "unknown"}${u}, ${schedule}, focus: ${profile.focus}, coaching style: ${COACH_STYLES[profile.coachStyle ?? DEFAULT_SETTINGS.profile.coachStyle]}.`,
     profile.notes && `INJURIES AND EQUIPMENT (from the athlete's profile; plan around these): ${profile.notes}`,
     profile.foodNotes && `FOOD PREFERENCES: ${profile.foodNotes}`,
     pain.length > 0 && `RECENT PAIN (from post-workout check-ins; adapt plans around it):\n${pain.join("\n")}`,
     `TODAY: ${todayLine}.`,
+    bodyweightLog.length > 1 &&
+      `BODYWEIGHT LOG (${u}, oldest first): ${bodyweightLog.slice(-BODYWEIGHT_CONTEXT_ENTRIES).map((e) => `${e.date} ${e.weight}`).join(", ")}`,
     `GOALS:\n${goalLines.join("\n") || "none set"}`,
     goals.length > 0 && `GOAL FORECASTS (straight line from the last 12 weeks; gains usually slow over time):\n${forecasts.join("\n")}`,
     `BEST LIFTS:\n${records.join("\n") || "none yet"}`,
@@ -3118,6 +3130,56 @@ function Stat({ value, label }) {
   );
 }
 
+function BodyweightPanel({ log, profile, unit, onLog }) {
+  const [draft, setDraft] = useState("");
+  const current = currentBodyweight(log, profile);
+  const change = log.length > 1 ? round1(log.at(-1).weight - log[0].weight) : 0;
+  const data = log.map((entry) => ({ date: formatShortDate(entry.date), weight: entry.weight }));
+
+  function save() {
+    const weight = Number(draft);
+    if (!(weight > 0)) return;
+    onLog(weight);
+    setDraft("");
+  }
+
+  return (
+    <Panel className="space-y-3">
+      <SectionTitle>Bodyweight</SectionTitle>
+      {log.length > 1 && (
+        <ResponsiveContainer width="100%" height={160}>
+          <LineChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+            <CartesianGrid stroke={CHART.grid} vertical={false} />
+            <XAxis dataKey="date" tick={CHART.tick} tickLine={false} axisLine={false} />
+            <YAxis tick={CHART.tick} tickLine={false} axisLine={false} domain={["auto", "auto"]} />
+            <Tooltip contentStyle={CHART.tooltip} />
+            <Line type="monotone" dataKey="weight" name={`Bodyweight (${unit})`} stroke={CHART.accent} strokeWidth={2.5} dot={{ r: 3, fill: CHART.accent }} />
+          </LineChart>
+        </ResponsiveContainer>
+      )}
+      <p className="text-sm text-zinc-500">
+        {current ? `Now ${current} ${unit}` : "Log your weight to follow it over time."}
+        {log.length > 1 && `, ${change === 0 ? "no change" : `${change > 0 ? "up" : "down"} ${Math.abs(change)} ${unit}`} since ${formatShortDate(log[0].date)}.`}
+      </p>
+      <div className="flex gap-2">
+        <input
+          type="number"
+          inputMode="decimal"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && save()}
+          placeholder={`Today's weight (${unit})`}
+          aria-label="Today's weight"
+          className={inputClass}
+        />
+        <button onClick={save} disabled={!(Number(draft) > 0)} className="shrink-0 rounded-lg bg-blue-700 px-4 font-semibold text-white disabled:opacity-40">
+          Log
+        </button>
+      </div>
+    </Panel>
+  );
+}
+
 // One line under the 1RM chart: where this lift is heading if the recent pace holds.
 function TrendLine({ workouts, exercise, unit }) {
   const trend = strengthTrend(workouts, exercise);
@@ -3130,7 +3192,7 @@ function TrendLine({ workouts, exercise, unit }) {
   return <p className="mt-2 text-sm text-zinc-600">{text}</p>;
 }
 
-function ProgressView({ workouts, records, exerciseNames, learnedMuscles, unit, daysPerWeek, onNavigate }) {
+function ProgressView({ workouts, records, exerciseNames, learnedMuscles, unit, daysPerWeek, bodyweight, onNavigate }) {
   const [selected, setSelected] = useState(exerciseNames[0] ?? "");
   const trend = useMemo(() => exerciseTrend(workouts, selected), [workouts, selected]);
   const volume = useMemo(() => weeklyVolume(workouts), [workouts]);
@@ -3143,6 +3205,9 @@ function ProgressView({ workouts, records, exerciseNames, learnedMuscles, unit, 
           <p className="text-zinc-600">Your charts appear here once you log a workout.</p>
           <PrimaryButton onClick={() => onNavigate("log")}>Log a workout</PrimaryButton>
         </Panel>
+        <div className="mt-4">
+          <BodyweightPanel {...bodyweight} unit={unit} />
+        </div>
       </div>
     );
   }
@@ -3162,6 +3227,7 @@ function ProgressView({ workouts, records, exerciseNames, learnedMuscles, unit, 
       </div>
 
       <ActivityWeek workouts={workouts} />
+      <BodyweightPanel {...bodyweight} unit={unit} />
       <MuscleHeatmap workouts={workouts} learned={learnedMuscles} />
 
       {exerciseNames.length > 0 && (
@@ -3340,9 +3406,6 @@ function GoalsView({ settings, setSettings, records, workouts }) {
           </Field>
           <Field label="Units">
             <Select value={profile.unit} options={["kg", "lb"]} onChange={updateProfile("unit")} />
-          </Field>
-          <Field label={`Bodyweight (${profile.unit})`}>
-            <input type="number" inputMode="decimal" value={profile.bodyweight} onChange={(e) => updateProfile("bodyweight")(e.target.value)} className={inputClass} />
           </Field>
           <Field label="Experience">
             <Select value={profile.experience} options={EXPERIENCE_LEVELS} onChange={updateProfile("experience")} />
@@ -3595,20 +3658,21 @@ export default function GymBot() {
   const [chat, setChat, chatLoaded] = usePersistentState(STORAGE_KEYS.chat, []);
   const [formChecks, setFormChecks, formChecksLoaded] = usePersistentState(STORAGE_KEYS.formChecks, []);
   const [session, setSession, sessionLoaded] = usePersistentState(STORAGE_KEYS.session, null); // workout in progress
+  const [bodyweightLog, setBodyweightLog, bodyweightLoaded] = usePersistentState(STORAGE_KEYS.bodyweight, []);
 
   const records = useMemo(() => personalRecords(workouts), [workouts]);
   const exerciseNames = useMemo(() => exercisesByFrequency(workouts), [workouts]);
 
   const setRepRange = (name, range) => setSettings((s) => ({ ...s, repRanges: { ...s.repRanges, [name]: range } }));
 
-  const loaded = workoutsLoaded && settingsLoaded && chatLoaded && formChecksLoaded && sessionLoaded;
+  const loaded = workoutsLoaded && settingsLoaded && chatLoaded && formChecksLoaded && sessionLoaded && bodyweightLoaded;
   const learnedMuscles = useLearnedMuscles({ enabled: loaded, exerciseNames });
   useInjuryAreas({ enabled: loaded, settings, setSettings });
   const plans = useMemo(() => buildAutopilotPlans(workouts, settings, learnedMuscles), [workouts, settings, learnedMuscles]);
   const exerciseContext = useMemo(() => ({ learnedMuscles, showDetails: setDetailsFor }), [learnedMuscles]);
   const coachContext = useMemo(
-    () => buildCoachContext(settings, workouts, plans, learnedMuscles, session),
-    [settings, workouts, plans, learnedMuscles, session]
+    () => buildCoachContext(settings, workouts, plans, learnedMuscles, session, bodyweightLog),
+    [settings, workouts, plans, learnedMuscles, session, bodyweightLog]
   );
   const facts = useMemo(() => todayFacts({ workouts, settings, records, plans }), [workouts, settings, records, plans]);
   const coachStyle = settings.profile.coachStyle ?? DEFAULT_SETTINGS.profile.coachStyle;
@@ -3621,7 +3685,8 @@ export default function GymBot() {
       <LogView workouts={workouts} setWorkouts={setWorkouts} session={session} setSession={setSession} settings={settings} coachContext={coachContext} plans={plans} learnedMuscles={learnedMuscles} onRangeChange={setRepRange} onStartRest={restTimer.start} unit={unit} />
     ),
     form: <FormCheckView profileNotes={notes} formChecks={formChecks} setFormChecks={setFormChecks} />,
-    progress: <ProgressView workouts={workouts} records={records} exerciseNames={exerciseNames} learnedMuscles={learnedMuscles} unit={unit} daysPerWeek={daysPerWeek} onNavigate={setTab} />,
+    progress: <ProgressView workouts={workouts} records={records} exerciseNames={exerciseNames} learnedMuscles={learnedMuscles} unit={unit} daysPerWeek={daysPerWeek} onNavigate={setTab}
+        bodyweight={{ log: bodyweightLog, profile: settings.profile, onLog: (weight) => setBodyweightLog((log) => logBodyweight(log, today(), weight)) }} />,
     goals: <GoalsView settings={settings} setSettings={setSettings} records={records} workouts={workouts} />,
   };
 
