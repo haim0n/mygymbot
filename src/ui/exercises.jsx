@@ -11,7 +11,7 @@ import { describeMuscles, musclesFor } from "../muscles.js";
 import { PrimaryButton } from "./primitives.jsx";
 import { BodyFigure, BodyView, exerciseFills } from "./muscles.jsx";
 import { VideoGuides } from "./videos.jsx";
-import { guideFor, photoFor, samePhoto } from "../training.js";
+import { guideFor, knownPhoto, photoFor } from "../training.js";
 
 // Where each muscle sits on the figure: which view shows it best, and a box (figure units, both sides)
 // that thumbnails zoom into, so the target muscle fills a small tile.
@@ -50,11 +50,11 @@ export function thumbnailFrame(muscles) {
   return { view, viewBox: `${(x1 + x2 - span) / 2} ${(y1 + y2 - span) / 2} ${span} ${span}` };
 }
 
-// Asks the AI once which photo shows each exercise without a same-named one, and keeps the answer (null: none fits).
+// Asks the AI once which photo shows each exercise the app doesn't know a photo for, and keeps the answer (null: none fits).
 export function useLearnedPhotos({ enabled, exerciseNames }) {
   const [learned, setLearned, learnedLoaded] = usePersistentState(STORAGE_KEYS.exercisePhotos, {});
   const requestedKey = useRef(null);
-  const unknown = exerciseNames.filter((name) => !samePhoto(name) && !(name in learned)).slice(0, MAX_EXERCISES_PER_CLASSIFICATION);
+  const unknown = exerciseNames.filter((name) => knownPhoto(name) === undefined && !(name in learned)).slice(0, MAX_EXERCISES_PER_CLASSIFICATION);
   const key = unknown.join("|");
 
   useEffect(() => {

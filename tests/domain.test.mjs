@@ -14,8 +14,10 @@ import * as schedule from "../src/schedule.js";
 import * as activities from "../src/activities.js";
 import * as importing from "../src/import.js";
 import * as coach_context from "../src/coach-context.js";
+import * as photos from "../src/exercise-photos.js";
+import * as photoMatches from "../src/photo-matches.js";
 
-const app = { ...config, ...dates, ...training, ...autopilot, ...motivation, ...muscles, ...liveWorkout, ...schedule, ...activities, ...importing, ...coach_context };
+const app = { ...config, ...dates, ...training, ...autopilot, ...motivation, ...muscles, ...liveWorkout, ...schedule, ...activities, ...importing, ...coach_context, ...photos, ...photoMatches };
 
 const daysAgo = (n) => {
   const d = new Date();
@@ -293,10 +295,14 @@ test("Exercise photos: same name first (equipment in brackets or in front), then
   assert.equal(app.photoFor("Leg Press"), "Leg_Press");
   assert.equal(app.photoFor("Bench Press (Dumbbell)"), "Dumbbell_Bench_Press");
   assert.equal(app.photoFor("goblet squat"), "Goblet_Squat");
-  assert.equal(app.samePhoto("Seated Chest Fly (Machine)"), null);
-  assert.equal(app.photoFor("Seated Chest Fly (Machine)", { "Seated Chest Fly (Machine)": "Butterfly" }), "Butterfly");
-  assert.equal(app.photoFor("Seated Chest Fly (Machine)", { "Seated Chest Fly (Machine)": "Made_Up" }), null);
-  assert.equal(app.photoFor("Leg Press", { "Leg Press": "Butterfly" }), "Leg_Press"); // the same name wins
+  assert.equal(app.knownPhoto("seated row (close grip) (machine)"), "Leverage_Iso_Row"); // the reviewed list
+  assert.equal(app.knownPhoto("Mountain Climber"), null); // listed: no photo fits, so the AI isn't asked
+  assert.equal(app.knownPhoto("Zottman Curl (Dumbbell)"), undefined);
+  assert.equal(app.photoFor("Zottman Curl (Dumbbell)", { "Zottman Curl (Dumbbell)": "Zottman_Curl" }), "Zottman_Curl");
+  assert.equal(app.photoFor("Zottman Curl (Dumbbell)", { "Zottman Curl (Dumbbell)": "Made_Up" }), null);
+  assert.equal(app.photoFor("Leg Press", { "Leg Press": "Butterfly" }), "Leg_Press"); // known wins over the AI
+  const photos = new Set(app.EXERCISE_PHOTOS);
+  assert.deepEqual(Object.values(app.PHOTO_MATCHES).filter((id) => id !== null && !photos.has(id)), []); // every match is a real photo
 });
 
 test("Forecasts: dates, deadlines, and honest refusals", () => {

@@ -1,6 +1,7 @@
 import { PLATES, VIDEO_LIBRARY } from "./config.js";
 import { formatShortDate, parseDate, toDateKey, today, weekStart } from "./dates.js";
 import { EXERCISE_PHOTOS } from "./exercise-photos.js";
+import { PHOTO_MATCHES } from "./photo-matches.js";
 
 export const normalizeName = (name) => name.trim().toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 // "Bench Press (Barbell)" from other apps becomes "Bench Press"; other equipment stays in the name.
@@ -9,17 +10,20 @@ export const cleanExerciseName = (name) => normalizeName(String(name ?? "").repl
 // The library entry for an exercise, or null if the library doesn't cover it.
 const photoKey = (text) => text.toLowerCase().replace(/[^a-z0-9]/g, "");
 const PHOTO_BY_KEY = new Map(EXERCISE_PHOTOS.map((id) => [photoKey(id), id]));
+const MATCH_BY_KEY = new Map(Object.entries(PHOTO_MATCHES).map(([name, id]) => [photoKey(name), id]));
 
-// The photo with the same name, also with the equipment moved to the front ("Bench Press (Dumbbell)" = "Dumbbell Bench Press"); null if none.
-export function samePhoto(name) {
+// The photo known without the AI: the same name, also with the equipment moved to the front ("Bench Press (Dumbbell)" =
+// "Dumbbell Bench Press"), or the reviewed match for a common name. null: no photo fits; undefined: not known here.
+export function knownPhoto(name) {
   const [, base, equipment] = name.match(/^(.*?)\s*\(([^()]*)\)$/) ?? [];
-  return PHOTO_BY_KEY.get(photoKey(name)) ?? (base ? PHOTO_BY_KEY.get(photoKey(equipment + base)) : undefined) ?? null;
+  return PHOTO_BY_KEY.get(photoKey(name)) ?? (base && PHOTO_BY_KEY.get(photoKey(equipment + base))) ?? MATCH_BY_KEY.get(photoKey(name));
 }
 
-// The photo showing how an exercise is done and on what: the same name, else the one the AI matched it to.
+// The photo showing how an exercise is done and on what: known without the AI, else the one the AI matched it to.
 export function photoFor(name, learnedPhotos = {}) {
-  const learned = learnedPhotos[name];
-  return samePhoto(name) ?? (EXERCISE_PHOTOS.includes(learned) ? learned : null);
+  const known = knownPhoto(name);
+  if (known !== undefined) return known;
+  return EXERCISE_PHOTOS.includes(learnedPhotos[name]) ? learnedPhotos[name] : null;
 }
 
 export function guideFor(exercise) {

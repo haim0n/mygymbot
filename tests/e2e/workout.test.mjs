@@ -37,22 +37,24 @@ test("live workout: start with Up next, reorder, check off, survive a reload, fi
   assert.deepEqual(errors, []);
 });
 
-test("exercise photos: same-named ones right away, others matched once by the AI and kept; details show start and finish", async (t) => {
+test("exercise photos: known names right away, others matched once by the AI and kept; details show start and finish", async (t) => {
+  const rare = { id: "rare", date: "2026-10-01", notes: "", exercises: ["Zottman Curl (Dumbbell)", "Made Up Lift"].map((name) => ({ name, sets: [{ weight: 12, reps: 10 }] })) };
   const { page, errors, aiRequests } = await openApp(t, {
-    seed: { "gymbot:workouts": [userWorkout] },
-    ai: (body) => (body.system.startsWith("Match each exercise") ? '{"Seated Chest Fly (Machine)":"Butterfly","Lat Pulldown (Cable)":"Made_Up"}' : "OK"),
+    seed: { "gymbot:workouts": [userWorkout, rare] },
+    ai: (body) => (body.system.startsWith("Match each exercise") ? '{"Zottman Curl (Dumbbell)":"Zottman_Curl","Made Up Lift":"Made_Up"}' : "OK"),
   });
   await page.getByRole("button", { name: "Log", exact: true }).tap();
+  await page.getByRole("button", { name: /^Show all/ }).tap();
   const photo = (name) => page.getByRole("button", { name: `Show details for ${name}` }).first().locator("img");
-  await photo("Seated Chest Fly (Machine)").waitFor();
-  assert.equal(await photo("Seated Chest Fly (Machine)").getAttribute("src"), "/exercises/Butterfly-0.webp");
-  assert.equal(await photo("Bench Press (Dumbbell)").getAttribute("src"), "/exercises/Dumbbell_Bench_Press-0.webp");
-  assert.equal(await photo("Lat Pulldown (Cable)").count(), 0); // not a real photo: the muscle figure stays
+  await photo("Zottman Curl (Dumbbell)").waitFor();
+  assert.equal(await photo("Zottman Curl (Dumbbell)").getAttribute("src"), "/exercises/Zottman_Curl-0.webp");
+  assert.equal(await photo("Bench Press (Dumbbell)").getAttribute("src"), "/exercises/Dumbbell_Bench_Press-0.webp"); // same name
+  assert.equal(await photo("Seated Chest Fly (Machine)").getAttribute("src"), "/exercises/Butterfly-0.webp"); // reviewed list
+  assert.equal(await photo("Made Up Lift").count(), 0); // not a real photo: the muscle figure stays
   await settle(page);
-  const learned = await stored(page, "gymbot:exercise-photos");
-  assert.equal(learned["Seated Chest Fly (Machine)"], "Butterfly");
-  assert.equal(learned["Lat Pulldown (Cable)"], null); // kept, so it isn't asked again
-  assert.ok(!("Bench Press (Dumbbell)" in learned)); // same name: never asked
+  assert.deepEqual(await stored(page, "gymbot:exercise-photos"), { "Zottman Curl (Dumbbell)": "Zottman_Curl", "Made Up Lift": null }); // null is kept too
+  const asked = aiRequests.filter((b) => b.system.startsWith("Match each exercise"));
+  assert.deepEqual(asked.map((b) => b.messages[0].content.split("\n").sort()), [["Made Up Lift", "Zottman Curl (Dumbbell)"]]); // known names are never asked
 
   await page.reload();
   await page.getByRole("button", { name: "Log", exact: true }).tap();
@@ -62,7 +64,7 @@ test("exercise photos: same-named ones right away, others matched once by the AI
     ["Seated Chest Fly (Machine): start", true],
     ["Seated Chest Fly (Machine): finish", true],
   ]);
-  assert.equal(aiRequests.filter((b) => b.system.startsWith("Match each exercise")).length, 1);
+  assert.equal(aiRequests.filter((b) => b.system.startsWith("Match each exercise")).length, 1); // not asked again after the reload
   assert.deepEqual(errors, []);
 });
 
