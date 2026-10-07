@@ -78,6 +78,8 @@ def test_only_iap_signed_requests_get_in(data_file: Path, sign) -> None:
     assert client.get("/", headers=sign("haim@example.com", issuer="https://evil.example")).status_code == 401
     assert client.get("/", headers=sign("../haim@example.com")).status_code == 401
     assert client.get("/", headers=sign("haim@example.com")).status_code == 200
+    assert client.get("/exercises/Leg_Press-0.webp").status_code == 401
+    assert client.get("/exercises/Leg_Press-0.webp", headers=sign("haim@example.com")).headers["content-type"] == "image/webp"
 
 
 def test_each_user_sees_only_their_own_data(data_file: Path, sign) -> None:

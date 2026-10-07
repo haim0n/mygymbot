@@ -11,6 +11,7 @@ export const STORAGE_KEYS = {
   session: "gymbot:session",
   dailyNote: "gymbot:daily-note",
   muscleMap: "gymbot:muscle-map",
+  exercisePhotos: "gymbot:exercise-photos", // { exercise name: photo id, or null when no photo fits }
   bodyweight: "gymbot:bodyweight", // [{ date, weight }], oldest first, one per day
 };
 

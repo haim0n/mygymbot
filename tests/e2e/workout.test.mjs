@@ -37,6 +37,35 @@ test("live workout: start with Up next, reorder, check off, survive a reload, fi
   assert.deepEqual(errors, []);
 });
 
+test("exercise photos: same-named ones right away, others matched once by the AI and kept; details show start and finish", async (t) => {
+  const { page, errors, aiRequests } = await openApp(t, {
+    seed: { "gymbot:workouts": [userWorkout] },
+    ai: (body) => (body.system.startsWith("Match each exercise") ? '{"Seated Chest Fly (Machine)":"Butterfly","Lat Pulldown (Cable)":"Made_Up"}' : "OK"),
+  });
+  await page.getByRole("button", { name: "Log", exact: true }).tap();
+  const photo = (name) => page.getByRole("button", { name: `Show details for ${name}` }).first().locator("img");
+  await photo("Seated Chest Fly (Machine)").waitFor();
+  assert.equal(await photo("Seated Chest Fly (Machine)").getAttribute("src"), "/exercises/Butterfly-0.webp");
+  assert.equal(await photo("Bench Press (Dumbbell)").getAttribute("src"), "/exercises/Dumbbell_Bench_Press-0.webp");
+  assert.equal(await photo("Lat Pulldown (Cable)").count(), 0); // not a real photo: the muscle figure stays
+  await settle(page);
+  const learned = await stored(page, "gymbot:exercise-photos");
+  assert.equal(learned["Seated Chest Fly (Machine)"], "Butterfly");
+  assert.equal(learned["Lat Pulldown (Cable)"], null); // kept, so it isn't asked again
+  assert.ok(!("Bench Press (Dumbbell)" in learned)); // same name: never asked
+
+  await page.reload();
+  await page.getByRole("button", { name: "Log", exact: true }).tap();
+  await page.getByRole("button", { name: "Show details for Seated Chest Fly (Machine)" }).first().tap();
+  const sheet = page.getByRole("dialog");
+  assert.deepEqual(await sheet.locator("img").evaluateAll((imgs) => Promise.all(imgs.map(async (i) => (await i.decode(), [i.alt, i.naturalWidth > 0])))), [
+    ["Seated Chest Fly (Machine): start", true],
+    ["Seated Chest Fly (Machine): finish", true],
+  ]);
+  assert.equal(aiRequests.filter((b) => b.system.startsWith("Match each exercise")).length, 1);
+  assert.deepEqual(errors, []);
+});
+
 test("history: folded by default, then edit a saved workout", async (t) => {
   const { page, errors } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
   await page.getByRole("button", { name: /^Log/ }).tap();

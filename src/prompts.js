@@ -1,4 +1,5 @@
 import { ACTIVITY_TYPES, EXPERIENCE_LEVELS, MUSCLES, TRAINING_FOCUSES, VIDEO_LIBRARY } from "./config.js";
+import { EXERCISE_PHOTOS } from "./exercise-photos.js";
 
 export const NAME_RULE = `Use the athlete's first name where a person would (a greeting, a welcome back, praise), not in every reply. Without a name, don't guess one.`;
 
@@ -48,6 +49,11 @@ export const MUSCLE_CLASSIFIER_PROMPT = `Classify which muscles each exercise (o
 {"<exercise name>":{"primary":[muscle,...],"secondary":[muscle,...]}}
 Use only these muscle ids: chest, shoulders, biceps, triceps, forearms, core, traps, lats, upperBack, lowerBack, glutes, quads, hamstrings, calves.
 1-2 primary muscles and up to 3 secondary. Use the exercise names exactly as given.`;
+
+export const EXERCISE_PHOTO_PROMPT = `Match each exercise (one per line) to the photo below that shows the same movement on the same equipment, so a beginner can find the right equipment in the gym.
+Respond with compact single-line JSON only, no prose or backticks: {"<exercise name>":"<photo id>" or null}
+Use the exercise names exactly as given and photo ids exactly as listed. Use null when no photo shows the same movement on the same kind of equipment (barbell, dumbbell, kettlebell, cable, machine, bodyweight).
+PHOTOS: ${EXERCISE_PHOTOS.join(", ")}`;
 
 export const INJURY_AREAS_PROMPT = `Below is an athlete's note about their injuries and equipment. Which muscles does a current injury or pain affect?
 Respond with compact single-line JSON only, no prose or backticks: {"muscles":[muscle,...]}

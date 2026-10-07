@@ -74,6 +74,7 @@ Browser tests start the Python server with seeded data (`tests/fixtures.mjs`) an
 src/                the app: domain modules (*.js, pure logic plus storage and AI calls), ui/ (components), App.jsx
 web/                the page, entry point and styles (built to web/dist/; tailwind.config.js)
 server/             Python backend (FastAPI): static files, storage, Gemini, access gate
+scripts/            exercise_photos.py: fetches the public-domain exercise photos into web/exercises/
 pyproject.toml      Python dependencies (uv)
 Dockerfile          the hosted copy: Node builds the bundle, Python serves it
 data/               your data when run locally (gitignored)

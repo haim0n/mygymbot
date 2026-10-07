@@ -14,7 +14,7 @@ import { activityEntry, activityLabel, paceText, sanitizeActivities } from "../a
 import { DeleteButton, ErrorText, Field, Panel, PrimaryButton, SectionTitle, ViewTitle, inputClass, useArmed } from "./primitives.jsx";
 import { SessionHighlights } from "./motivation.jsx";
 import { VideoGuides } from "./videos.jsx";
-import { MuscleThumb } from "./exercises.jsx";
+import { ExerciseThumb } from "./exercises.jsx";
 import { CheckInCard, CoachReply } from "./check-in.jsx";
 import { ActivityIcon, ActivityPanel } from "./activities.jsx";
 import { ImportPanel } from "./import-history.jsx";
@@ -109,7 +109,7 @@ export function ReorderList({ session, setSession, onDone }) {
         {session.exercises.map((exercise, index) => (
           <li key={exercise.id} className={`flex items-center gap-2 px-3 py-2 ${exercise.id === movedId ? "bg-blue-50" : ""}`}>
             <span className="w-5 text-sm text-zinc-400 tabular-nums">{index + 1}</span>
-            <MuscleThumb name={exercise.name} size={36} interactive={false} />
+            <ExerciseThumb name={exercise.name} size={36} interactive={false} />
             <span className="min-w-0 flex-1 font-medium text-zinc-900">{exercise.name}</span>
             <button onClick={() => move(exercise.id, -1)} disabled={index === 0} aria-label={`Move ${exercise.name} up`} className={arrow}>
               <ChevronUp className="w-5 h-5" />
@@ -174,7 +174,7 @@ export function ExerciseCard({ exercise, unit, mode, isCurrent = false, update, 
     <li className={`rounded-xl border-2 p-3 ${isCurrent ? "border-blue-700" : "border-zinc-200"}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-3">
-          <MuscleThumb name={exercise.name} size={52} />
+          <ExerciseThumb name={exercise.name} size={52} />
           <div className="min-w-0">
             {isCurrent && <div className="text-xs font-semibold text-blue-700">Now</div>}
             <div className={`font-semibold ${live && allDone ? "text-zinc-400" : "text-zinc-900"}`}>{exercise.name}</div>
@@ -584,7 +584,7 @@ export function PlanRow({ plan, muscles, unit, onAdd, onRangeChange, onRest }) {
 
   return (
     <li className="py-3 flex gap-3">
-      <MuscleThumb name={plan.name} size={64} />
+      <ExerciseThumb name={plan.name} size={64} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-semibold text-zinc-900">{plan.name}</span>
@@ -725,7 +725,7 @@ export function WorkoutHistory({ workouts, unit, onUpdate, onDelete }) {
                         ))}
                         {workout.exercises.map((exercise, i) => (
                           <li key={i} className="flex items-center gap-2">
-                            <MuscleThumb name={exercise.name} size={32} />
+                            <ExerciseThumb name={exercise.name} size={32} />
                             <span>
                               {exercise.name} <span className="text-zinc-400">{describeSets(exercise.sets, unit)}</span>
                             </span>

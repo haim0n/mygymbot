@@ -79,6 +79,7 @@ Storage keys (all personal scope):
 | `gymbot:form-checks` | last 30 `{ id, date, exercise, feedback }` |
 | `gymbot:daily-note` | `{ key: "date\|style", text }` (one coach note per day) |
 | `gymbot:muscle-map` | coach classifications for exercises the rules don't know |
+| `gymbot:exercise-photos` | the photo the AI matched to each exercise without a same-named one (`null`: none fits) |
 
 A stale `gymbot:video-guides` key may exist from an earlier version that searched the web; nothing reads it.
 
@@ -91,7 +92,7 @@ Modules in `src/`, with no import cycles; domain modules import nothing from `sr
 3. **Pure domain logic**: `dates.js`, `training.js`, `autopilot.js`, `motivation.js`, `muscles.js`, `workout.js`, `schedule.js`, `activities.js`, `import.js`, `coach-context.js`. No JSX and nothing from the UI, so the unit tests import them directly.
 4. **UI** (`src/ui/`): primitives, feature components, tabs, rest timer; `App.jsx` (`GymBot`) holds the app state.
 
-App-level state: workouts, settings, chat, form checks, session, rest timer, open details sheet, and the derived values (`records`, `plans`, `coachContext`, Today facts, daily note, learned muscles). `ExerciseContext` gives every thumbnail the learned muscles and the details-sheet opener without passing them down.
+App-level state: workouts, settings, chat, form checks, session, rest timer, open details sheet, and the derived values (`records`, `plans`, `coachContext`, Today facts, daily note, learned muscles and photos). `ExerciseContext` gives every thumbnail the learned muscles and photos and the details-sheet opener without passing them down.
 
 ## 5. Features and the rules behind them
 
@@ -154,10 +155,11 @@ The latest workout from the last 2 days gets a "How did it go?" card: effort, pa
   - 14 groups, mapped from exercise names by ordered regex rules (`MUSCLE_RULES`; specific patterns first, e.g. reverse fly before fly).
   - Unknown names go to the coach in batches of 20, and the answer is cached.
 - **Visuals:**
-  - Thumbnails zoom into the main muscles (`MUSCLE_FOCUS` boxes): red for main, light red for helpers.
-  - Tapping opens a details sheet with the front and back figure, main and helper muscles, equipment and video.
+  - Thumbnails show a photo of the exercise being done, so a beginner can find the equipment in the gym. Without a photo they zoom into the main muscles (`MUSCLE_FOCUS` boxes): red for main, light red for helpers.
+  - Tapping opens a details sheet with the start and finish photos, the front and back figure, main and helper muscles, equipment and video.
   - The Progress heatmap counts the last 7 days of sets, with helper muscles at half weight.
 - **Original figures:** the body drawings are original and simplified. Commercial anatomy illustrations like those in other apps would need a license.
+- **Photos (`photoFor`):** 675 strength exercises from free-exercise-db (public domain), two photos each, fetched by `scripts/exercise_photos.py` into `web/exercises/` (WebP, 360 px wide, about 11 MB) with their ids in `src/exercise-photos.js`. Same name first, also with the equipment moved to the front ("Bench Press (Dumbbell)" = "Dumbbell Bench Press"); other names go to the AI in batches of 20 (`EXERCISE_PHOTO_PROMPT`, same movement on the same equipment, or none), cached per user. Exercises in saved plans and the workout in progress are matched too, so a new user's first plan has photos.
 
 ### Video guides
 - **Library:** a fixed `VIDEO_LIBRARY` of 36 exercises, each linked to tutorials from established coaches.
@@ -215,6 +217,7 @@ The chat sends the last 12 messages.
 | `COLUMN_MAPPER_PROMPT` | Unknown CSV layouts | Only header + 5 rows leave the device |
 | `SCREENSHOT_IMPORT_PROMPT` | Screenshot import | Tiles of one screenshot per request |
 | `MUSCLE_CLASSIFIER_PROMPT` | Unknown exercises | Batches of 20, cached |
+| `EXERCISE_PHOTO_PROMPT` | Exercises without a same-named photo | Batches of 20, cached, `null` when none fits |
 | `MOTIVATION_PROMPT` | Daily note | Once a day per style, cached |
 | `CHECK_IN_PROMPT` | Post-workout check-in reply | Stored on the workout |
 
@@ -248,6 +251,7 @@ All JSON answers go through `askAIForJson`, which reads the outermost `{…}` so
 | Weekly target counts training days | A gym session and a swim on the same day are one day |
 | Explicit `distanceUnit` on every activity | Units can differ between sports and users |
 | Original simplified figures | Commercial exercise illustrations need a license |
+| Public-domain exercise photos, stored with the app | Show the equipment to find; free, no license, served behind IAP with no third party |
 | Backend in Python, front end in JS | Haim works in Python; the browser runs JS |
 | Gemini on Vertex AI behind the app's own `/api/ask` | Billed to the `mygymbot` project with no API key; the front end doesn't depend on the AI vendor |
 | Users: Google sign-in through IAP, IAP's IAM list as the allowlist, one data file per email | No login screen, passwords or user table to build; adding or removing someone is one IAM change |

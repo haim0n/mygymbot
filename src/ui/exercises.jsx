@@ -1,13 +1,17 @@
 import { useEffect, useRef, createContext, useContext } from "react";
 import { X, Info } from "lucide-react";
-import { MUSCLE_COLORS, MUSCLE_LABELS } from "../config.js";
+import { MAX_EXERCISES_PER_CLASSIFICATION, MUSCLE_COLORS, MUSCLE_LABELS, STORAGE_KEYS } from "../config.js";
+import { EXERCISE_PHOTO_PROMPT } from "../prompts.js";
+import { usePersistentState } from "../storage.js";
+import { askAIForJson } from "../ai.js";
+import { EXERCISE_PHOTOS } from "../exercise-photos.js";
 import { joinWords } from "../dates.js";
 import { equipmentOf } from "../autopilot.js";
 import { describeMuscles, musclesFor } from "../muscles.js";
 import { PrimaryButton } from "./primitives.jsx";
 import { BodyFigure, BodyView, exerciseFills } from "./muscles.jsx";
 import { VideoGuides } from "./videos.jsx";
-import { guideFor } from "../training.js";
+import { guideFor, photoFor, samePhoto } from "../training.js";
 
 // Where each muscle sits on the figure: which view shows it best, and a box (figure units, both sides)
 // that thumbnails zoom into, so the target muscle fills a small tile.
@@ -46,16 +50,42 @@ export function thumbnailFrame(muscles) {
   return { view, viewBox: `${(x1 + x2 - span) / 2} ${(y1 + y2 - span) / 2} ${span} ${span}` };
 }
 
-// Muscle lookups and the details sheet are needed in many places, so they're shared instead of passed down.
-export const ExerciseContext = createContext({ learnedMuscles: {}, showDetails: () => {} });
+// Asks the AI once which photo shows each exercise without a same-named one, and keeps the answer (null: none fits).
+export function useLearnedPhotos({ enabled, exerciseNames }) {
+  const [learned, setLearned, learnedLoaded] = usePersistentState(STORAGE_KEYS.exercisePhotos, {});
+  const requestedKey = useRef(null);
+  const unknown = exerciseNames.filter((name) => !samePhoto(name) && !(name in learned)).slice(0, MAX_EXERCISES_PER_CLASSIFICATION);
+  const key = unknown.join("|");
 
-// Small tile zoomed in on the target muscles (red = main, light red = helpers). Tap for details.
-export function MuscleThumb({ name, size = 52, interactive = true }) {
-  const { learnedMuscles, showDetails } = useContext(ExerciseContext);
+  useEffect(() => {
+    if (!enabled || !learnedLoaded || !unknown.length || requestedKey.current === key) return;
+    requestedKey.current = key;
+    askAIForJson(EXERCISE_PHOTO_PROMPT, unknown.join("\n"))
+      .then((result) => {
+        const byName = Object.fromEntries(Object.entries(result).map(([name, id]) => [name.toLowerCase(), id]));
+        const matched = unknown.map((name) => [name, EXERCISE_PHOTOS.includes(byName[name.toLowerCase()]) ? byName[name.toLowerCase()] : null]);
+        setLearned((current) => ({ ...current, ...Object.fromEntries(matched) }));
+      })
+      .catch(() => {}); // asked again next time; meanwhile the muscle figure shows
+  }, [enabled, learnedLoaded, key]);
+
+  return learned;
+}
+
+// Muscle and photo lookups and the details sheet are needed in many places, so they're shared instead of passed down.
+export const ExerciseContext = createContext({ learnedMuscles: {}, learnedPhotos: {}, showDetails: () => {} });
+
+// Small tile showing the exercise being done, so the equipment is easy to find; without a photo, zoomed in
+// on the target muscles (red = main, light red = helpers). Tap for details.
+export function ExerciseThumb({ name, size = 52, interactive = true }) {
+  const { learnedMuscles, learnedPhotos, showDetails } = useContext(ExerciseContext);
   const muscles = musclesFor(name, learnedMuscles);
+  const photo = photoFor(name, learnedPhotos);
   const frame = thumbnailFrame(muscles);
   const tile = "relative shrink-0 overflow-hidden rounded-xl border border-zinc-200 bg-white";
-  const picture = (
+  const picture = photo ? (
+    <img src={`/exercises/${photo}-0.webp`} alt="" loading="lazy" className="h-full w-full object-cover" />
+  ) : (
     <svg viewBox={frame.viewBox} width={size} height={size} aria-hidden="true">
       <BodyView side={frame.view} fills={exerciseFills(muscles)} />
     </svg>
@@ -70,8 +100,9 @@ export function MuscleThumb({ name, size = 52, interactive = true }) {
 }
 
 export function ExerciseSheet({ name, onClose }) {
-  const { learnedMuscles } = useContext(ExerciseContext);
+  const { learnedMuscles, learnedPhotos } = useContext(ExerciseContext);
   const muscles = musclesFor(name, learnedMuscles);
+  const photo = photoFor(name, learnedPhotos);
   const guide = guideFor(name);
   const closeRef = useRef(null);
   const onCloseRef = useRef(onClose);
@@ -113,6 +144,13 @@ export function ExerciseSheet({ name, onClose }) {
             <X className="w-6 h-6" />
           </button>
         </div>
+
+        {photo && (
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <img src={`/exercises/${photo}-0.webp`} alt={`${name}: start`} className="w-full rounded-xl" />
+            <img src={`/exercises/${photo}-1.webp`} alt={`${name}: finish`} className="w-full rounded-xl" />
+          </div>
+        )}
 
         <div className="my-4 flex justify-center rounded-2xl bg-zinc-50 py-3">
           <BodyFigure

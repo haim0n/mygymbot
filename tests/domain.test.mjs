@@ -289,6 +289,16 @@ test("Onboarding: a new athlete is interviewed until a plan is saved or a workou
   assert.deepEqual(app.todayFacts({ workouts: [], settings: { ...noPlans, routines: [a] }, records: {}, plans: [] }).map((f) => f.text), ["Your first workout is ready: A."]);
 });
 
+test("Exercise photos: same name first (equipment in brackets or in front), then the AI's match, if it's a real photo", () => {
+  assert.equal(app.photoFor("Leg Press"), "Leg_Press");
+  assert.equal(app.photoFor("Bench Press (Dumbbell)"), "Dumbbell_Bench_Press");
+  assert.equal(app.photoFor("goblet squat"), "Goblet_Squat");
+  assert.equal(app.samePhoto("Seated Chest Fly (Machine)"), null);
+  assert.equal(app.photoFor("Seated Chest Fly (Machine)", { "Seated Chest Fly (Machine)": "Butterfly" }), "Butterfly");
+  assert.equal(app.photoFor("Seated Chest Fly (Machine)", { "Seated Chest Fly (Machine)": "Made_Up" }), null);
+  assert.equal(app.photoFor("Leg Press", { "Leg Press": "Butterfly" }), "Leg_Press"); // the same name wins
+});
+
 test("Forecasts: dates, deadlines, and honest refusals", () => {
   const bench = (n, weight) => workout(`b${n}`, daysAgo(n), [ex("Bench Press (Dumbbell)", [[weight, 10]])]);
   const steady = [56, 49, 42, 35, 28, 21, 14, 7].map((n, i) => bench(n, 40 + i * 0.75)); // ~+1 kg est. 1RM a week

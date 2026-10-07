@@ -1,11 +1,27 @@
 import { PLATES, VIDEO_LIBRARY } from "./config.js";
 import { formatShortDate, parseDate, toDateKey, today, weekStart } from "./dates.js";
+import { EXERCISE_PHOTOS } from "./exercise-photos.js";
 
 export const normalizeName = (name) => name.trim().toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 // "Bench Press (Barbell)" from other apps becomes "Bench Press"; other equipment stays in the name.
 export const cleanExerciseName = (name) => normalizeName(String(name ?? "").replace(/\s*\(barbell\)\s*$/i, ""));
 
 // The library entry for an exercise, or null if the library doesn't cover it.
+const photoKey = (text) => text.toLowerCase().replace(/[^a-z0-9]/g, "");
+const PHOTO_BY_KEY = new Map(EXERCISE_PHOTOS.map((id) => [photoKey(id), id]));
+
+// The photo with the same name, also with the equipment moved to the front ("Bench Press (Dumbbell)" = "Dumbbell Bench Press"); null if none.
+export function samePhoto(name) {
+  const [, base, equipment] = name.match(/^(.*?)\s*\(([^()]*)\)$/) ?? [];
+  return PHOTO_BY_KEY.get(photoKey(name)) ?? (base ? PHOTO_BY_KEY.get(photoKey(equipment + base)) : undefined) ?? null;
+}
+
+// The photo showing how an exercise is done and on what: the same name, else the one the AI matched it to.
+export function photoFor(name, learnedPhotos = {}) {
+  const learned = learnedPhotos[name];
+  return samePhoto(name) ?? (EXERCISE_PHOTOS.includes(learned) ? learned : null);
+}
+
 export function guideFor(exercise) {
   const name = cleanExerciseName(exercise).toLowerCase();
   return VIDEO_LIBRARY.find((guide) => guide.match.test(name)) ?? null;

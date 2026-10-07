@@ -10,7 +10,7 @@ import { saveRoutine } from "./workout.js";
 import { buildCoachContext, isNewAthlete } from "./coach-context.js";
 import { useDailyNote } from "./ui/motivation.jsx";
 import { useInjuryAreas, useLearnedMuscles } from "./ui/muscles.jsx";
-import { ExerciseContext, ExerciseSheet } from "./ui/exercises.jsx";
+import { ExerciseContext, ExerciseSheet, useLearnedPhotos } from "./ui/exercises.jsx";
 import { CoachView } from "./ui/coach.jsx";
 import { LogView } from "./ui/log.jsx";
 import { FormCheckView } from "./ui/form-check.jsx";
@@ -77,10 +77,16 @@ export default function GymBot() {
   const deleteRoutine = (name) => setSettings((s) => ({ ...s, routines: (s.routines ?? []).filter((r) => r.name !== name) }));
 
   const loaded = workoutsLoaded && settingsLoaded && chatLoaded && formChecksLoaded && sessionLoaded && bodyweightLoaded;
-  const learnedMuscles = useLearnedMuscles({ enabled: loaded, exerciseNames });
+  // Exercises in saved plans and the workout in progress count too: a new user's first plan has no history yet.
+  const namesInUse = useMemo(
+    () => [...new Set([...exerciseNames, ...(settings.routines ?? []).flatMap((r) => r.exercises), ...(session?.exercises ?? []).map((e) => e.name)])],
+    [exerciseNames, settings.routines, session]
+  );
+  const learnedMuscles = useLearnedMuscles({ enabled: loaded, exerciseNames: namesInUse });
+  const learnedPhotos = useLearnedPhotos({ enabled: loaded, exerciseNames: namesInUse });
   useInjuryAreas({ enabled: loaded, settings, setSettings });
   const plans = useMemo(() => buildAutopilotPlans(workouts, settings, learnedMuscles), [workouts, settings, learnedMuscles]);
-  const exerciseContext = useMemo(() => ({ learnedMuscles, showDetails: setDetailsFor }), [learnedMuscles]);
+  const exerciseContext = useMemo(() => ({ learnedMuscles, learnedPhotos, showDetails: setDetailsFor }), [learnedMuscles, learnedPhotos]);
   const coachContext = useMemo(
     () => buildCoachContext(settings, workouts, plans, learnedMuscles, session, bodyweightLog),
     [settings, workouts, plans, learnedMuscles, session, bodyweightLog]

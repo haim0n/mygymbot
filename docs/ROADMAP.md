@@ -16,7 +16,7 @@
 - **Client**: keep React (PWA first; React Native if app-store presence matters). The pure domain functions port over unchanged.
 - **Accounts, payments, privacy**: auth; Stripe or app-store billing; privacy policy, consent and data deletion (pain, injuries and bodyweight are health-related data); "not medical advice" notice.
 - **Real notifications** for pre-workout motivation and check-ins (push or calendar).
-- **Exercise illustrations**: license a commercial library if wanted.
+- **Exercise illustrations**: the photos are public domain with busy gym backgrounds; license a commercial illustration library for a cleaner look if wanted.
 
 ## Monetization notes
 

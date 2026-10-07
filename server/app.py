@@ -80,4 +80,5 @@ def create_app(stores: Stores, iap_audience: str | None, commit: str | None = No
             return JSONResponse({"error": str(error)}, status_code=502)
 
     app.mount("/dist", StaticFiles(directory=WEB_DIR / "dist", check_dir=False), name="dist")
+    app.mount("/exercises", StaticFiles(directory=WEB_DIR / "exercises"), name="exercises")
     return app
