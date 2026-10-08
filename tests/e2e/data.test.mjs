@@ -28,7 +28,7 @@ test("bodyweight: logged in Progress, one entry per day, charted with the change
   await panel.getByLabel("Today's weight").fill("80.5");
   await panel.getByLabel("Today's weight").press("Enter");
   await panel.getByText("Now 80.5 kg, down 2 kg since").waitFor();
-  assert.equal(await panel.locator("svg.recharts-surface").count(), 1);
+  await panel.locator("svg.recharts-surface").waitFor(); // the chart draws after it measures its box
   await settle(page);
   assert.deepEqual(await stored(page, "gymbot:bodyweight"), [{ date: "2026-09-20", weight: 82.5 }, { date: "2026-10-03", weight: 80.5 }]);
   assert.deepEqual(errors, []);
