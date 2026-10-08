@@ -17,9 +17,11 @@ export const STORAGE_KEYS = {
 
 export const EXPERIENCE_LEVELS = ["Beginner", "Intermediate", "Advanced"];
 export const TRAINING_FOCUSES = ["Strength", "Muscle growth", "Fat loss", "General fitness"];
+export const SEXES = ["Female", "Male"];
+export const HEIGHT_UNITS = { kg: "cm", lb: "in" }; // height follows the weight unit, like distances
 
 export const DEFAULT_SETTINGS = {
-  profile: { name: "", unit: "kg", bodyweight: "", experience: "Intermediate", daysPerWeek: 4, focus: "Strength", coachStyle: "Encouraging", notes: "", foodNotes: "", trainingDays: [], trainingTime: "" },
+  profile: { name: "", unit: "kg", bodyweight: "", experience: "Intermediate", daysPerWeek: 4, focus: "Strength", coachStyle: "Encouraging", notes: "", foodNotes: "", trainingDays: [], trainingTime: "", birthYear: "", sex: "", height: "", sessionMinutes: "" },
   goals: [],
   repRanges: {}, // per-exercise overrides, e.g. { "Bench Press": [5, 8] }
   routines: [], // saved workout plans, done in turn: [{ name: "A", exercises: ["Back Squat", ...] }]

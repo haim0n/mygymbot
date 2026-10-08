@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { APP_VERSION, COACH_STYLES, DEFAULT_SETTINGS, EXPERIENCE_LEVELS, MUSCLE_LABELS, PLATES, TRAINING_FOCUSES, WEEKDAYS } from "../config.js";
+import { APP_VERSION, COACH_STYLES, DEFAULT_SETTINGS, EXPERIENCE_LEVELS, HEIGHT_UNITS, MUSCLE_LABELS, PLATES, SEXES, TRAINING_FOCUSES, WEEKDAYS } from "../config.js";
 import { exportAllData } from "../storage.js";
 import { daysBetween, joinWords, today } from "../dates.js";
 import { normalizeName, plateSize, platesPerSide } from "../training.js";
 import { injuredMuscles } from "../autopilot.js";
 import { forecastText, goalForecast } from "../schedule.js";
 import { DeleteButton, ErrorText, Field, Panel, PrimaryButton, SectionTitle, Select, ViewTitle, inputClass } from "./primitives.jsx";
+
+const NOT_SAID = "Prefer not to say"; // stored as ""
 
 // The target loaded on a barbell: plates you've already lifted are solid, the rest are outlines.
 export function LoadedBar({ target, current, unit }) {
@@ -129,6 +131,18 @@ export function GoalsView({ settings, setSettings, records, workouts }) {
           </Field>
           <Field label="Sessions per week">
             <input type="number" inputMode="numeric" min="1" max="7" value={profile.daysPerWeek} onChange={(e) => updateProfile("daysPerWeek")(e.target.value)} className={inputClass} />
+          </Field>
+          <Field label="Minutes per session">
+            <input type="number" inputMode="numeric" min="10" max="240" value={profile.sessionMinutes ?? ""} onChange={(e) => updateProfile("sessionMinutes")(e.target.value)} placeholder="Optional" className={inputClass} />
+          </Field>
+          <Field label="Birth year">
+            <input type="number" inputMode="numeric" min="1900" max={today().slice(0, 4)} value={profile.birthYear ?? ""} onChange={(e) => updateProfile("birthYear")(e.target.value)} placeholder="Optional" className={inputClass} />
+          </Field>
+          <Field label="Sex">
+            <Select value={profile.sex || NOT_SAID} options={[NOT_SAID, ...SEXES]} onChange={(value) => updateProfile("sex")(value === NOT_SAID ? "" : value)} />
+          </Field>
+          <Field label={`Height (${HEIGHT_UNITS[profile.unit]})`}>
+            <input type="number" inputMode="decimal" min="0" value={profile.height ?? ""} onChange={(e) => updateProfile("height")(e.target.value)} placeholder="Optional" className={inputClass} />
           </Field>
           <Field label="Main focus" className="col-span-2">
             <Select value={profile.focus} options={TRAINING_FOCUSES} onChange={updateProfile("focus")} />

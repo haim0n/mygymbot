@@ -74,7 +74,7 @@ test("onboarding: a new athlete's coach asks first, then the profile and plans i
   const { page, errors, aiRequests } = await openApp(t, {
     ai: (body) =>
       isCoachChat(body)
-        ? "Here's your start.\n[profile: experience: Beginner; daysPerWeek: 3; focus: General fitness; music: hip hop]\n[plan: A: Goblet Squat, Push-up]\n[plan: B: Romanian Deadlift, Lat Pulldown]"
+        ? "Here's your start.\n[profile: experience: Beginner; daysPerWeek: 3; sessionMinutes: 45; focus: General fitness; music: hip hop]\n[plan: A: Goblet Squat, Push-up]\n[plan: B: Romanian Deadlift, Lat Pulldown]"
         : "OK",
   });
   await page.getByText("A few quick questions first").waitFor();
@@ -95,7 +95,7 @@ test("onboarding: a new athlete's coach asks first, then the profile and plans i
   await settle(page);
 
   const saved = await stored(page, "gymbot:settings");
-  assert.deepEqual([saved.profile.experience, saved.profile.daysPerWeek, saved.profile.focus, saved.profile.music], ["Beginner", 3, "General fitness", "hip hop"]);
+  assert.deepEqual([saved.profile.experience, saved.profile.daysPerWeek, saved.profile.sessionMinutes, saved.profile.focus, saved.profile.music], ["Beginner", 3, 45, "General fitness", "hip hop"]);
   assert.deepEqual(saved.routines.map((r) => r.name), ["A", "B"]);
   assert.equal(aiRequests.filter((b) => b.system.includes("motivation note")).length, 0); // no daily note before there's anything to say
   assert.deepEqual(errors, []);

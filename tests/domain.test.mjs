@@ -108,6 +108,15 @@ test("Coach context: the athlete's name comes from the profile, when given", () 
   assert.match(athleteLine(undefined), /^ATHLETE: Intermediate/); // profiles saved before the field existed
 });
 
+test("Coach context: age, sex, height and session length are added only when the athlete filled them in", () => {
+  const profile = { unit: "kg", experience: "Intermediate", daysPerWeek: 3, focus: "Strength" };
+  const athleteLine = (extra) => app.buildCoachContext({ profile: { ...profile, ...extra }, goals: [] }, [], [], {}, null).split("\n\n").find((block) => block.startsWith("ATHLETE:"));
+  const age = Number(app.today().slice(0, 4)) - 1985;
+  assert.match(athleteLine({ sex: "Male", birthYear: "1985", height: "180", sessionMinutes: "60" }), new RegExp(`^ATHLETE: Intermediate, male, age ${age}, height 180cm, bodyweight unknownkg, aims for 3 sessions/week, sessions of up to 60 min, focus`));
+  assert.match(athleteLine({ unit: "lb", height: "70" }), /^ATHLETE: Intermediate, height 70in, bodyweight/);
+  assert.match(athleteLine({ sex: "", birthYear: "", height: "", sessionMinutes: "" }), /^ATHLETE: Intermediate, bodyweight unknownkg, aims for 3 sessions\/week, focus/);
+});
+
 test("Bodyweight: one entry per day, kept in date order; the coach sees the current weight and the log", () => {
   let log = app.logBodyweight([], "2026-10-03", 81);
   log = app.logBodyweight(log, "2026-09-20", 82.5);
@@ -285,6 +294,9 @@ test("Onboarding: a new athlete is interviewed until a plan is saved or a workou
   });
   assert.deepEqual(app.parseProfileTag("[profile: experience: Expert; daysPerWeek: 9; focus: ; unit: lb; constructor: x; music: jazz]"), { music: "jazz" }); // invalid or unknown: left out
   assert.equal(app.parseProfileTag("[profile: daysPerWeek: 2.5]"), null);
+  assert.deepEqual(app.parseProfileTag("[profile: sessionMinutes: 45]"), { sessionMinutes: 45 });
+  assert.equal(app.parseProfileTag("[profile: sessionMinutes: 45 min]"), null);
+  assert.equal(app.parseProfileTag("[profile: sessionMinutes: 5]"), null);
   assert.equal(app.parseProfileTag("Saved [profile: name: Dana]"), null);
 
   const { routines, ...noPlans } = settingsWith();

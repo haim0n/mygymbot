@@ -56,6 +56,8 @@ type Settings = {
     music?: string;           // what they like to train to
     trainingDays: number[];   // Date.getDay() numbers (0 = Sunday)
     trainingTime: string;     // "HH:MM" or ""
+    // Optional, "" when not given; the coach sees only what is filled in.
+    birthYear?: string; sex?: "" | "Female" | "Male"; height?: string /* cm, or in for lb */; sessionMinutes?: string | number;
   };
   goals: { id: string; exercise: string; target: number /* est. 1RM */; deadline: string }[];
   repRanges: Record<string, [number, number]>; // explicit per-exercise overrides
@@ -167,7 +169,7 @@ The latest workout from the last 2 days gets a "How did it go?" card: effort, pa
 ### Video guides
 - **Library:** a fixed `VIDEO_LIBRARY` of 36 exercises, each linked to tutorials from established coaches.
 - **Matching:** by regex after name cleanup. Exercises it doesn't cover get no video.
-- **Coach recommendations:** the coach writes `[video: Exercise]` tags, the app resolves them against the library, and anything else, including raw URLs, is never made into a link. Workout plans it suggests or fixes are `[plan: Name: Exercise, ...]` lines, shown with a Save plan button (same name replaces that plan). A new athlete's interview ends with a `[profile: field: value; ...]` line (name, experience, daysPerWeek, focus, notes, music; each value checked by `parseProfileTag`), shown with a Save to profile button. `[import]` is a button that opens Import history in Log. When the athlete says something that will still matter later (a preference, an injury, a schedule change), the coach adds `[remember: fact]` (or `[remember: new fact | replaces: old fact]`); the chat shows it as a small "Noted" line, `rememberFacts` keeps it in `coachMemory`, and the coach context lists those facts under WHAT YOU KNOW ABOUT THE ATHLETE.
+- **Coach recommendations:** the coach writes `[video: Exercise]` tags, the app resolves them against the library, and anything else, including raw URLs, is never made into a link. Workout plans it suggests or fixes are `[plan: Name: Exercise, ...]` lines, shown with a Save plan button (same name replaces that plan). A new athlete's interview ends with a `[profile: field: value; ...]` line (name, experience, daysPerWeek, sessionMinutes, focus, notes, music; each value checked by `parseProfileTag`), shown with a Save to profile button. `[import]` is a button that opens Import history in Log. When the athlete says something that will still matter later (a preference, an injury, a schedule change), the coach adds `[remember: fact]` (or `[remember: new fact | replaces: old fact]`); the chat shows it as a small "Noted" line, `rememberFacts` keeps it in `coachMemory`, and the coach context lists those facts under WHAT YOU KNOW ABOUT THE ATHLETE.
 
 ### Import
 - **CSV:**
@@ -194,7 +196,7 @@ The latest workout from the last 2 days gets a "How did it go?" card: effort, pa
 
 ### Onboarding (`isNewAthlete`)
 - **Who**: no workouts and no saved plans. Saving a plan or logging anything ends it, so existing users never see it.
-- **How**: the chat opens with the coach's first message (`ONBOARDING_GREETING`, no AI call): an offer to import history from another app, then the first question. `ONBOARDING_PROMPT` joins the coach context and has the coach ask one question per message (goal, experience, days a week, injuries, equipment, music), then write a profile tag and the first plans. The Today card then says "Your first workout is ready".
+- **How**: the chat opens with the coach's first message (`ONBOARDING_GREETING`, no AI call): an offer to import history from another app, then the first question. `ONBOARDING_PROMPT` joins the coach context and has the coach ask one question per message (goal, experience, days a week and session length, injuries, equipment, music), then write a profile tag and the first plans, and end with one line saying that age, sex and height in About you are optional and help. The Today card then says "Your first workout is ready".
 
 ### Coach context (`buildCoachContext`)
 Sent with every coach chat, check-in and daily note:
@@ -233,7 +235,7 @@ All JSON answers go through `askAIForJson`, which reads the outermost `{…}` so
 - **Log:** Import history (toggle) · Session saved · check-in card · coach reply · Workout (with Save as a plan) or Start a workout (saved plans, the next one first in line) · Log an activity · Up next · Add exercises (describe in words, or manual) · History (folded).
 - **Form:** exercise, focus note, file picker, frames, feedback, past checks.
 - **Progress:** stats · Activities (last 7 days) · muscle heatmap · estimated 1RM chart with trend line · weekly volume · best lifts.
-- **Goals:** goal cards (barbell loaded with plates you've lifted, forecast) · new goal · About you (units, bodyweight, experience, sessions per week, training days, usual time, food preferences, workout music, coaching style, main focus, injuries and equipment) · What your coach knows (facts from chats, edit or delete) · Your data (export as text)
+- **Goals:** goal cards (barbell loaded with plates you've lifted, forecast) · new goal · About you (units, bodyweight, experience, sessions per week, minutes per session, birth year, sex, height, training days, usual time, food preferences, workout music, coaching style, main focus, injuries and equipment) · What your coach knows (facts from chats, edit or delete) · Your data (export as text)
 - **Everywhere:** rest timer bar (top, with the coach's note, Reply and Quiet), tab bar with a dot while a workout is in progress, exercise details sheet.
 
 ## 8. Decision log

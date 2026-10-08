@@ -161,7 +161,7 @@ export function RichText({ text, onSaveRoutine, onSaveProfile, onOpenImport }) {
   );
 }
 
-const PROFILE_LABELS = { name: "Name", experience: "Experience", daysPerWeek: "Sessions per week", focus: "Main focus", notes: "Injuries and equipment", music: "Workout music" };
+const PROFILE_LABELS = { name: "Name", experience: "Experience", daysPerWeek: "Sessions per week", sessionMinutes: "Minutes per session", focus: "Main focus", notes: "Injuries and equipment", music: "Workout music" };
 
 // What the coach learned in a new athlete's interview, saved to their profile with one tap.
 export function ProfileSuggestion({ profile, onSave }) {

@@ -1,4 +1,4 @@
-import { BODYWEIGHT_CONTEXT_ENTRIES, COACH_STYLES, DEFAULT_SETTINGS, EXPERIENCE_LEVELS, MAX_COACH_FACTS, MEMORY_MARKER, MUSCLE_LABELS, PAIN_LOOKBACK_DAYS, PLAN_STATUS, PROFILE_MARKER, TRAINING_FOCUSES, WEEKDAYS } from "./config.js";
+import { BODYWEIGHT_CONTEXT_ENTRIES, COACH_STYLES, DEFAULT_SETTINGS, EXPERIENCE_LEVELS, HEIGHT_UNITS, MAX_COACH_FACTS, MEMORY_MARKER, MUSCLE_LABELS, PAIN_LOOKBACK_DAYS, PLAN_STATUS, PROFILE_MARKER, TRAINING_FOCUSES, WEEKDAYS } from "./config.js";
 import { ONBOARDING_PROMPT } from "./prompts.js";
 import { daysBetween, formatClock, today } from "./dates.js";
 import { currentBodyweight, personalRecords, sortNewestFirst } from "./training.js";
@@ -33,6 +33,7 @@ const PROFILE_TAG_FIELDS = {
   experience: pickFrom(EXPERIENCE_LEVELS),
   daysPerWeek: (value) => [1, 2, 3, 4, 5, 6, 7].find((days) => days === Number(value)),
   focus: pickFrom(TRAINING_FOCUSES),
+  sessionMinutes: (value) => (Number.isInteger(Number(value)) && value >= 10 && value <= 240 ? Number(value) : undefined),
   notes: asIs,
   music: asIs,
 };
@@ -91,6 +92,13 @@ export function buildCoachContext({ profile, goals, routines = [], coachMemory =
   const recent = sortNewestFirst(workouts).slice(0, 40).map(formatWorkout);
   const pain = recentPainLines(workouts);
   const name = profile.name?.trim() ? `name ${profile.name.trim()}, ` : "";
+  // Optional: only what the athlete filled in.
+  const body = [
+    profile.sex?.toLowerCase(),
+    profile.birthYear && `age ${Number(today().slice(0, 4)) - profile.birthYear}`,
+    profile.height && `height ${profile.height}${HEIGHT_UNITS[u]}`,
+  ].filter(Boolean).map((part) => `${part}, `).join("");
+  const sessionLength = profile.sessionMinutes ? `, sessions of up to ${profile.sessionMinutes} min` : "";
   const targets = plans.map(
     (p) => `- ${p.name}: ${p.target.sets}x${p.target.reps} @ ${p.target.weight}${u} (${PLAN_STATUS[p.status].label.toLowerCase()}, rep range ${formatRange(p.range)}, rest ${formatClock(p.rest)})`
   );
@@ -100,7 +108,7 @@ export function buildCoachContext({ profile, goals, routines = [], coachMemory =
 
   return [
     `Today is ${today()}. Weights are in ${u}, written weight x reps; dumbbell weights are per dumbbell.`,
-    `ATHLETE: ${name}${profile.experience}, bodyweight ${currentBodyweight(bodyweightLog, profile) ?? "unknown"}${u}, ${schedule}, focus: ${profile.focus}, coaching style: ${COACH_STYLES[profile.coachStyle ?? DEFAULT_SETTINGS.profile.coachStyle]}.`,
+    `ATHLETE: ${name}${profile.experience}, ${body}bodyweight ${currentBodyweight(bodyweightLog, profile) ?? "unknown"}${u}, ${schedule}${sessionLength}, focus: ${profile.focus}, coaching style: ${COACH_STYLES[profile.coachStyle ?? DEFAULT_SETTINGS.profile.coachStyle]}.`,
     profile.notes && `INJURIES AND EQUIPMENT (from the athlete's profile; plan around these): ${profile.notes}`,
     profile.foodNotes && `FOOD PREFERENCES: ${profile.foodNotes}`,
     profile.music && `WORKOUT MUSIC: ${profile.music}`,
