@@ -1,4 +1,4 @@
-import { BODYWEIGHT_CONTEXT_ENTRIES, COACH_STYLES, DEFAULT_SETTINGS, EXPERIENCE_LEVELS, MUSCLE_LABELS, PAIN_LOOKBACK_DAYS, PLAN_STATUS, PROFILE_MARKER, TRAINING_FOCUSES, WEEKDAYS } from "./config.js";
+import { BODYWEIGHT_CONTEXT_ENTRIES, COACH_STYLES, DEFAULT_SETTINGS, EXPERIENCE_LEVELS, MAX_COACH_FACTS, MEMORY_MARKER, MUSCLE_LABELS, PAIN_LOOKBACK_DAYS, PLAN_STATUS, PROFILE_MARKER, TRAINING_FOCUSES, WEEKDAYS } from "./config.js";
 import { ONBOARDING_PROMPT } from "./prompts.js";
 import { daysBetween, formatClock, today } from "./dates.js";
 import { currentBodyweight, personalRecords, sortNewestFirst } from "./training.js";
@@ -49,7 +49,27 @@ export function parseProfileTag(line) {
   return Object.keys(fields).length ? fields : null;
 }
 
-export function buildCoachContext({ profile, goals, routines = [] }, workouts, plans, learnedMuscles, session, bodyweightLog = []) {
+// "[remember: Knee is fine now | replaces: Left knee hurts]" → { text, replaces }; null for any other line.
+export function parseMemoryTag(line) {
+  const [text, replaces] = (line.match(MEMORY_MARKER)?.[1] ?? "").split(/\s*\|\s*replaces:\s*/i).map((part) => part.trim());
+  return text ? { text, replaces: replaces?.replace(/\s*\(\d{4}-\d\d-\d\d\)$/, "") || null } : null; // the coach may copy the date it sees after a fact
+}
+
+const factKey = (text) => text.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+// The coach's memory after a reply: each [remember: ...] is added (newest last), dropping the fact it replaces and any
+// copy of itself; past the cap the oldest go. The same list back if the reply remembers nothing.
+export function rememberFacts(facts, reply, date) {
+  const tags = reply.split("\n").map(parseMemoryTag).filter(Boolean);
+  if (!tags.length) return facts;
+  const updated = tags.reduce(
+    (list, tag) => [...list.filter((f) => factKey(f.text) !== factKey(tag.text) && factKey(f.text) !== factKey(tag.replaces ?? "")), { text: tag.text, date }],
+    facts
+  );
+  return updated.slice(-MAX_COACH_FACTS);
+}
+
+export function buildCoachContext({ profile, goals, routines = [], coachMemory = [] }, workouts, plans, learnedMuscles, session, bodyweightLog = []) {
   const u = profile.unit;
   const formatWorkout = formatWorkoutLine;
   const schedule = (profile.trainingDays ?? []).length
@@ -84,6 +104,7 @@ export function buildCoachContext({ profile, goals, routines = [] }, workouts, p
     profile.notes && `INJURIES AND EQUIPMENT (from the athlete's profile; plan around these): ${profile.notes}`,
     profile.foodNotes && `FOOD PREFERENCES: ${profile.foodNotes}`,
     profile.music && `WORKOUT MUSIC: ${profile.music}`,
+    coachMemory.length > 0 && `WHAT YOU KNOW ABOUT THE ATHLETE (they told you in earlier chats, oldest first):\n${coachMemory.map((f) => `- ${f.text} (${f.date})`).join("\n")}`,
     pain.length > 0 && `RECENT PAIN (from post-workout check-ins; adapt plans around it):\n${pain.join("\n")}`,
     `TODAY: ${todayLine}.`,
     bodyweightLog.length > 1 &&

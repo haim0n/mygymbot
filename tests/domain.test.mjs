@@ -291,6 +291,29 @@ test("Onboarding: a new athlete is interviewed until a plan is saved or a workou
   assert.deepEqual(app.todayFacts({ workouts: [], settings: { ...noPlans, routines: [a] }, records: {}, plans: [] }).map((f) => f.text), ["Your first workout is ready: A."]);
 });
 
+test("Coach memory: remember tags add facts, replace or drop copies of old ones, and the coach sees them", () => {
+  const knee = { text: "Left knee hurts on squats", date: "2026-10-01" };
+  const facts = [knee, { text: "Prefers dumbbells", date: "2026-10-02" }];
+  assert.deepEqual(app.parseMemoryTag(" [remember: Knee is fine now | replaces: Left knee hurts on squats] "), { text: "Knee is fine now", replaces: "Left knee hurts on squats" });
+  assert.deepEqual(app.parseMemoryTag("[Remember: Trains for a 10k in May]"), { text: "Trains for a 10k in May", replaces: null });
+  assert.equal(app.parseMemoryTag("[remember: Knee is fine | replaces: Left knee hurts on squats (2026-10-01)]").replaces, "Left knee hurts on squats"); // as listed in the context
+  assert.equal(app.parseMemoryTag("I'll [remember: this]"), null);
+
+  assert.equal(app.rememberFacts(facts, "Good set.\nKeep going.", "2026-10-08"), facts); // nothing remembered: the same list, so nothing is saved
+  assert.deepEqual(app.rememberFacts(facts, "Glad.\n[remember: Knee is fine now | replaces: left knee hurts on squats.]\n[remember: prefers Dumbbells]", "2026-10-08"), [
+    { text: "Knee is fine now", date: "2026-10-08" },
+    { text: "prefers Dumbbells", date: "2026-10-08" },
+  ]);
+  const many = Array.from({ length: app.MAX_COACH_FACTS }, (_, i) => ({ text: `Fact ${i}`, date: "2026-10-01" }));
+  const capped = app.rememberFacts(many, "[remember: New fact]", "2026-10-08");
+  assert.equal(capped.length, app.MAX_COACH_FACTS);
+  assert.deepEqual([capped[0].text, capped.at(-1).text], ["Fact 1", "New fact"]); // the oldest goes
+
+  const context = (coachMemory) => app.buildCoachContext({ ...settingsWith(), coachMemory }, [], [], {}, null);
+  assert.ok(context(facts).includes("WHAT YOU KNOW ABOUT THE ATHLETE (they told you in earlier chats, oldest first):\n- Left knee hurts on squats (2026-10-01)\n- Prefers dumbbells (2026-10-02)"));
+  assert.ok(!context(undefined).includes("WHAT YOU KNOW")); // settings saved before the field existed
+});
+
 test("Exercise photos: same name first (equipment in brackets or in front), then the AI's match, if it's a real photo", () => {
   assert.equal(app.photoFor("Leg Press"), "Leg_Press");
   assert.equal(app.photoFor("Bench Press (Dumbbell)"), "Dumbbell_Bench_Press");

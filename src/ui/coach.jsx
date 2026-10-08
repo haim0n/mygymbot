@@ -6,7 +6,7 @@ import { askAI, recentTurns } from "../ai.js";
 import { ErrorText, RichText, ViewTitle, inputClass } from "./primitives.jsx";
 import { TodayCard } from "./motivation.jsx";
 
-export function CoachView({ chat, setChat, context, briefing, newAthlete, onNavigate, onSaveRoutine, onSaveProfile, onOpenImport }) {
+export function CoachView({ chat, setChat, context, briefing, newAthlete, onNavigate, onSaveRoutine, onSaveProfile, onOpenImport, onRemember }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -33,6 +33,7 @@ export function CoachView({ chat, setChat, context, briefing, newAthlete, onNavi
     try {
       const reply = await askAI(`${COACH_PROMPT}\n\n${context}`, recentTurns(conversation, CHAT_CONTEXT_SIZE));
       setChat([...conversation, { role: "assistant", content: reply }].slice(-CHAT_HISTORY_SIZE)); // may start with the coach; requests trim to a user turn
+      onRemember(reply);
     } catch (err) {
       setChat(chat); // roll back the unanswered question…
       setInput(content); // …so it can be sent again

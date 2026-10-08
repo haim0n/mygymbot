@@ -7,7 +7,7 @@ import { exercisesByFrequency, logBodyweight, personalRecords } from "./training
 import { buildAutopilotPlans } from "./autopilot.js";
 import { todayFacts } from "./motivation.js";
 import { saveRoutine } from "./workout.js";
-import { buildCoachContext, isNewAthlete } from "./coach-context.js";
+import { buildCoachContext, isNewAthlete, rememberFacts } from "./coach-context.js";
 import { useDailyNote } from "./ui/motivation.jsx";
 import { useInjuryAreas, useLearnedMuscles } from "./ui/muscles.jsx";
 import { ExerciseContext, ExerciseSheet, useLearnedPhotos } from "./ui/exercises.jsx";
@@ -70,6 +70,12 @@ export default function GymBot() {
   const setRepRange = (name, range) => setSettings((s) => ({ ...s, repRanges: { ...s.repRanges, [name]: range } }));
   const storeRoutine = (routine) => setSettings((s) => ({ ...s, routines: saveRoutine(s.routines ?? [], routine) }));
   const storeProfile = (fields) => setSettings((s) => ({ ...s, profile: { ...s.profile, ...fields } }));
+  const remember = (reply) =>
+    setSettings((s) => {
+      const facts = s.coachMemory ?? [];
+      const updated = rememberFacts(facts, reply, today());
+      return updated === facts ? s : { ...s, coachMemory: updated };
+    });
   const openImport = () => {
     setShowImport(true);
     setTab("log");
@@ -103,7 +109,7 @@ export default function GymBot() {
   };
 
   const views = {
-    coach: <CoachView chat={chat} setChat={setChat} context={coachContext} briefing={{ facts, note: dailyNote }} newAthlete={isNewAthlete(settings, workouts)} onNavigate={setTab} onSaveRoutine={storeRoutine} onSaveProfile={storeProfile} onOpenImport={openImport} />,
+    coach: <CoachView chat={chat} setChat={setChat} context={coachContext} briefing={{ facts, note: dailyNote }} newAthlete={isNewAthlete(settings, workouts)} onNavigate={setTab} onSaveRoutine={storeRoutine} onSaveProfile={storeProfile} onOpenImport={openImport} onRemember={remember} />,
     log: (
       <LogView workouts={workouts} setWorkouts={setWorkouts} session={session} setSession={setSession} settings={settings} coachContext={coachContext} plans={plans} learnedMuscles={learnedMuscles} onRangeChange={setRepRange} onStartRest={restTimer.start} onSaveRoutine={storeRoutine} onDeleteRoutine={deleteRoutine} showImport={showImport} setShowImport={setShowImport} unit={unit} />
     ),

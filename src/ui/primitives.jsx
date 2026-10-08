@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Trash2, Loader2, Upload } from "lucide-react";
 import { IMPORT_MARKER, VIDEO_MARKER } from "../config.js";
 import { parseRoutineTag } from "../workout.js";
-import { parseProfileTag } from "../coach-context.js";
+import { parseMemoryTag, parseProfileTag } from "../coach-context.js";
 import { VideoGuides } from "./videos.jsx";
 import { guideFor } from "../training.js";
 
@@ -121,7 +121,7 @@ export function renderBold(text) {
   );
 }
 
-// Minimal markdown: headings, "- " bullets and **bold**, plus the coach's video, plan, profile and import tags.
+// Minimal markdown: headings, "- " bullets and **bold**, plus the coach's video, plan, profile, import and remember tags.
 export function RichText({ text, onSaveRoutine, onSaveProfile, onOpenImport }) {
   const lines = text.split("\n").filter((line) => line.trim());
   return (
@@ -143,6 +143,8 @@ export function RichText({ text, onSaveRoutine, onSaveProfile, onOpenImport }) {
           ) : null;
         const profile = parseProfileTag(line);
         if (profile) return onSaveProfile ? <ProfileSuggestion key={i} profile={profile} onSave={onSaveProfile} /> : null;
+        const memory = parseMemoryTag(line);
+        if (memory) return <p key={i} className="text-xs text-zinc-400">Noted: {memory.text}</p>;
         const isHeading = /^#{1,4}\s/.test(line);
         const content = renderBold(line.replace(/^\s*[-*•]\s+/, "").replace(/^#{1,4}\s/, ""));
         if (isHeading) return <p key={i} className="font-semibold text-zinc-900 pt-1">{content}</p>;

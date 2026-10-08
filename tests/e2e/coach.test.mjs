@@ -41,6 +41,35 @@ test("coach: video tags become library links; anything else is dropped", async (
   assert.deepEqual(errors, []);
 });
 
+test("coach memory: what the athlete says is remembered, shown in Goals, editable, and sent with later chats", async (t) => {
+  const { page, errors, aiRequests } = await openApp(t, {
+    seed: { "gymbot:workouts": [userWorkout] },
+    ai: (body) => (!isCoachChat(body) ? "OK" : body.messages.at(-1).content.includes("like") ? "Dumbbells it is.\n[remember: Prefers dumbbells over barbells]" : "Upper body today."),
+  });
+  await page.getByPlaceholder("Message your coach").fill("I like dumbbells more than barbells");
+  await page.getByRole("button", { name: "Send" }).tap();
+  await page.getByText("Noted: Prefers dumbbells over barbells").waitFor();
+  await settle(page);
+  assert.deepEqual((await stored(page, "gymbot:settings")).coachMemory.map((f) => f.text), ["Prefers dumbbells over barbells"]);
+
+  await page.getByRole("button", { name: "Goals", exact: true }).tap();
+  const panel = section(page, "What your coach knows");
+  await panel.getByLabel("Fact 1", { exact: true }).fill("Prefers dumbbells");
+  await page.getByRole("button", { name: "Coach", exact: true }).tap();
+  await page.getByPlaceholder("Message your coach").fill("what should I do today?");
+  await page.getByRole("button", { name: "Send" }).tap();
+  await settle(page);
+  assert.match(aiRequests.filter(isCoachChat).at(-1).system, /WHAT YOU KNOW ABOUT THE ATHLETE[^\n]*\n- Prefers dumbbells \(\d{4}-\d\d-\d\d\)/);
+
+  await page.getByRole("button", { name: "Goals", exact: true }).tap();
+  await panel.getByRole("button", { name: "Delete fact 1" }).tap();
+  await panel.getByRole("button", { name: "Tap to delete" }).tap();
+  await panel.getByText("Tell your coach about preferences").waitFor();
+  await settle(page);
+  assert.deepEqual((await stored(page, "gymbot:settings")).coachMemory, []);
+  assert.deepEqual(errors, []);
+});
+
 test("onboarding: a new athlete's coach asks first, then the profile and plans it suggests are saved", async (t) => {
   const { page, errors, aiRequests } = await openApp(t, {
     ai: (body) =>

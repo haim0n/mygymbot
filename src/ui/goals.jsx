@@ -185,9 +185,33 @@ export function GoalsView({ settings, setSettings, records, workouts }) {
         </div>
       </Panel>
 
+      <CoachMemoryPanel settings={settings} setSettings={setSettings} />
       <ExportPanel />
       <p className="text-center text-xs text-zinc-400">GymBot {[APP_VERSION, deployedCommit()].filter(Boolean).join(" ")}</p>
     </div>
+  );
+}
+
+// The facts the coach picked up in chats ([remember: ...] tags), so the athlete can correct or drop them.
+function CoachMemoryPanel({ settings, setSettings }) {
+  const facts = settings.coachMemory ?? [];
+  const update = (index, text) => setSettings((s) => ({ ...s, coachMemory: s.coachMemory.map((f, i) => (i === index ? { ...f, text } : f)) }));
+  const remove = (index) => setSettings((s) => ({ ...s, coachMemory: s.coachMemory.filter((_, i) => i !== index) }));
+  return (
+    <Panel className="space-y-3">
+      <div>
+        <SectionTitle>What your coach knows</SectionTitle>
+        <p className="-mt-1 text-sm text-zinc-500">
+          {facts.length ? "Picked up from your chats. Edit or delete anything that's wrong." : "Tell your coach about preferences, injuries or plans and it keeps them here."}
+        </p>
+      </div>
+      {facts.map((fact, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <input aria-label={`Fact ${i + 1}`} value={fact.text} onChange={(e) => update(i, e.target.value)} className={inputClass} />
+          <DeleteButton label={`Delete fact ${i + 1}`} onConfirm={() => remove(i)} />
+        </div>
+      ))}
+    </Panel>
   );
 }
 

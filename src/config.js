@@ -23,6 +23,7 @@ export const DEFAULT_SETTINGS = {
   goals: [],
   repRanges: {}, // per-exercise overrides, e.g. { "Bench Press": [5, 8] }
   routines: [], // saved workout plans, done in turn: [{ name: "A", exercises: ["Back Squat", ...] }]
+  coachMemory: [], // what the athlete told the coach that still matters: [{ text, date }], newest last
 };
 
 // Autopilot: double progression. Hit the top of the rep range on every set, then add weight.
@@ -126,6 +127,7 @@ export const MUSCLE_RULES = [
 export const VIDEO_MARKER = /^\s*\[video:\s*(.+?)\]\s*$/i; // the coach writes [video: Exercise Name] on its own line
 export const ROUTINE_MARKER = /^\s*\[plan:\s*([^:\]]+?)\s*:\s*(.+?)\]\s*$/i; // the coach writes [plan: Name: Exercise, Exercise, ...] on its own line
 export const IMPORT_MARKER = /^\s*\[import\]\s*$/i; // the coach writes [import] on its own line for a button that opens Import history
+export const MEMORY_MARKER = /^\s*\[remember:\s*(.+?)\]\s*$/i; // the coach writes [remember: fact] or [remember: fact | replaces: old fact] on its own line
 export const PROFILE_MARKER = /^\s*\[profile:\s*(.+?)\]\s*$/i; // a new athlete's interview ends with [profile: field: value; field: value; ...]
 export const VIDEO_LIBRARY = [
   { exercise: "Incline press", match: /incline.*(press|bench)/, videos: [{ id: "SrqOu55lrYU", channel: "Jeff Nippard" }] },
@@ -185,6 +187,7 @@ export const RECENT_RECORD_DAYS = 7;
 export const GOAL_CLOSE_RATIO = 0.9; // within 10% of a goal
 export const GOAL_DUE_SOON_DAYS = 14;
 export const MAX_TODAY_FACTS = 4;
+export const MAX_COACH_FACTS = 20; // the coach's memory keeps the newest; a short list keeps every prompt small
 export const REST_NOTE_CHAT_MESSAGES = 6; // the latest coach chat messages a rest note sees, so it follows up on what was said
 // The rest-screen notes of one workout take these in turn, so the coach doesn't open every note the same way.
 export const REST_NOTE_KINDS = [
