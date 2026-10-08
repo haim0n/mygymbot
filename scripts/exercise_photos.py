@@ -21,6 +21,7 @@ WEBP_QUALITY = 60
 ROOT = Path(__file__).resolve().parent.parent
 PHOTOS_DIR = ROOT / "web" / "exercises"
 INDEX_FILE = ROOT / "src" / "exercise-photos.js"
+DRAWN_FILE = ROOT / "scripts" / "drawn-exercises.txt"  # ids whose photos exercise_drawings.py replaced with drawings
 
 
 def fetch(path: str) -> bytes:
@@ -47,7 +48,12 @@ def main() -> None:
         if e["category"] in CATEGORIES and len(e["images"]) == 2
     ]
     PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
-    jobs = [(image, PHOTOS_DIR / f"{e['id']}-{i}.webp") for e in exercises for i, image in enumerate(e["images"])]
+    drawn = set(DRAWN_FILE.read_text().split()) if DRAWN_FILE.exists() else set()
+    jobs = [
+        (image, PHOTOS_DIR / f"{e['id']}-{i}.webp")
+        for e in exercises if e["id"] not in drawn
+        for i, image in enumerate(e["images"])
+    ]
     with ThreadPoolExecutor(max_workers=16) as pool:
         list(pool.map(lambda job: save_photo(*job), jobs))
 

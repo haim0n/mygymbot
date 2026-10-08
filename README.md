@@ -75,6 +75,7 @@ src/                the app: domain modules (*.js, pure logic plus storage and A
 web/                the page, entry point and styles (built to web/dist/; tailwind.config.js)
 server/             Python backend (FastAPI): static files, storage, Gemini, access gate
 scripts/            exercise_photos.py: fetches the public-domain exercise photos into web/exercises/
+                    exercise_drawings.py: redraws chosen photos as clean illustrations with Gemini (billed)
 pyproject.toml      Python dependencies (uv)
 Dockerfile          the hosted copy: Node builds the bundle, Python serves it
 data/               your data when run locally (gitignored)
