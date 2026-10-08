@@ -106,6 +106,14 @@ def test_ask_answers_with_text_and_reports_failures(data_file: Path, monkeypatch
     assert client.post("/api/ask", json=body).status_code == 502
 
 
+def test_app_files_are_checked_for_a_new_version_on_each_load(data_file: Path) -> None:
+    client = client_for(data_file)
+    picture = client.get("/exercises/Leg_Press-0.webp")
+    assert picture.headers["cache-control"] == "no-cache"
+    assert client.get("/exercises/Leg_Press-0.webp", headers={"if-none-match": picture.headers["etag"]}).status_code == 304
+    assert "cache-control" not in client.get("/api/storage/gymbot:workouts").headers
+
+
 def test_gemini_contents_from_the_conversation() -> None:
     jpeg = b"\xff\xd8 fake jpeg"
     contents = gemini.to_gemini_contents(

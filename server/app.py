@@ -18,6 +18,7 @@ WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 DEV_USER = "dev"  # the only user without IAP (local dev); data in data/dev.json
 
 logger = logging.getLogger(__name__)
+STATIC_PATHS = ("/dist/", "/exercises/")  # the bundle and the exercise pictures, replaced in place by each deploy
 
 
 def create_app(stores: Stores, iap_audience: str | None, commit: str | None = None) -> FastAPI:
@@ -44,6 +45,15 @@ def create_app(stores: Stores, iap_audience: str | None, commit: str | None = No
             logger.warning("Refused a request without IAP identity: %s", error)
             return PlainTextResponse("Sign in through GymBot's address.", status_code=401)
         return await call_next(request)
+
+    @app.middleware("http")
+    async def revalidate_files(request: Request, call_next: Any) -> Response:
+        response = await call_next(request)
+        if request.url.path.startswith(STATIC_PATHS):
+            # Without this, browsers cache by their own rules and kept running an app several deploys old.
+            # no-cache still caches, but checks the ETag first: unchanged files cost one 304.
+            response.headers["Cache-Control"] = "no-cache"
+        return response
 
     @app.get("/")
     def index() -> HTMLResponse:
