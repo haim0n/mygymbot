@@ -18,7 +18,7 @@ WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 DEV_USER = "dev"  # the only user without IAP (local dev); data in data/dev.json
 
 logger = logging.getLogger(__name__)
-STATIC_PATHS = ("/dist/", "/exercises/")  # the bundle and the exercise pictures, replaced in place by each deploy
+STATIC_PATHS = ("/dist/", "/exercises/", "/static/")  # the bundle, the pictures and the install files, replaced in place by each deploy
 
 
 def create_app(stores: Stores, iap_audience: str | None, commit: str | None = None) -> FastAPI:
@@ -91,4 +91,5 @@ def create_app(stores: Stores, iap_audience: str | None, commit: str | None = No
 
     app.mount("/dist", StaticFiles(directory=WEB_DIR / "dist", check_dir=False), name="dist")
     app.mount("/exercises", StaticFiles(directory=WEB_DIR / "exercises"), name="exercises")
+    app.mount("/static", StaticFiles(directory=WEB_DIR / "static"), name="static")  # what installs it on a phone
     return app

@@ -38,7 +38,7 @@ No deploy is needed, and it works for any Google account (Gmail or not).
      --resource-type=cloud-run --service=gymbot \
      --member=user:FRIEND@gmail.com --role=roles/iap.httpsResourceAccessor
    ```
-4. **Send them the address**, https://gymbot-83264737603.me-west1.run.app. They sign in with Google; access can take a minute or two to start working. On a phone, Add to Home Screen makes it feel like an app.
+4. **Send them the address**, https://gymbot-83264737603.me-west1.run.app. They sign in with Google; access can take a minute or two to start working. To install it on a phone: on Android, Chrome menu → Install app; on an iPhone, Safari → Share → Add to Home Screen. It then opens full screen from its own icon.
 
 Who has access now: `gcloud iap web get-iam-policy --project=mygymbot --region=me-west1 --resource-type=cloud-run --service=gymbot`.
 

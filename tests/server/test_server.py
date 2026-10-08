@@ -114,6 +114,18 @@ def test_app_files_are_checked_for_a_new_version_on_each_load(data_file: Path) -
     assert "cache-control" not in client.get("/api/storage/gymbot:workouts").headers
 
 
+def test_the_page_links_a_manifest_that_installs_the_app(data_file: Path) -> None:
+    client = client_for(data_file)
+    assert 'href="/static/manifest.webmanifest"' in client.get("/").text
+    manifest = client.get("/static/manifest.webmanifest")
+    assert manifest.headers["content-type"] == "application/manifest+json"
+    assert (manifest.json()["start_url"], manifest.json()["display"]) == ("/", "standalone")
+    sizes = {icon["sizes"] for icon in manifest.json()["icons"]}
+    assert {"192x192", "512x512"} <= sizes  # what Android needs to install it
+    for icon in manifest.json()["icons"]:
+        assert client.get(icon["src"]).status_code == 200
+
+
 def test_gemini_contents_from_the_conversation() -> None:
     jpeg = b"\xff\xd8 fake jpeg"
     contents = gemini.to_gemini_contents(

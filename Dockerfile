@@ -20,6 +20,7 @@ RUN uv sync --frozen --no-dev
 COPY server server
 COPY web/index.html web/index.html
 COPY web/exercises web/exercises
+COPY web/static web/static
 COPY --from=web /app/web/dist web/dist
 ENV HOST=0.0.0.0 GYMBOT_DATA_DIR=/data \
     GYMBOT_IAP_AUDIENCE=/projects/83264737603/locations/me-west1/services/gymbot

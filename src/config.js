@@ -268,5 +268,9 @@ export const GLOBAL_CSS = `
 .gb-root { font-family: 'Barlow', system-ui, sans-serif; color-scheme: light; }
 .gb-display { font-family: 'Barlow Condensed', 'Arial Narrow', system-ui, sans-serif; letter-spacing: -0.01em; }
 .gb-root :focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
+/* Feel like an app, not a web page: no grey flash on tap, no text selection on a long press of a button. */
+.gb-root { -webkit-tap-highlight-color: transparent; }
+.gb-root button { -webkit-user-select: none; user-select: none; }
+.gb-root button:active:not(:disabled) { opacity: 0.6; }
 @media (prefers-reduced-motion: reduce) { .gb-root * { animation: none !important; scroll-behavior: auto !important; } }
 `;

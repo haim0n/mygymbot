@@ -18,7 +18,7 @@ npm run deploy       # ship to Haim's hosted copy on Cloud Run (only after npm r
 - `src/`: the app (JS, front end only).
   - Domain modules at the top level (`config.js`, `autopilot.js`, `workout.js`, ...): pure functions and constants, no JSX, nothing from `src/ui/`. `storage.js` and `ai.js` are the only ones that talk to the server.
   - `src/ui/*.jsx`: the components, one file per area; `App.jsx` holds the app state and the tabs.
-- `web/`: the page (`index.html`), entry point (`main.jsx`) and `styles.css`, built to `web/dist/` by esbuild and Tailwind (`tailwind.config.js`).
+- `web/`: the page (`index.html`), entry point (`main.jsx`), `styles.css` and `static/` (the manifest and icon that let a phone install the app), built to `web/dist/` by esbuild and Tailwind (`tailwind.config.js`).
 - `server/`: the Python backend (FastAPI): serves `web/`, stores each user's data (`storage.py`), answers AI calls with Gemini (`gemini.py`), and identifies users from IAP (`iap.py`). **Backend code is Python only.**
 - `tests/`: `domain.test.mjs` (imports the domain modules directly), `server/` (pytest), `e2e/` (Playwright driving the Python server).
 
