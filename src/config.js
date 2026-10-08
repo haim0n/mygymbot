@@ -1,7 +1,7 @@
 import { Footprints, Mountain, Bike, Waves, PersonStanding, Activity } from "lucide-react";
 
 // Shown under Goals, so users and developers can tell which build they run. Bump it with package.json's "version" on every release.
-export const APP_VERSION = "0.5.0";
+export const APP_VERSION = "0.6.0";
 
 export const STORAGE_KEYS = {
   workouts: "gymbot:workouts",
