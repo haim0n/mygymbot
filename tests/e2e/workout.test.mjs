@@ -37,6 +37,54 @@ test("live workout: start with Up next, reorder, check off, survive a reload, fi
   assert.deepEqual(errors, []);
 });
 
+test("rest notes: the coach writes once per exercise while resting; Reply continues in the chat, Quiet stops it", async (t) => {
+  let notes = 0;
+  const { page, errors, aiRequests } = await openApp(t, {
+    seed: { "gymbot:workouts": [userWorkout] },
+    ai: (body) => (body.system.includes("rest screen") ? `Note ${++notes}: slow on the way down.` : isCoachChat(body) ? "Good, keep it there." : "OK"),
+  });
+  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: /Start with Up next/ }).tap();
+  const items = section(page, "Workout").locator("ol > li");
+  const bar = page.locator("div.fixed.top-0");
+
+  await items.nth(0).getByRole("button", { name: "Set 1 done" }).tap();
+  await bar.getByText("Note 1: slow on the way down.").waitFor();
+  const asked = aiRequests.filter((b) => b.system.includes("rest screen"));
+  assert.match(asked[0].messages[0].content, /^RESTING after set 1 of \d+ of /);
+  assert.ok(asked[0].system.includes("WORKOUT IN PROGRESS"));
+  await page.getByRole("button", { name: "Skip" }).tap();
+
+  await items.nth(0).getByRole("button", { name: "Set 2 done" }).tap(); // same exercise: no new note
+  await settle(page);
+  assert.equal(await bar.getByRole("button", { name: "Reply" }).count(), 0);
+  await page.getByRole("button", { name: "Skip" }).tap();
+
+  await items.nth(1).getByRole("button", { name: "Set 1 done" }).tap();
+  await bar.getByText("Note 2").waitFor();
+  assert.ok(aiRequests.filter((b) => b.system.includes("rest screen"))[1].messages[0].content.includes("You already said this workout:\n- Note 1"));
+  await bar.getByRole("button", { name: "Reply" }).tap();
+  await page.getByText("Note 2: slow on the way down.").last().waitFor(); // in the chat now
+  await page.getByPlaceholder("Message your coach").fill("Felt heavy");
+  await page.getByRole("button", { name: "Send" }).tap();
+  await page.getByText("Good, keep it there.").waitFor();
+  assert.ok(aiRequests.find(isCoachChat).system.includes("between sets"));
+
+  await page.getByRole("button", { name: "Skip" }).tap();
+  await page.getByRole("button", { name: /^Log/ }).tap();
+  await items.nth(2).getByRole("button", { name: "Set 1 done" }).tap();
+  await bar.getByText("Note 3").waitFor();
+  assert.ok(aiRequests.filter((b) => b.system.includes("rest screen"))[2].messages[0].content.includes("- athlete: Felt heavy")); // picks up the chat
+
+  await bar.getByRole("button", { name: "Quiet" }).tap();
+  assert.equal(await bar.getByText("Note 3").count(), 0);
+  await page.getByRole("button", { name: "Skip" }).tap();
+  await items.nth(3).getByRole("button", { name: "Set 1 done" }).tap();
+  await settle(page);
+  assert.equal(aiRequests.filter((b) => b.system.includes("rest screen")).length, 3);
+  assert.deepEqual(errors, []);
+});
+
 test("exercise photos: known names right away, others matched once by the AI and kept; details show start and finish", async (t) => {
   const rare = { id: "rare", date: "2026-10-01", notes: "", exercises: ["Zottman Curl (Dumbbell)", "Made Up Lift"].map((name) => ({ name, sets: [{ weight: 12, reps: 10 }] })) };
   const { page, errors, aiRequests } = await openApp(t, {

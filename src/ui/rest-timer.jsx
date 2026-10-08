@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { formatClock } from "../dates.js";
+import { REST_NOTE_PROMPT } from "../prompts.js";
+import { askAI } from "../ai.js";
+import { restNoteRequest, wantsRestNote } from "../workout.js";
 
 export const REST_FINISHED_DISPLAY_MS = 4000;
 
@@ -24,7 +27,7 @@ export function playChime(audio) {
 
 // Counts down from a fixed end time, so it stays accurate even if the browser throttles the tab.
 export function useRestTimer() {
-  const [rest, setRest] = useState(null); // { label, duration (s), endsAt (ms) }
+  const [rest, setRest] = useState(null); // { label, duration (s), startedAt and endsAt (ms) }
   const [now, setNow] = useState(Date.now());
   const audioRef = useRef(null);
 
@@ -53,7 +56,7 @@ export function useRestTimer() {
     }
     audioRef.current?.resume?.();
     setNow(Date.now());
-    setRest({ label, duration: seconds, endsAt: Date.now() + seconds * 1000 });
+    setRest({ label, duration: seconds, startedAt: Date.now(), endsAt: Date.now() + seconds * 1000 });
   }
 
   const adjust = (seconds) =>
@@ -64,6 +67,22 @@ export function useRestTimer() {
   return { rest, remaining, finished, start, adjust, stop };
 }
 
+// The coach keeps the athlete company between sets with one short line, the first time each exercise rests.
+// Notes live in the session, so a reload doesn't ask again and the coach knows what it already said.
+export function useRestNote({ rest, session, setSession, context, chat }) {
+  const requested = useRef(null);
+  useEffect(() => {
+    if (!rest || requested.current === rest.startedAt || !wantsRestNote(session, rest.label)) return;
+    requested.current = rest.startedAt;
+    askAI(`${REST_NOTE_PROMPT}\n\n${context}`, [{ role: "user", content: restNoteRequest(session, rest.label, chat) }])
+      .then((text) => setSession((s) => s && { ...s, coachNotes: [...(s.coachNotes ?? []), { exercise: rest.label, text, restStartedAt: rest.startedAt }] }))
+      .catch(() => {}); // the timer is what matters; a rest without a note is fine
+  }, [rest?.startedAt]);
+
+  const latest = session?.coachNotes?.at(-1);
+  return rest && !session.coachQuiet && latest?.restStartedAt === rest.startedAt ? latest.text : null;
+}
+
 export function TimerButton({ children, onClick, label }) {
   return (
     <button onClick={onClick} aria-label={label} className="rounded-lg bg-zinc-700 px-3 py-2 text-sm font-semibold text-white">
@@ -72,7 +91,7 @@ export function TimerButton({ children, onClick, label }) {
   );
 }
 
-export function RestTimerBar({ timer }) {
+export function RestTimerBar({ timer, note, onReply, onQuiet }) {
   const { rest, remaining, finished, adjust, stop } = timer;
   if (!rest) return null;
   const progress = Math.min(1, remaining / rest.duration);
@@ -96,6 +115,13 @@ export function RestTimerBar({ timer }) {
         <div className="mt-2 h-1 overflow-hidden rounded-full bg-zinc-700">
           <div className="h-full bg-blue-500" style={{ width: `${progress * 100}%` }} />
         </div>
+        {note && (
+          <div className="mt-2 flex items-start gap-3">
+            <p className="flex-1 text-sm leading-snug text-zinc-200">{note}</p>
+            <button onClick={onReply} className="shrink-0 text-sm font-semibold text-blue-300">Reply</button>
+            <button onClick={onQuiet} className="shrink-0 text-sm text-zinc-400">Quiet</button>
+          </div>
+        )}
       </div>
       <span className="sr-only" aria-live="assertive">
         {finished ? "Rest over. Time for your next set." : ""}

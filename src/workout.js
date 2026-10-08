@@ -1,4 +1,4 @@
-import { NEW_EXERCISE_TARGET, ROUTINE_MARKER } from "./config.js";
+import { NEW_EXERCISE_TARGET, REST_NOTE_CHAT_MESSAGES, REST_NOTE_KINDS, ROUTINE_MARKER } from "./config.js";
 import { today } from "./dates.js";
 import { cleanExerciseName, lastGymWorkout, newId, sortNewestFirst } from "./training.js";
 import { repeatSet, restSeconds } from "./autopilot.js";
@@ -116,4 +116,25 @@ export function sessionToWorkout(session, { allSets = false } = {}) {
     exercises: session.exercises.map((e) => ({ name: e.name, sets: doneSets(e.sets) })).filter((e) => e.sets.length),
     ...(session.routine && { routine: session.routine }),
   };
+}
+
+// The coach's rest-screen note: once per exercise, at its first rest, unless the athlete asked for quiet.
+export const wantsRestNote = (session, exerciseName) =>
+  Boolean(session) && !session.coachQuiet && !(session.coachNotes ?? []).some((note) => note.exercise === exerciseName);
+
+// What the coach is told when a rest starts: the set just done, the latest chat and what it already said this workout.
+export function restNoteRequest(session, exerciseName, chat = []) {
+  const sets = session.exercises.find((e) => e.name === exerciseName)?.sets ?? [];
+  const done = sets.filter((set) => set.done);
+  const last = done.at(-1);
+  const earlier = (session.coachNotes ?? []).map((note) => `- ${note.text}`);
+  const talk = chat.slice(-REST_NOTE_CHAT_MESSAGES).map((m) => `- ${m.role === "user" ? "athlete" : "coach"}: ${m.content}`);
+  return [
+    `RESTING after set ${done.length} of ${sets.length} of ${exerciseName}${last ? ` (${last.weight}x${last.reps})` : ""}.`,
+    `Write ${REST_NOTE_KINDS[earlier.length % REST_NOTE_KINDS.length]}.`,
+    talk.length > 0 && `LATEST COACH CHAT (oldest first):\n${talk.join("\n")}`,
+    earlier.length > 0 && `You already said this workout:\n${earlier.join("\n")}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
 }

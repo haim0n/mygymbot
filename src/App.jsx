@@ -16,7 +16,7 @@ import { LogView } from "./ui/log.jsx";
 import { FormCheckView } from "./ui/form-check.jsx";
 import { ProgressView } from "./ui/progress.jsx";
 import { GoalsView } from "./ui/goals.jsx";
-import { RestTimerBar, useRestTimer } from "./ui/rest-timer.jsx";
+import { RestTimerBar, useRestNote, useRestTimer } from "./ui/rest-timer.jsx";
 
 export const TABS = [
   { id: "coach", label: "Coach", Icon: MessageCircle },
@@ -95,6 +95,12 @@ export default function GymBot() {
   const coachStyle = settings.profile.coachStyle ?? DEFAULT_SETTINGS.profile.coachStyle;
   const dailyNote = useDailyNote({ enabled: loaded && workouts.length > 0, facts, context: coachContext, style: coachStyle });
   const { unit, daysPerWeek, notes } = settings.profile;
+  const restNote = useRestNote({ rest: restTimer.rest, session, setSession, context: coachContext, chat });
+  // Replying puts the note in the coach chat, so the conversation carries on from it.
+  const replyToRestNote = () => {
+    setChat((messages) => [...messages, { role: "assistant", content: restNote }]);
+    setTab("coach");
+  };
 
   const views = {
     coach: <CoachView chat={chat} setChat={setChat} context={coachContext} briefing={{ facts, note: dailyNote }} newAthlete={isNewAthlete(settings, workouts)} onNavigate={setTab} onSaveRoutine={storeRoutine} onSaveProfile={storeProfile} onOpenImport={openImport} />,
@@ -119,8 +125,8 @@ export default function GymBot() {
 
         {loaded ? (
           <>
-            <RestTimerBar timer={restTimer} />
-            <main className={`max-w-md mx-auto px-4 pb-24 ${restTimer.rest ? "pt-28" : "pt-6"}`}>{views[tab]}</main>
+            <RestTimerBar timer={restTimer} note={restNote} onReply={replyToRestNote} onQuiet={() => setSession((s) => s && { ...s, coachQuiet: true })} />
+            <main className={`max-w-md mx-auto px-4 pb-24 ${restTimer.rest ? (restNote ? "pt-44" : "pt-28") : "pt-6"}`}>{views[tab]}</main>
             <BottomNav tab={tab} onSelect={setTab} workoutInProgress={Boolean(session)} />
             {detailsFor && <ExerciseSheet name={detailsFor} onClose={() => setDetailsFor(null)} />}
           </>

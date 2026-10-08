@@ -185,6 +185,14 @@ export const RECENT_RECORD_DAYS = 7;
 export const GOAL_CLOSE_RATIO = 0.9; // within 10% of a goal
 export const GOAL_DUE_SOON_DAYS = 14;
 export const MAX_TODAY_FACTS = 4;
+export const REST_NOTE_CHAT_MESSAGES = 6; // the latest coach chat messages a rest note sees, so it follows up on what was said
+// The rest-screen notes of one workout take these in turn, so the coach doesn't open every note the same way.
+export const REST_NOTE_KINDS = [
+  "a cue for the next set",
+  "a quick question about how that set felt",
+  "a word on the set just done that cites its numbers",
+  "a short, interesting fact about this exercise or the muscle it trains",
+];
 
 // Non-gym activities. Distance units follow the profile's units (kg → metric, lb → imperial).
 export const ACTIVITY_TYPES = [

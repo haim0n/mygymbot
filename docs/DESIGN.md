@@ -64,6 +64,7 @@ type Settings = {
 
 type Session = { // the workout in progress
   date: string; startedAt: number | null; notes: string; routine?: string;
+  coachNotes?: { exercise: string; text: string; restStartedAt: number }[]; coachQuiet?: boolean; // the coach's rest notes, and Quiet
   exercises: { id: string; name: string; rest: number /* s */; sets: { id: string; weight: number | string; reps: number | string; done: boolean }[] }[];
 }; // weights/reps may be strings while typed; sessionToWorkout() turns them into numbers
 ```
@@ -125,6 +126,7 @@ App-level state: workouts, settings, chat, form checks, session, rest timer, ope
 - **Sets:** editable weight and reps; ✓ marks a set done and starts rest automatically (except after the final set).
 - **Reordering** happens in a compact list, so a moved exercise doesn't jump out from under the finger.
 - **Saving:** the session is persisted (survives tab switches and reloads). Finish saves only checked sets.
+- **Coach between sets (`useRestNote`):** the first rest of each exercise gets one short line from the coach in the rest bar (`REST_NOTE_PROMPT`, under 20 words, nothing else: no sound, no extra rests). The kind rotates (`REST_NOTE_KINDS`: a cue, a question, the set's numbers, a fact), and the coach sees the coach context, the latest 6 chat messages and what it already said, so it follows up on the chat. Reply puts the note in the coach chat and opens it; Quiet stops the notes for that workout. While a workout is in progress the chat answers in 1 to 3 lines.
 - **History** reuses the same cards to edit a saved workout (`workoutToSession` → edit → `sessionToWorkout(…, { allSets: true })`).
 
 ### Motivation
@@ -218,6 +220,7 @@ The chat sends the last 12 messages.
 | `SCREENSHOT_IMPORT_PROMPT` | Screenshot import | Tiles of one screenshot per request |
 | `MUSCLE_CLASSIFIER_PROMPT` | Unknown exercises | Batches of 20, cached |
 | `EXERCISE_PHOTO_PROMPT` | Exercises without a same-named photo | Batches of 20, cached, `null` when none fits |
+| `REST_NOTE_PROMPT` | Rest bar during a workout | Once per exercise, kinds in turn, sees the latest chat |
 | `MOTIVATION_PROMPT` | Daily note | Once a day per style, cached |
 | `CHECK_IN_PROMPT` | Post-workout check-in reply | Stored on the workout |
 
@@ -230,7 +233,7 @@ All JSON answers go through `askAIForJson`, which reads the outermost `{…}` so
 - **Form:** exercise, focus note, file picker, frames, feedback, past checks.
 - **Progress:** stats · Activities (last 7 days) · muscle heatmap · estimated 1RM chart with trend line · weekly volume · best lifts.
 - **Goals:** goal cards (barbell loaded with plates you've lifted, forecast) · new goal · About you (units, bodyweight, experience, sessions per week, training days, usual time, food preferences, workout music, coaching style, main focus, injuries and equipment). · Your data (export as text)
-- **Everywhere:** rest timer bar (top), tab bar with a dot while a workout is in progress, exercise details sheet.
+- **Everywhere:** rest timer bar (top, with the coach's note, Reply and Quiet), tab bar with a dot while a workout is in progress, exercise details sheet.
 
 ## 8. Decision log
 

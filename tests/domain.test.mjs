@@ -305,6 +305,21 @@ test("Exercise photos: same name first (equipment in brackets or in front), then
   assert.deepEqual(Object.values(app.PHOTO_MATCHES).filter((id) => id !== null && !photos.has(id)), []); // every match is a real photo
 });
 
+test("Rest notes: once per exercise, never when quiet, and the coach hears the set and what it already said", () => {
+  const session = { exercises: [{ name: "Leg Press", sets: [{ weight: 100, reps: 10, done: true }, { weight: 100, reps: 10, done: false }] }] };
+  assert.equal(app.wantsRestNote(session, "Leg Press"), true);
+  assert.equal(app.wantsRestNote(null, "Leg Press"), false);
+  assert.equal(app.restNoteRequest(session, "Leg Press"), "RESTING after set 1 of 2 of Leg Press (100x10).\nWrite a cue for the next set.");
+  const noted = { ...session, coachNotes: [{ exercise: "Leg Press", text: "Drive through the heels." }] };
+  assert.equal(app.wantsRestNote(noted, "Leg Press"), false);
+  assert.equal(app.wantsRestNote(noted, "Leg Extension"), true);
+  assert.equal(app.wantsRestNote({ ...session, coachQuiet: true }, "Leg Extension"), false);
+  assert.ok(app.restNoteRequest(noted, "Leg Press").includes("Write a quick question")); // the next kind in turn
+  assert.ok(app.restNoteRequest(noted, "Leg Press").endsWith("You already said this workout:\n- Drive through the heels."));
+  const chat = [{ role: "assistant", content: "How did it feel?" }, { role: "user", content: "Heavy, my knee aches" }];
+  assert.ok(app.restNoteRequest(session, "Leg Press", chat).includes("LATEST COACH CHAT (oldest first):\n- coach: How did it feel?\n- athlete: Heavy, my knee aches"));
+});
+
 test("Forecasts: dates, deadlines, and honest refusals", () => {
   const bench = (n, weight) => workout(`b${n}`, daysAgo(n), [ex("Bench Press (Dumbbell)", [[weight, 10]])]);
   const steady = [56, 49, 42, 35, 28, 21, 14, 7].map((n, i) => bench(n, 40 + i * 0.75)); // ~+1 kg est. 1RM a week
