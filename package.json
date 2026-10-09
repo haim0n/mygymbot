@@ -13,7 +13,7 @@
     "test:server": "uv run pytest -q",
     "test:e2e": "npm run build && node --test tests/e2e/workout.test.mjs tests/e2e/activities.test.mjs tests/e2e/coach.test.mjs tests/e2e/data.test.mjs",
     "test:all": "npm test && npm run test:server && npm run test:e2e",
-    "deploy": "gcloud run deploy gymbot --source . --project=mygymbot --region=me-west1 --quiet --update-env-vars=GYMBOT_COMMIT=$(git describe --always --dirty)"
+    "deploy": "gcloud run deploy mygymbot --source . --project=mygymbot --region=me-west1 --quiet --update-env-vars=GYMBOT_COMMIT=$(git describe --always --dirty)"
   },
   "dependencies": {
     "lucide-react": "0.383.0",

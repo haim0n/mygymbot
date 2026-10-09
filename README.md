@@ -17,7 +17,7 @@ Locally there's one user, `dev`: the Python server (`server/`) keeps the data in
 
 ## Hosted copy (Cloud Run)
 
-Haim's own copy runs on Cloud Run (project `mygymbot`, region `me-west1`) from the `Dockerfile`; AI is Gemini on Vertex AI through the service account, and each user's data is `<their email>.json` in the private, versioned bucket `gs://mygymbot-data`. It lives at https://gymbot-83264737603.me-west1.run.app. Ship a change with `npm run deploy`.
+Haim's own copy runs on Cloud Run (project `mygymbot`, region `me-west1`) from the `Dockerfile`; AI is Gemini on Vertex AI through the service account, and each user's data is `<their email>.json` in the private, versioned bucket `gs://mygymbot-data`. It lives at https://mygymbot-83264737603.me-west1.run.app. Ship a change with `npm run deploy`.
 
 Users sign in with their Google account through Identity-Aware Proxy (IAP). IAP's access list is the allowlist; the server checks IAP's signed identity on every request and gives each email its own file.
 
@@ -35,12 +35,12 @@ No deploy is needed, and it works for any Google account (Gmail or not).
 3. **Add them to the access list:**
    ```bash
    gcloud iap web add-iam-policy-binding --project=mygymbot --region=me-west1 \
-     --resource-type=cloud-run --service=gymbot \
+     --resource-type=cloud-run --service=mygymbot \
      --member=user:FRIEND@gmail.com --role=roles/iap.httpsResourceAccessor
    ```
-4. **Send them the address**, https://gymbot-83264737603.me-west1.run.app. They sign in with Google; access can take a minute or two to start working. To install it on a phone: on Android, Chrome menu → Install app; on an iPhone, Safari → Share → Add to Home Screen. It then opens full screen from its own icon.
+4. **Send them the address**, https://mygymbot-83264737603.me-west1.run.app. They sign in with Google; access can take a minute or two to start working. To install it on a phone: on Android, Chrome menu → Install app; on an iPhone, Safari → Share → Add to Home Screen. It then opens full screen from its own icon.
 
-Who has access now: `gcloud iap web get-iam-policy --project=mygymbot --region=me-west1 --resource-type=cloud-run --service=gymbot`.
+Who has access now: `gcloud iap web get-iam-policy --project=mygymbot --region=me-west1 --resource-type=cloud-run --service=mygymbot`.
 
 To lock someone out, run step 3 with `remove-iam-policy-binding` instead. Their file stays in the bucket, so adding them back restores everything.
 
@@ -53,7 +53,7 @@ gcloud storage buckets update gs://mygymbot-data --project=mygymbot --versioning
 # IAP: the project has no organization, so first create the OAuth consent screen (External, published) and a web OAuth client in the console
 # with redirect URI https://iap.googleapis.com/v1/oauth/clientIds/<client id>:handleRedirect (enable cloudresourcemanager.googleapis.com too),
 # then hand IAP the client with `gcloud iap settings set` (resource type cloud-run); the IAP service agent gets run.invoker on the service
-gcloud run deploy gymbot --source . --project=mygymbot --region=me-west1 --max-instances=1 --no-allow-unauthenticated --iap \
+gcloud run deploy mygymbot --source . --project=mygymbot --region=me-west1 --max-instances=1 --no-allow-unauthenticated --iap \
   --execution-environment=gen2 --add-volume=name=data,type=cloud-storage,bucket=mygymbot-data --add-volume-mount=volume=data,mount-path=/data
 ```
 
