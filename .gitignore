@@ -1,5 +1,6 @@
-node_modules/
-.venv/
+# No trailing slash: mockup worktrees link these from the main checkout
+node_modules
+.venv
 __pycache__/
 .pytest_cache/
 .env
@@ -10,3 +11,6 @@ data/
 
 # Full-size exercise drawings for review (scripts/exercise_drawings.py)
 .drawings/
+
+# The product manager's screenshots and data copy (real health data: never commit)
+.pm/

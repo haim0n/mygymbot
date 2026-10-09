@@ -22,7 +22,7 @@ const freePort = () =>
   });
 
 // The Python server on its own port, with `seed` as the dev user's data, so tests never share data.
-async function startServer(seed) {
+export async function startServer(seed) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "gymbot-test-"));
   await writeFile(path.join(dir, "dev.json"), JSON.stringify(seed));
   const port = await freePort();
