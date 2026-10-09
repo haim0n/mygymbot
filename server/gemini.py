@@ -32,6 +32,15 @@ class Message:
 
 
 @dataclass
+class Reply:
+    """Gemini's answer and what it cost, in tokens (output includes thinking)."""
+
+    text: str
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+
+@dataclass
 class Question:
     """What the app asks: the instructions, then the conversation so far."""
 
@@ -68,11 +77,11 @@ def _client() -> genai.Client | None:
     return genai.Client(vertexai=True, project=GCP_PROJECT, location=GEMINI_LOCATION, credentials=credentials)
 
 
-def answer(question: Question) -> str:
+def answer(question: Question) -> Reply:
     """Gemini's reply to ``question``."""
     client = _client()
     if client is None:
-        return PLACEHOLDER_REPLY
+        return Reply(PLACEHOLDER_REPLY)
     response = client.models.generate_content(
         model=GEMINI_MODEL,
         contents=to_gemini_contents(question.messages),
@@ -85,4 +94,9 @@ def answer(question: Question) -> str:
     )
     if not response.text:
         raise EmptyReplyError(f"Gemini returned no text (finish reason: {response.candidates[0].finish_reason})")
-    return response.text
+    usage = response.usage_metadata
+    return Reply(
+        response.text,
+        input_tokens=usage.prompt_token_count or 0,
+        output_tokens=(usage.candidates_token_count or 0) + (usage.thoughts_token_count or 0),
+    )

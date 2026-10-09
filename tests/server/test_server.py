@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from google.auth import crypt, jwt
 
 from server import gemini, iap
+from server import app as app_module
 from server.app import create_app
 from server.storage import Store, Stores
 
@@ -94,16 +95,36 @@ def test_each_user_sees_only_their_own_data(data_file: Path, sign) -> None:
 
 def test_ask_answers_with_text_and_reports_failures(data_file: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     client = client_for(data_file)
-    monkeypatch.setattr(gemini, "answer", lambda question: f"echo {question.messages[0].content}")
+    monkeypatch.setattr(gemini, "answer", lambda question: gemini.Reply(f"echo {question.messages[0].content}"))
     body = {"system": "Coach", "messages": [{"role": "user", "content": "hi"}]}
     assert client.post("/api/ask", json=body).json() == {"text": "echo hi"}
     assert client.post("/api/ask", json={"system": "Coach", "messages": [{"role": "robot", "content": "hi"}]}).status_code == 422
 
-    def fail(question: gemini.Question) -> str:
+    def fail(question: gemini.Question) -> gemini.Reply:
         raise gemini.EmptyReplyError("blocked")
 
     monkeypatch.setattr(gemini, "answer", fail)
     assert client.post("/api/ask", json=body).status_code == 502
+
+
+def test_ask_stops_at_the_daily_limit_and_logs_each_call(
+    data_file: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    client = client_for(data_file)
+    monkeypatch.setattr(app_module, "AI_CALLS_PER_DAY", 2)
+    monkeypatch.setattr(gemini, "answer", lambda question: gemini.Reply("ok", input_tokens=120, output_tokens=30))
+    body = {"system": "You are GymBot", "messages": [{"role": "user", "content": "hi"}]}
+    with caplog.at_level("INFO"):
+        assert [client.post("/api/ask", json=body).status_code for _ in range(3)] == [200, 200, 429]
+    assert client.post("/api/ask", json=body).text == app_module.AI_LIMIT_MESSAGE
+    assert "AI call: user=dev prompt='You are GymBot' tokens_in=120 tokens_out=30" in caplog.text
+
+
+def test_requests_over_the_size_limit_are_refused(data_file: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    client = client_for(data_file)
+    monkeypatch.setattr(app_module, "MAX_REQUEST_BYTES", 100)
+    assert client.put("/api/storage/x", content=json.dumps("a" * 200)).status_code == 413
+    assert client.put("/api/storage/x", content=json.dumps("a" * 50)).status_code == 204
 
 
 def test_app_files_are_checked_for_a_new_version_on_each_load(data_file: Path) -> None:

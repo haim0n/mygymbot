@@ -10,6 +10,7 @@ Settings come from the environment:
 - ``GYMBOT_COMMIT``: the git commit this copy was deployed from (set by ``npm run deploy``), shown in the app.
 """
 
+import logging
 import os
 from pathlib import Path
 
@@ -24,6 +25,7 @@ LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
 def main() -> None:
     """Start the server, refusing to listen beyond this machine without IAP."""
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")  # the AI usage lines are INFO
     host = os.environ.get("HOST", "127.0.0.1")
     iap_audience = os.environ.get("GYMBOT_IAP_AUDIENCE", "").strip() or None
     if iap_audience is None and host not in LOOPBACK_HOSTS:

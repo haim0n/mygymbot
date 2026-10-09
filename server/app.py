@@ -4,6 +4,8 @@ import asyncio
 import html
 import json
 import logging
+from collections import Counter
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +21,9 @@ DEV_USER = "dev"  # the only user without IAP (local dev); data in data/dev.json
 
 logger = logging.getLogger(__name__)
 STATIC_PATHS = ("/dist/", "/exercises/", "/static/")  # the bundle, the pictures and the install files, replaced in place by each deploy
+AI_CALLS_PER_DAY = 200  # per user: several times a heavy training day, low enough to stop a runaway loop or misuse
+MAX_REQUEST_BYTES = 16_000_000  # a screenshot import (up to 8 image slices) is about 3 MB
+AI_LIMIT_MESSAGE = "You've reached today's limit for the coach. It resets tomorrow."
 
 
 def create_app(stores: Stores, iap_audience: str | None, commit: str | None = None) -> FastAPI:
@@ -29,6 +34,8 @@ def create_app(stores: Stores, iap_audience: str | None, commit: str | None = No
     ``commit``, the git commit this copy was deployed from, goes into the page for the app to show.
     """
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    # ponytail: in memory, so it resets on each deploy; fine with one instance. Store it if the limit must hold exactly.
+    ai_calls: Counter[tuple[str, date]] = Counter()
     page = (WEB_DIR / "index.html").read_text()
     if commit:
         page = page.replace("<head>", f'<head>\n    <meta name="gymbot-commit" content="{html.escape(commit)}" />', 1)
@@ -44,6 +51,12 @@ def create_app(stores: Stores, iap_audience: str | None, commit: str | None = No
         except iap.NotSignedIn as error:
             logger.warning("Refused a request without IAP identity: %s", error)
             return PlainTextResponse("Sign in through GymBot's address.", status_code=401)
+        return await call_next(request)
+
+    @app.middleware("http")
+    async def limit_size(request: Request, call_next: Any) -> Response:
+        if int(request.headers.get("content-length", 0)) > MAX_REQUEST_BYTES:
+            return PlainTextResponse("Request too large", status_code=413)
         return await call_next(request)
 
     @app.middleware("http")
@@ -82,12 +95,24 @@ def create_app(stores: Stores, iap_audience: str | None, commit: str | None = No
         return Response(status_code=204)
 
     @app.post("/api/ask")
-    def ask(question: gemini.Question) -> Response:
+    def ask(question: gemini.Question, request: Request) -> Response:
+        user = request.state.user
+        today = (user, date.today())
+        if ai_calls[today] >= AI_CALLS_PER_DAY:
+            logger.warning("AI limit reached for %s", user)
+            return PlainTextResponse(AI_LIMIT_MESSAGE, status_code=429)
+        ai_calls[today] += 1
         try:
-            return JSONResponse({"text": gemini.answer(question)})
+            reply = gemini.answer(question)
         except Exception as error:  # any Gemini failure: the app then shows "the coach didn't respond"
             logger.exception("Gemini request failed")
             return JSONResponse({"error": str(error)}, status_code=502)
+        # One line per call, to measure the cost per user and per prompt.
+        logger.info(
+            "AI call: user=%s prompt=%r tokens_in=%d tokens_out=%d",
+            user, question.system[:40], reply.input_tokens, reply.output_tokens,
+        )
+        return JSONResponse({"text": reply.text})
 
     app.mount("/dist", StaticFiles(directory=WEB_DIR / "dist", check_dir=False), name="dist")
     app.mount("/exercises", StaticFiles(directory=WEB_DIR / "exercises"), name="exercises")

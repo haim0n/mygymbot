@@ -5,6 +5,7 @@ export async function askAI(system, messages) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ system, messages }),
   });
+  if (response.status === 429) throw new Error(await response.text()); // the daily limit, in the server's words
   if (!response.ok) throw new Error(`The coach didn't respond (error ${response.status}). Try again.`);
   return (await response.json()).text.trim();
 }

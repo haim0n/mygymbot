@@ -275,5 +275,5 @@ All JSON answers go through `askAIForJson`, which reads the outermost `{…}` so
 ## 10. Testing
 
 - `npm test`: unit tests for Autopilot, equipment steps, rep-range stability, rest, import, muscle rules, video library, live workout, forecasts, schedule and check-ins, activities and highlights. They import the domain modules directly.
-- `npm run test:server`: pytest for the backend: storage round-trip, daily backup, corrupt-file refusal, access gate, the `/api/ask` request checks and Gemini translation, and errors becoming 502 (no network).
+- `npm run test:server`: pytest for the backend: storage round-trip, daily backup, corrupt-file refusal, access gate, the `/api/ask` request checks, daily AI limit, usage log line and Gemini translation, the request size limit, and errors becoming 502 (no network).
 - `npm run test:e2e`: Playwright on a Pixel 5-sized screen with a fixed clock (Sat 3 Oct 2026, 18:00), seeded storage, and a fake AI that records requests. Each test starts the Python server with its own seeded data file. Covers live workout (reorder, check-off, reload, finish), history edit, activities, check-in, video-tag resolution, the Today card, export, and a failed save being retried.
