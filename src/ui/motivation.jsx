@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from "react";
-import { X } from "lucide-react";
+import { X, ChevronDown, ChevronUp } from "lucide-react";
 import { COACH_STYLES, MAX_TODAY_FACTS, STORAGE_KEYS } from "../config.js";
 import { MOTIVATION_PROMPT } from "../prompts.js";
 import { usePersistentState } from "../storage.js";
 import { askAI } from "../ai.js";
 import { today } from "../dates.js";
-import { Panel, SectionTitle } from "./primitives.jsx";
+import { Panel } from "./primitives.jsx";
 
 export const TONE_DOT = { plan: "bg-blue-600", celebrate: "bg-green-500", nudge: "bg-amber-500", info: "bg-zinc-400" };
 
@@ -48,13 +48,25 @@ export function useDailyNote({ enabled, facts, context, style }) {
   return { text: isFresh ? note.text : null, loading: enabled && !isFresh && !failed };
 }
 
-export function TodayCard({ facts, note, onNavigate }) {
-  return (
-    <Panel className="mb-4 space-y-3">
-      <SectionTitle>Today</SectionTitle>
-      {note.text && <p className="-mt-1 text-lg leading-snug text-zinc-900">{note.text}</p>}
-      {note.loading && <p className="-mt-1 text-zinc-400">Your coach is writing today's note.</p>}
-      <FactList facts={facts.slice(0, MAX_TODAY_FACTS)} onAction={(action) => onNavigate(action.tab)} />
+// On the Coach tab it stays pinned above the chat, so it is one line until tapped.
+export function TodayCard({ facts, note, open, onToggle, onNavigate }) {
+  const shown = facts.slice(0, MAX_TODAY_FACTS);
+    return (
+    <Panel className={`mb-3 ${open ? "max-h-[45dvh] overflow-y-auto overscroll-contain space-y-3" : "py-3"}`}>
+      <h2>
+        <button onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-3 text-left">
+          <span className="gb-display text-2xl font-bold text-zinc-900">Today</span>
+          <span className="flex-1 truncate text-zinc-600">{!open && shown[0]?.text}</span>
+          {open ? <ChevronUp className="w-5 h-5 shrink-0 text-zinc-500" /> : <ChevronDown className="w-5 h-5 shrink-0 text-zinc-500" />}
+        </button>
+      </h2>
+      {open && (
+        <>
+          {note.text && <p className="-mt-1 text-lg leading-snug text-zinc-900">{note.text}</p>}
+          {note.loading && <p className="-mt-1 text-zinc-400">Your coach is writing today's note.</p>}
+          <FactList facts={shown} onAction={(action) => onNavigate(action.tab)} />
+        </>
+      )}
     </Panel>
   );
 }

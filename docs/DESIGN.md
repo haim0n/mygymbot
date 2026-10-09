@@ -231,7 +231,7 @@ All JSON answers go through `askAIForJson`, which reads the outermost `{…}` so
 
 ## 7. UI map
 
-- **Coach:** Today card (note and facts) · for a new athlete, the coach's first question instead of quick prompts · chat with quick prompts (incl. "What should I eat today?") · input fixed above the tab bar.
+- **Coach:** like a messaging app, the title, the Today card and the input stay in place and only the chat scrolls. The chat opens at the latest message and follows new ones, unless the athlete scrolled back. The Today card is one line (its first fact) until tapped; tapping the input closes it again, to keep room for the keyboard · for a new athlete, the coach's first question instead of quick prompts · quick prompts (incl. "What should I eat today?") above the input.
 - **Log:** Import history (toggle) · Session saved · check-in card · coach reply · Workout (with Save as a plan) or Start a workout (saved plans, the next one first in line) · Log an activity · Up next · Add exercises (describe in words, or manual) · History (folded).
 - **Form:** exercise, focus note, file picker, frames, feedback, past checks.
 - **Progress:** stats · Activities (last 7 days) · muscle heatmap · estimated 1RM chart with trend line · weekly volume · best lifts.

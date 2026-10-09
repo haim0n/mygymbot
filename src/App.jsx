@@ -121,7 +121,7 @@ export default function GymBot() {
 
   return (
     <ExerciseContext.Provider value={exerciseContext}>
-      <div className="gb-root min-h-screen bg-zinc-100 text-zinc-800">
+      <div className="gb-root min-h-dvh bg-zinc-100 text-zinc-800">
         <style>{GLOBAL_CSS}</style>
         <datalist id="exercise-names">
           {exerciseNames.map((name) => (
@@ -132,7 +132,7 @@ export default function GymBot() {
         {loaded ? (
           <>
             <RestTimerBar timer={restTimer} note={restNote} onReply={replyToRestNote} onQuiet={() => setSession((s) => s && { ...s, coachQuiet: true })} />
-            <main className={`max-w-md mx-auto px-4 pb-24 ${restTimer.rest ? (restNote ? "pt-44" : "pt-28") : "pt-6"}`}>{views[tab]}</main>
+            <main className={`max-w-md mx-auto px-4 ${tab === "coach" ? "h-dvh flex flex-col pb-16" : "pb-24"} ${restTimer.rest ? (restNote ? "pt-44" : "pt-28") : "pt-6"}`}>{views[tab]}</main>
             <BottomNav tab={tab} onSelect={setTab} workoutInProgress={Boolean(session)} />
             {detailsFor && <ExerciseSheet name={detailsFor} onClose={() => setDetailsFor(null)} />}
           </>

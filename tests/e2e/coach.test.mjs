@@ -41,6 +41,43 @@ test("coach: video tags become library links; anything else is dropped", async (
   assert.deepEqual(errors, []);
 });
 
+test("coach: the chat opens at the latest message under a pinned Today card, and follows new replies", async (t) => {
+  const chat = Array.from({ length: 30 }, (_, i) => ({ role: i % 2 ? "assistant" : "user", content: `Message ${i}` }));
+  const { page, errors } = await openApp(t, {
+    seed: { "gymbot:workouts": [userWorkout], "gymbot:chat": chat },
+    ai: (body) => (isCoachChat(body) ? "The newest reply." : "OK"),
+  });
+  // Visible means inside the window and inside the chat pane, which scrolls on its own.
+  const visible = (locator) =>
+    locator.evaluate((el) => {
+      const box = el.getBoundingClientRect();
+      const pane = el.closest(".overflow-y-auto")?.getBoundingClientRect() ?? { top: 0, bottom: innerHeight };
+      return box.top >= Math.max(0, pane.top) && box.bottom <= Math.min(innerHeight, pane.bottom);
+    });
+  const shows = async (locator) => {
+    for (let i = 0; i < 20 && !(await visible(locator)); i++) await page.waitForTimeout(50); // the pane scrolls after layout
+    return visible(locator);
+  };
+  const today = page.getByRole("heading", { name: "Today" });
+  await page.getByText("Message 29", { exact: true }).waitFor();
+  assert.ok(await shows(page.getByText("Message 29", { exact: true })));
+  assert.ok(!(await visible(page.getByText("Message 0", { exact: true }))));
+  assert.ok(await shows(today));
+
+  await today.tap(); // open Today, then typing closes it again to make room for the keyboard
+  assert.equal(await today.getByRole("button").getAttribute("aria-expanded"), "true");
+  assert.ok(await shows(page.getByText("Message 29", { exact: true })));
+  await page.getByPlaceholder("Message your coach").tap();
+  assert.equal(await today.getByRole("button").getAttribute("aria-expanded"), "false");
+  await page.getByPlaceholder("Message your coach").fill("what next?");
+  await page.getByRole("button", { name: "Send" }).tap();
+  await page.getByText("The newest reply.").waitFor();
+  assert.ok(await shows(page.getByText("The newest reply.")));
+  assert.ok(await shows(today));
+  assert.equal(await page.evaluate(() => scrollY), 0); // the page itself never scrolls
+  assert.deepEqual(errors, []);
+});
+
 test("coach memory: what the athlete says is remembered, shown in Goals, editable, and sent with later chats", async (t) => {
   const { page, errors, aiRequests } = await openApp(t, {
     seed: { "gymbot:workouts": [userWorkout] },
@@ -115,8 +152,11 @@ test("today card: planned workout first, and the daily note becomes a pep talk",
     seed: { "gymbot:workouts": [userWorkout], "gymbot:settings": settings({ trainingDays: [6], trainingTime: "20:00" }) },
     ai: (body) => (body.system.includes("motivation note") ? "Big one tonight." : "OK"),
   });
+  const today = section(page, /^Today/);
+  await today.getByText("Workout planned today at 20:00").waitFor(); // closed, it shows the first fact
+  await today.getByRole("button").tap();
   await page.getByText("Big one tonight.").waitFor();
-  const facts = await section(page, "Today").locator("li").allInnerTexts();
+  const facts = await today.locator("li").allInnerTexts();
   assert.match(facts[0], /^Workout planned today at 20:00/);
   const note = aiRequests.find((b) => b.system.includes("motivation note"));
   assert.ok(note.system.includes("pep talk"));
