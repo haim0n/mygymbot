@@ -72,6 +72,12 @@ Haim dogfoods the app on Cloud Run: service `mygymbot`, project `mygymbot`, regi
 - **Serving files**: the server serves only `/`, `/dist/`, `/exercises/` and `/static/`. A new folder under `web/` needs a `StaticFiles` mount and an entry in `STATIC_PATHS` (`server/app.py`), and a `COPY` line in the `Dockerfile`: it copies each `web/` path explicitly, so a file left out works locally but returns 404 when deployed. `STATIC_PATHS` get `Cache-Control: no-cache`. Without that header, browsers ran a bundle several deploys old. After a change to caching headers, Haim needs one hard reload.
 - **Installed app (PWA)**: `web/static/manifest.webmanifest` and the icon. The manifest link needs `crossorigin="use-credentials"`: without it, Chrome fetches it without the IAP cookie and gets a sign-in redirect. There is no service worker, on purpose: Chrome installs without one, and a caching worker would bring back stale bundles. To check installability locally, run the server and call `Page.getInstallabilityErrors` through Playwright's CDP session. On Haim's Android phone, the Chrome menu must say "Install app", not only "Add to Home screen".
 - **Releases** (`/push-deploy`): commit the change, then ask Haim for the version and commit it separately as "Version X.Y.Z" (`APP_VERSION` with sed, then `npm version X.Y.Z --no-git-tag-version` for `package.json` and the lockfile). Run `npm run test:all` again, then deploy from a clean tree.
+- **Moving to a new service** (Cloud Run can't rename one; `gymbot` became `mygymbot` on 2026-10-09):
+  1. Deploy once with the full flags from README's one-time setup. `--iap` also gives the IAP service agent `run.invoker`.
+  2. Haim sets IAP's OAuth client on the new service (`gcloud iap settings set FILE --resource-type=cloud-run --region=me-west1 --service=...`). The setting belongs to each service, and without it the address returns 502. The secret can't be read back; he adds a new secret to the existing client in the console.
+  3. Haim adds himself to the new service's access list, which also belongs to each service.
+  4. Update the IAP audience in the `Dockerfile` and the address (`https://<service>-83264737603.me-west1.run.app`).
+  5. After Haim confirms, delete the old service. Until then both services save to the same bucket, so he must use only one.
 - Docker can't run on this machine (no socket access). To check the container builds without deploying, run `gcloud builds submit . --project=mygymbot --region=me-west1` with a config whose only step is `docker build`.
 
 ## Gemini notes
@@ -86,7 +92,7 @@ Haim dogfoods the app on Cloud Run: service `mygymbot`, project `mygymbot`, regi
 
 - **Commit only when he says "commit"**: one commit per logical step, with a body listing what changed. Ask before creating anything billable or outward-facing.
 - **He handles secrets himself** (creating them and changing who can read them; auto mode blocks those for Claude Code). Hand him the command, then verify the result read-only before continuing.
-- **Commands for him to paste**: long single lines get split when pasted, so break them with a trailing `\`. For `! command`, the `!` must be the very first character, or it arrives as a chat message and nothing runs.
+- **Commands for him to paste**: long single lines get split when pasted, so break them with a trailing `\`. For `! command`, the `!` must be the very first character, or it arrives as a chat message and nothing runs. Even a correct pasted `! ...` can arrive as chat: if no output appears, ask him to type `!` by hand at an empty prompt, then paste one line. Check the result read-only either way. When a secret goes through a temporary file, check afterwards that he deleted it.
 - **The shell is zsh**: an unquoted `$VAR` holding several words is passed as one argument. Write flags literally (a `--project` flag kept in a variable once created a bucket in his work project).
 - **Running a second server locally** (screenshots, checks): `PORT=5191 GYMBOT_DATA_DIR=<scratch dir> uv run python -m server`, and stop it with `fuser -k 5191/tcp`. Never `pkill -f "python -m server"`: it also stops Haim's `npm run dev` and the calling shell.
 - **Tools on this machine**: ffmpeg is built with librsvg, so it renders SVG to PNG (`ffmpeg -width 512 -height 512 -i icon.svg icon.png`). There is no ImageMagick, rsvg-convert or Pillow.
