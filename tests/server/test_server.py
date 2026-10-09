@@ -127,6 +127,14 @@ def test_requests_over_the_size_limit_are_refused(data_file: Path, monkeypatch: 
     assert client.put("/api/storage/x", content=json.dumps("a" * 50)).status_code == 204
 
 
+def test_app_errors_are_logged_with_the_user_and_cut_short(data_file: Path, caplog: pytest.LogCaptureFixture) -> None:
+    client = client_for(data_file)
+    report = {"message": "TypeError: x is undefined" + "." * 5000, "version": "0.7.1"}
+    assert client.post("/api/errors", json=report).status_code == 204
+    assert "App error for dev (app 0.7.1): TypeError: x is undefined" in caplog.text
+    assert len(caplog.records[-1].getMessage()) < app_module.MAX_ERROR_REPORT_CHARS + 100
+
+
 def test_app_files_are_checked_for_a_new_version_on_each_load(data_file: Path) -> None:
     client = client_for(data_file)
     picture = client.get("/exercises/Leg_Press-0.webp")

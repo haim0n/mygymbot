@@ -55,3 +55,17 @@ test("saves: a failed save shows Not saved yet, is retried, and the newest value
   assert.deepEqual(await stored(page, "gymbot:bodyweight"), [{ date: "2026-09-20", weight: 82.5 }, { date: "2026-10-03", weight: 80.5 }]);
   assert.deepEqual(errors, []);
 });
+
+test("errors: an uncaught error in the app is reported to the server once", async (t) => {
+  const { page, errors } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
+  const reports = [];
+  page.on("request", (request) => request.url().endsWith("/api/errors") && reports.push(request.postDataJSON()));
+  const report = page.waitForRequest("**/api/errors");
+  for (let i = 0; i < 2; i++) await page.addScriptTag({ content: 'throw new Error("boom");' }); // twice, reported once
+  await report;
+  await settle(page);
+  assert.equal(reports.length, 1);
+  assert.match(reports[0].message, /boom/);
+  assert.equal(reports[0].version, JSON.parse(await readFile(new URL("../../package.json", import.meta.url), "utf8")).version);
+  assert.deepEqual(errors, ["boom", "boom"]);
+});

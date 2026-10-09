@@ -5,6 +5,7 @@ import html
 import json
 import logging
 from collections import Counter
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -23,7 +24,16 @@ logger = logging.getLogger(__name__)
 STATIC_PATHS = ("/dist/", "/exercises/", "/static/")  # the bundle, the pictures and the install files, replaced in place by each deploy
 AI_CALLS_PER_DAY = 200  # per user: several times a heavy training day, low enough to stop a runaway loop or misuse
 MAX_REQUEST_BYTES = 16_000_000  # a screenshot import (up to 8 image slices) is about 3 MB
+MAX_ERROR_REPORT_CHARS = 2000  # a stack trace fits; a flood doesn't
 AI_LIMIT_MESSAGE = "You've reached today's limit for the coach. It resets tomorrow."
+
+
+@dataclass
+class AppError:
+    """An uncaught error in the app on someone's phone."""
+
+    message: str
+    version: str = ""
 
 
 def create_app(stores: Stores, iap_audience: str | None, commit: str | None = None) -> FastAPI:
@@ -113,6 +123,11 @@ def create_app(stores: Stores, iap_audience: str | None, commit: str | None = No
             user, question.system[:40], reply.input_tokens, reply.output_tokens,
         )
         return JSONResponse({"text": reply.text})
+
+    @app.post("/api/errors")
+    def report_error(report: AppError, request: Request) -> Response:
+        logger.error("App error for %s (app %s): %s", request.state.user, report.version, report.message[:MAX_ERROR_REPORT_CHARS])
+        return Response(status_code=204)
 
     app.mount("/dist", StaticFiles(directory=WEB_DIR / "dist", check_dir=False), name="dist")
     app.mount("/exercises", StaticFiles(directory=WEB_DIR / "exercises"), name="exercises")
