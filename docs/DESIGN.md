@@ -235,7 +235,7 @@ All JSON answers go through `askAIForJson`, which reads the outermost `{…}` so
 - **Log:** Import history (toggle) · Session saved · check-in card · coach reply · Workout (with Save as a plan) or Start a workout (saved plans, the next one first in line) · Log an activity · Up next · Add exercises (describe in words, or manual) · History (folded).
 - **Form:** exercise, focus note, file picker, frames, feedback, past checks.
 - **Progress:** stats · Activities (last 7 days) · muscle heatmap · estimated 1RM chart with trend line · weekly volume · best lifts.
-- **Goals:** goal cards (barbell loaded with plates you've lifted, forecast) · new goal · About you (units, bodyweight, experience, sessions per week, minutes per session, birth year, sex, height, training days, usual time, food preferences, workout music, coaching style, main focus, injuries and equipment) · What your coach knows (facts from chats, edit or delete) · Your data (export as text) · Feedback (kept by the server in `feedback.jsonl`)
+- **Goals:** goal cards (barbell loaded with plates you've lifted, forecast) · new goal · About you (with the "not medical advice" notice under injuries; units, bodyweight, experience, sessions per week, minutes per session, birth year, sex, height, training days, usual time, food preferences, workout music, coaching style, main focus, injuries and equipment) · What your coach knows (facts from chats, edit or delete) · Your data (export as text) · Feedback (kept by the server in `feedback.jsonl`)
 - **Everywhere:** rest timer bar (top, with the coach's note, Reply and Quiet), tab bar with a dot while a workout is in progress, exercise details sheet.
 
 ## 8. Decision log

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { APP_VERSION, COACH_STYLES, DEFAULT_SETTINGS, EXPERIENCE_LEVELS, HEIGHT_UNITS, MUSCLE_LABELS, PLATES, SEXES, TRAINING_FOCUSES, WEEKDAYS } from "../config.js";
+import { APP_VERSION, COACH_STYLES, MEDICAL_NOTICE, DEFAULT_SETTINGS, EXPERIENCE_LEVELS, HEIGHT_UNITS, MUSCLE_LABELS, PLATES, SEXES, TRAINING_FOCUSES, WEEKDAYS } from "../config.js";
 import { exportAllData, sendFeedback } from "../storage.js";
 import { daysBetween, joinWords, today } from "../dates.js";
 import { normalizeName, plateSize, platesPerSide } from "../training.js";
@@ -190,6 +190,7 @@ export function GoalsView({ settings, setSettings, records, workouts }) {
               placeholder="Home gym with a rack and dumbbells up to 30 kg. Left shoulder gets cranky on overhead work."
               className={inputClass}
             />
+            <p className="mt-1 text-sm text-zinc-500">{MEDICAL_NOTICE}</p>
             {injuredMuscles(settings).length > 0 && (
               <p className="mt-1 text-sm text-zinc-500">
                 Autopilot keeps the weight on lifts that work your {joinWords(injuredMuscles(settings).map((m) => MUSCLE_LABELS[m].toLowerCase()))}.
@@ -202,6 +203,7 @@ export function GoalsView({ settings, setSettings, records, workouts }) {
       <CoachMemoryPanel settings={settings} setSettings={setSettings} />
       <ExportPanel />
       <FeedbackPanel />
+      <p className="text-center text-xs text-zinc-400">{MEDICAL_NOTICE}</p>
       <p className="text-center text-xs text-zinc-400">GymBot {[APP_VERSION, deployedCommit()].filter(Boolean).join(" ")}</p>
     </div>
   );

@@ -73,6 +73,8 @@ export const PLAN_STATUS = {
   hold: { label: "Hold for pain", className: "bg-rose-50 text-rose-700" },
 };
 
+// Shown where injuries are entered and at the bottom of Goals; the final wording waits for the legal review (#21).
+export const MEDICAL_NOTICE = "GymBot gives training suggestions, not medical advice. See a doctor or physiotherapist about pain or injuries.";
 export const SAVE_RETRY_MS = { first: 1000, max: 10000 }; // a failed save is retried after 1 s, doubling up to 10 s
 export const CHAT_CONTEXT_SIZE = 12; // messages sent to the coach per request
 export const CHAT_HISTORY_SIZE = 60; // messages kept on device

@@ -10,6 +10,7 @@ test("export: every gymbot key as one JSON object, next to the app version and c
   await page.getByRole("button", { name: "Goals", exact: true }).tap();
   const { version } = JSON.parse(await readFile(new URL("../../package.json", import.meta.url), "utf8"));
   await page.getByText(`GymBot ${version} ${COMMIT}`).waitFor();
+  assert.equal(await page.getByText("not medical advice").count(), 2); // under Injuries and at the bottom
   await page.getByRole("button", { name: "Export data" }).tap();
   const exported = JSON.parse(await page.getByLabel("Exported data").inputValue());
   assert.deepEqual(exported["gymbot:workouts"], seed["gymbot:workouts"]);
