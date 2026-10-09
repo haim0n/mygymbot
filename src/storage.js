@@ -85,6 +85,12 @@ export function usePersistentState(key, initialValue) {
   return [value, setValue, loaded];
 }
 
+// Feedback for whoever runs this copy of GymBot; the server keeps every message in one file.
+export async function sendFeedback(text, version) {
+  const response = await fetch("/api/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, version }) });
+  if (!response.ok) throw new Error(`Feedback error ${response.status}`);
+}
+
 // Every stored key as one JSON object, so a history can move to another copy of the app.
 export async function exportAllData() {
   const entries = await Promise.all(Object.values(STORAGE_KEYS).map(async (key) => [key, await readStored(key)]));

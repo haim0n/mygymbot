@@ -69,3 +69,18 @@ test("errors: an uncaught error in the app is reported to the server once", asyn
   assert.equal(reports[0].version, JSON.parse(await readFile(new URL("../../package.json", import.meta.url), "utf8")).version);
   assert.deepEqual(errors, ["boom", "boom"]);
 });
+
+test("feedback: sent from Goals with the app version", async (t) => {
+  const { page, errors } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
+  await page.getByRole("button", { name: "Goals", exact: true }).tap();
+  const panel = section(page, "Feedback");
+  assert.ok(await panel.getByRole("button", { name: "Send feedback" }).isDisabled());
+  await panel.getByLabel("Feedback").fill("The rest timer should vibrate");
+  const request = page.waitForRequest("**/api/feedback");
+  await panel.getByRole("button", { name: "Send feedback" }).tap();
+  const { version } = JSON.parse(await readFile(new URL("../../package.json", import.meta.url), "utf8"));
+  assert.deepEqual((await request).postDataJSON(), { text: "The rest timer should vibrate", version });
+  await panel.getByText("Sent. Thank you.").waitFor();
+  assert.equal(await panel.getByLabel("Feedback").inputValue(), "");
+  assert.deepEqual(errors, []);
+});

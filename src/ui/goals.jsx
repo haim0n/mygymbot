@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { APP_VERSION, COACH_STYLES, DEFAULT_SETTINGS, EXPERIENCE_LEVELS, HEIGHT_UNITS, MUSCLE_LABELS, PLATES, SEXES, TRAINING_FOCUSES, WEEKDAYS } from "../config.js";
-import { exportAllData } from "../storage.js";
+import { exportAllData, sendFeedback } from "../storage.js";
 import { daysBetween, joinWords, today } from "../dates.js";
 import { normalizeName, plateSize, platesPerSide } from "../training.js";
 import { injuredMuscles } from "../autopilot.js";
@@ -201,6 +201,7 @@ export function GoalsView({ settings, setSettings, records, workouts }) {
 
       <CoachMemoryPanel settings={settings} setSettings={setSettings} />
       <ExportPanel />
+      <FeedbackPanel />
       <p className="text-center text-xs text-zinc-400">GymBot {[APP_VERSION, deployedCommit()].filter(Boolean).join(" ")}</p>
     </div>
   );
@@ -225,6 +226,48 @@ function CoachMemoryPanel({ settings, setSettings }) {
           <DeleteButton label={`Delete fact ${i + 1}`} onConfirm={() => remove(i)} />
         </div>
       ))}
+    </Panel>
+  );
+}
+
+function FeedbackPanel() {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [sent, setSent] = useState(false);
+
+  async function send() {
+    setBusy(true);
+    setError("");
+    try {
+      await sendFeedback(text.trim(), APP_VERSION);
+      setText("");
+      setSent(true);
+    } catch {
+      setError("Couldn't send it. Try again.");
+    }
+    setBusy(false);
+  }
+
+  return (
+    <Panel className="space-y-3">
+      <div>
+        <SectionTitle>Feedback</SectionTitle>
+        <p className="-mt-1 text-sm text-zinc-500">What works, what doesn't, what you miss. It goes straight to the people who build GymBot.</p>
+      </div>
+      <textarea
+        rows={3}
+        value={text}
+        onChange={(e) => (setText(e.target.value), setSent(false))}
+        aria-label="Feedback"
+        placeholder="The rest timer should vibrate"
+        className={inputClass}
+      />
+      <PrimaryButton onClick={send} busy={busy} disabled={!text.trim()}>
+        Send feedback
+      </PrimaryButton>
+      {sent && <p className="text-sm text-zinc-500">Sent. Thank you.</p>}
+      <ErrorText message={error} />
     </Panel>
   );
 }

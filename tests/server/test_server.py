@@ -135,6 +135,15 @@ def test_app_errors_are_logged_with_the_user_and_cut_short(data_file: Path, capl
     assert len(caplog.records[-1].getMessage()) < app_module.MAX_ERROR_REPORT_CHARS + 100
 
 
+def test_feedback_is_kept_in_one_file_for_all_users(data_file: Path) -> None:
+    client = client_for(data_file)
+    assert client.post("/api/feedback", json={"text": "Love it", "version": "0.7.1"}).status_code == 204
+    assert client.post("/api/feedback", json={"text": "x" * 9000}).status_code == 204
+    first, second = [json.loads(line) for line in (data_file.parent / app_module.FEEDBACK_FILE).read_text().splitlines()]
+    assert {**first, "time": None} == {"time": None, "user": "dev", "version": "0.7.1", "text": "Love it"}
+    assert len(second["text"]) == app_module.MAX_FEEDBACK_CHARS
+
+
 def test_app_files_are_checked_for_a_new_version_on_each_load(data_file: Path) -> None:
     client = client_for(data_file)
     picture = client.get("/exercises/Leg_Press-0.webp")

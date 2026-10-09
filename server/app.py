@@ -4,9 +4,10 @@ import asyncio
 import html
 import json
 import logging
+import threading
 from collections import Counter
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,8 @@ logger = logging.getLogger(__name__)
 STATIC_PATHS = ("/dist/", "/exercises/", "/static/")  # the bundle, the pictures and the install files, replaced in place by each deploy
 AI_CALLS_PER_DAY = 200  # per user: several times a heavy training day, low enough to stop a runaway loop or misuse
 MAX_REQUEST_BYTES = 16_000_000  # a screenshot import (up to 8 image slices) is about 3 MB
+FEEDBACK_FILE = "feedback.jsonl"  # every user's feedback, one JSON line each, next to the users' files
+MAX_FEEDBACK_CHARS = 5000
 MAX_ERROR_REPORT_CHARS = 2000  # a stack trace fits; a flood doesn't
 AI_LIMIT_MESSAGE = "You've reached today's limit for the coach. It resets tomorrow."
 
@@ -33,6 +36,14 @@ class AppError:
     """An uncaught error in the app on someone's phone."""
 
     message: str
+    version: str = ""
+
+
+@dataclass
+class Feedback:
+    """A message from a user to whoever runs GymBot."""
+
+    text: str
     version: str = ""
 
 
@@ -46,6 +57,7 @@ def create_app(stores: Stores, iap_audience: str | None, commit: str | None = No
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     # ponytail: in memory, so it resets on each deploy; fine with one instance. Store it if the limit must hold exactly.
     ai_calls: Counter[tuple[str, date]] = Counter()
+    feedback_lock = threading.Lock()
     page = (WEB_DIR / "index.html").read_text()
     if commit:
         page = page.replace("<head>", f'<head>\n    <meta name="gymbot-commit" content="{html.escape(commit)}" />', 1)
@@ -127,6 +139,19 @@ def create_app(stores: Stores, iap_audience: str | None, commit: str | None = No
     @app.post("/api/errors")
     def report_error(report: AppError, request: Request) -> Response:
         logger.error("App error for %s (app %s): %s", request.state.user, report.version, report.message[:MAX_ERROR_REPORT_CHARS])
+        return Response(status_code=204)
+
+    @app.post("/api/feedback")
+    def keep_feedback(feedback: Feedback, request: Request) -> Response:
+        entry = {
+            "time": datetime.now(UTC).isoformat(timespec="seconds"),
+            "user": request.state.user,
+            "version": feedback.version,
+            "text": feedback.text[:MAX_FEEDBACK_CHARS],
+        }
+        with feedback_lock, (stores.directory / FEEDBACK_FILE).open("a") as file:
+            file.write(json.dumps(entry) + "\n")
+        logger.info("Feedback from %s", request.state.user)
         return Response(status_code=204)
 
     app.mount("/dist", StaticFiles(directory=WEB_DIR / "dist", check_dir=False), name="dist")

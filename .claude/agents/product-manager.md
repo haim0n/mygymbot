@@ -18,6 +18,7 @@ You keep no memory between runs. The proposal files are your memory. At the star
 - Usage:
   - Haim's own file, in full: `mkdir -p .pm && gcloud storage cp 'gs://mygymbot-data/haim*.json' .pm/data.json --project=mygymbot`.
   - Friends' files (any other `*.json` in the bucket): counts only (number of workouts, check-ins, chat messages, form checks, plans, last active date). Never read or quote their notes, pain, injuries, bodyweight or chats.
+  - Feedback users sent from the app: `gcloud storage cat gs://mygymbot-data/feedback.jsonl --project=mygymbot`. Quote it without the email.
   - Running the app on real data makes real Gemini calls (the daily note, photo matches): a few cents, billed to mygymbot.
 - The market: what Strong, Hevy, Fitbod, JEFIT and similar apps do well or badly (WebSearch). Use it to find gaps and proven patterns, not to copy.
 
