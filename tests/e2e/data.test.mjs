@@ -85,3 +85,20 @@ test("feedback: sent from Goals with the app version", async (t) => {
   assert.equal(await panel.getByLabel("Feedback").inputValue(), "");
   assert.deepEqual(errors, []);
 });
+
+test("saves: a save the server refuses is not retried; the app asks for a reload", async (t) => {
+  const { page, errors } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
+  const puts = [];
+  await page.route("**/api/storage/**", (route) =>
+    route.request().method() === "PUT" ? (puts.push(route.request().url()), route.fulfill({ status: 401 })) : route.continue()
+  );
+  await page.getByRole("button", { name: "Progress", exact: true }).tap();
+  const panel = section(page, "Bodyweight");
+  await panel.getByLabel("Today's weight").fill("81");
+  await panel.getByRole("button", { name: "Log" }).tap();
+  await page.getByRole("status").filter({ hasText: "Not saved. Reload the app." }).waitFor();
+  await page.waitForTimeout(2500); // longer than the first retry would wait
+  assert.ok(puts.some((url) => url.includes("bodyweight")));
+  assert.equal(new Set(puts).size, puts.length); // each key tried once, never again
+  assert.deepEqual(errors, []);
+});

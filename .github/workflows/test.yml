@@ -13,7 +13,9 @@ jobs:
           node-version: 22
           cache: npm
       - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: "3.13" # as in the Dockerfile
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: uv sync
+      - run: uv sync --locked
       - run: npm run test:all

@@ -19,20 +19,23 @@ export async function readStored(key) {
   }
 }
 
+// Throws { refused: true } when retrying can't help: an expired sign-in (IAP redirects) or a 4xx.
 export async function writeStored(key, value) {
-  const response = await fetch(storageUrl(key), { method: "PUT", body: JSON.stringify(value) });
-  if (!response.ok) throw new Error(`Storage error ${response.status}`);
+  const response = await fetch(storageUrl(key), { method: "PUT", body: JSON.stringify(value), redirect: "manual" });
+  if (response.ok) return;
+  const refused = response.type === "opaqueredirect" || (response.status >= 400 && response.status < 500 && ![408, 429].includes(response.status));
+  throw Object.assign(new Error(`Storage error ${response.status || "redirect"}`), { refused });
 }
 
 // Values the server hasn't accepted yet, newest per key. One writer per key sends the latest value until it
 // lands, so an older value can never arrive after a newer one.
 // ponytail: kept in memory; closing the app while offline loses them. Keep them on the phone if that bites.
 const unsaved = new Map();
-let saveFailing = false;
+let saveProblem = ""; // "", "retrying", or "refused" (only a reload helps)
 const listeners = new Set();
-const setSaveFailing = (failing) => {
-  if (failing === saveFailing) return;
-  saveFailing = failing;
+const setSaveProblem = (problem) => {
+  if (problem === saveProblem || saveProblem === "refused") return;
+  saveProblem = problem;
   listeners.forEach((listener) => listener());
 };
 
@@ -48,21 +51,22 @@ async function sendUnsaved(key) {
     try {
       await writeStored(key, value);
       if (unsaved.get(key) === value) unsaved.delete(key);
-      if (unsaved.size === 0) setSaveFailing(false);
+      if (unsaved.size === 0) setSaveProblem("");
       if (!unsaved.has(key)) return;
       continue; // a newer value came in while this one was on its way
     } catch (err) {
-      console.error(`Saving ${key} failed; trying again`, err);
-      setSaveFailing(true);
+      console.error(`Saving ${key} failed`, err);
+      setSaveProblem(err.refused ? "refused" : "retrying");
+      if (err.refused) return; // the value stays unsaved, so later changes to this key wait for the reload too
     }
     await new Promise((resolve) => setTimeout(resolve, wait));
     wait = Math.min(wait * 2, SAVE_RETRY_MS.max);
   }
 }
 
-// True while a save has failed and is waiting to be sent again.
-export const useSaveFailing = () =>
-  useSyncExternalStore((listener) => (listeners.add(listener), () => listeners.delete(listener)), () => saveFailing);
+// "" while saves land; "retrying" while one waits to be sent again; "refused" when only a reload helps.
+export const useSaveProblem = () =>
+  useSyncExternalStore((listener) => (listeners.add(listener), () => listeners.delete(listener)), () => saveProblem);
 
 export function usePersistentState(key, initialValue) {
   const [value, setValue] = useState(initialValue);
