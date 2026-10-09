@@ -1,0 +1,19 @@
+# Runs every test on each push and pull request. The e2e tests use a fake AI and no IAP, so no secrets are needed.
+name: Tests
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: uv sync
+      - run: npm run test:all
