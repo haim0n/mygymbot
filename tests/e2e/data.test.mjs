@@ -33,3 +33,25 @@ test("bodyweight: logged in Progress, one entry per day, charted with the change
   assert.deepEqual(await stored(page, "gymbot:bodyweight"), [{ date: "2026-09-20", weight: 82.5 }, { date: "2026-10-03", weight: 80.5 }]);
   assert.deepEqual(errors, []);
 });
+
+test("saves: a failed save shows Not saved yet, is retried, and the newest value lands", async (t) => {
+  const { page, errors } = await openApp(t, {
+    seed: { "gymbot:workouts": [userWorkout], "gymbot:bodyweight": [{ date: "2026-09-20", weight: 82.5 }] },
+  });
+  const offline = (route) => (route.request().method() === "PUT" ? route.abort() : route.continue());
+  await page.route("**/api/storage/**", offline);
+  await page.getByRole("button", { name: "Progress", exact: true }).tap();
+  const panel = section(page, "Bodyweight");
+  await panel.getByLabel("Today's weight").fill("81");
+  await panel.getByRole("button", { name: "Log" }).tap();
+  const banner = page.getByRole("status").filter({ hasText: "Not saved yet" });
+  await banner.waitFor();
+  await panel.getByLabel("Today's weight").fill("80.5");
+  await panel.getByRole("button", { name: "Log" }).tap();
+  await settle(page);
+
+  await page.unroute("**/api/storage/**", offline);
+  await banner.waitFor({ state: "detached", timeout: 15000 });
+  assert.deepEqual(await stored(page, "gymbot:bodyweight"), [{ date: "2026-09-20", weight: 82.5 }, { date: "2026-10-03", weight: 80.5 }]);
+  assert.deepEqual(errors, []);
+});

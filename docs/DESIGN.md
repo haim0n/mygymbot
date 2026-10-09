@@ -265,7 +265,7 @@ All JSON answers go through `askAIForJson`, which reads the outermost `{…}` so
 ## 9. Known limitations
 
 - **No notifications** while the app is closed (it's a web page). Calendar reminders are the workaround.
-- **A save that fails offline is only retried by the next change.** Losing signal and then closing the tab loses what was logged since the last successful save.
+- **Unsaved changes live in memory.** A failed save is retried (newest value per key, 1 s doubling to 10 s) and "Not saved yet" shows meanwhile, but closing the app while offline loses what wasn't saved.
 - **Changing kg/lb doesn't convert** past entries.
 - **Activities can't be edited** (delete and re-log).
 - **Video links weren't verified as still online.** YouTube blocks automated checks. Each is one line in `VIDEO_LIBRARY`.
@@ -276,4 +276,4 @@ All JSON answers go through `askAIForJson`, which reads the outermost `{…}` so
 
 - `npm test`: unit tests for Autopilot, equipment steps, rep-range stability, rest, import, muscle rules, video library, live workout, forecasts, schedule and check-ins, activities and highlights. They import the domain modules directly.
 - `npm run test:server`: pytest for the backend: storage round-trip, daily backup, corrupt-file refusal, access gate, the `/api/ask` request checks and Gemini translation, and errors becoming 502 (no network).
-- `npm run test:e2e`: Playwright on a Pixel 5-sized screen with a fixed clock (Sat 3 Oct 2026, 18:00), seeded storage, and a fake AI that records requests. Each test starts the Python server with its own seeded data file. Covers live workout (reorder, check-off, reload, finish), history edit, activities, check-in, video-tag resolution, the Today card and export.
+- `npm run test:e2e`: Playwright on a Pixel 5-sized screen with a fixed clock (Sat 3 Oct 2026, 18:00), seeded storage, and a fake AI that records requests. Each test starts the Python server with its own seeded data file. Covers live workout (reorder, check-off, reload, finish), history edit, activities, check-in, video-tag resolution, the Today card, export, and a failed save being retried.

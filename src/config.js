@@ -73,6 +73,7 @@ export const PLAN_STATUS = {
   hold: { label: "Hold for pain", className: "bg-rose-50 text-rose-700" },
 };
 
+export const SAVE_RETRY_MS = { first: 1000, max: 10000 }; // a failed save is retried after 1 s, doubling up to 10 s
 export const CHAT_CONTEXT_SIZE = 12; // messages sent to the coach per request
 export const CHAT_HISTORY_SIZE = 60; // messages kept on device
 export const BODYWEIGHT_CONTEXT_ENTRIES = 30; // latest bodyweight entries the coach sees

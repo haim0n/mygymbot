@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { MessageCircle, Dumbbell, Video, TrendingUp, Target, Loader2 } from "lucide-react";
 import { DEFAULT_SETTINGS, GLOBAL_CSS, STORAGE_KEYS } from "./config.js";
-import { usePersistentState } from "./storage.js";
+import { usePersistentState, useSaveFailing } from "./storage.js";
 import { today } from "./dates.js";
 import { exercisesByFrequency, logBodyweight, personalRecords } from "./training.js";
 import { buildAutopilotPlans } from "./autopilot.js";
@@ -82,6 +82,7 @@ export default function GymBot() {
   };
   const deleteRoutine = (name) => setSettings((s) => ({ ...s, routines: (s.routines ?? []).filter((r) => r.name !== name) }));
 
+  const saveFailing = useSaveFailing();
   const loaded = workoutsLoaded && settingsLoaded && chatLoaded && formChecksLoaded && sessionLoaded && bodyweightLoaded;
   // Exercises in saved plans and the workout in progress count too: a new user's first plan has no history yet.
   const namesInUse = useMemo(
@@ -133,6 +134,11 @@ export default function GymBot() {
           <>
             <RestTimerBar timer={restTimer} note={restNote} onReply={replyToRestNote} onQuiet={() => setSession((s) => s && { ...s, coachQuiet: true })} />
             <main className={`max-w-md mx-auto px-4 ${tab === "coach" ? "h-dvh flex flex-col pb-16" : "pb-24"} ${restTimer.rest ? (restNote ? "pt-44" : "pt-28") : "pt-6"}`}>{views[tab]}</main>
+            {saveFailing && (
+              <p role="status" className="fixed inset-x-0 top-2 z-50 mx-auto w-fit rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-900 shadow">
+                Not saved yet, trying again. Keep the app open.
+              </p>
+            )}
             <BottomNav tab={tab} onSelect={setTab} workoutInProgress={Boolean(session)} />
             {detailsFor && <ExerciseSheet name={detailsFor} onClose={() => setDetailsFor(null)} />}
           </>
