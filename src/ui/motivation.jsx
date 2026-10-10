@@ -71,7 +71,7 @@ export function TodayCard({ facts, note, open, onToggle, onNavigate }) {
   );
 }
 
-export function SessionHighlights({ facts, onClose }) {
+export function SessionHighlights({ facts, onClose, onContinue }) {
   return (
     <section className="rounded-2xl bg-zinc-900 p-4 text-white">
       <div className="mb-2 flex items-start justify-between">
@@ -81,6 +81,11 @@ export function SessionHighlights({ facts, onClose }) {
         </button>
       </div>
       <FactList facts={facts} />
+      {onContinue && (
+        <button onClick={onContinue} className="mt-3 w-full rounded-lg border border-zinc-500 py-2.5 font-semibold text-white">
+          Continue this workout
+        </button>
+      )}
     </section>
   );
 }

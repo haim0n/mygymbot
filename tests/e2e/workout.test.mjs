@@ -37,6 +37,27 @@ test("live workout: start with Up next, reorder, check off, survive a reload, fi
   assert.deepEqual(errors, []);
 });
 
+test("finish by mistake: Continue this workout takes the saved workout back and reopens it as it was", async (t) => {
+  const { page, errors } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
+  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: /Start with Up next/ }).tap();
+  const workout = section(page, "Workout");
+  const names = await exerciseNames(workout);
+  await workout.locator("ol > li").first().getByRole("button", { name: "Set 1 done" }).tap();
+  await page.getByRole("button", { name: "Skip" }).tap();
+  await workout.getByRole("button", { name: /Finish and save/ }).tap();
+  await settle(page);
+  assert.equal((await stored(page, "gymbot:workouts")).length, 2);
+
+  await section(page, "Session saved").getByRole("button", { name: "Continue this workout" }).tap();
+  assert.deepEqual(await exerciseNames(workout), names);
+  assert.equal(await workout.locator("ol > li").first().getByRole("button", { name: "Set 1 done" }).getAttribute("aria-pressed"), "true");
+  assert.equal(await section(page, "Session saved").count(), 0);
+  await settle(page);
+  assert.deepEqual(await stored(page, "gymbot:workouts"), [userWorkout]);
+  assert.deepEqual(errors, []);
+});
+
 test("exercise picker: find an exercise by name, add it, then replace it with one for the same muscle", async (t) => {
   const { page, errors } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
   await page.getByRole("button", { name: /^Log/ }).tap();

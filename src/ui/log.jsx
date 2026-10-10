@@ -378,6 +378,7 @@ export function LogView({ workouts, setWorkouts, session, setSession, settings, 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [highlights, setHighlights] = useState(null);
+  const [finished, setFinished] = useState(null); // { session, workoutId }: the workout just finished, so a finish tapped by mistake can be undone
   const [coachReply, setCoachReply] = useState(null);
   const checkInWorkout = pendingCheckIn(workouts);
   const routines = settings.routines ?? [];
@@ -392,6 +393,7 @@ export function LogView({ workouts, setWorkouts, session, setSession, settings, 
 
   // Saves a finished entry (a workout or an activity) and shows what to celebrate.
   function saveEntry(entry) {
+    setFinished(null);
     setHighlights(sessionHighlights(entry, workouts, settings));
     setWorkouts((all) => [...all, entry]);
     window.scrollTo({ top: 0, behavior: "smooth" }); // the highlights appear at the top
@@ -421,8 +423,18 @@ export function LogView({ workouts, setWorkouts, session, setSession, settings, 
     setPicker(null);
   }
 
+  // Takes the saved workout back and reopens it as it was, unfinished sets included.
+  function continueWorkout() {
+    setWorkouts((all) => all.filter((w) => w.id !== finished.workoutId));
+    setSession(finished.session);
+    setHighlights(null);
+    setFinished(null);
+  }
+
   function finishWorkout() {
-    saveEntry(sessionToWorkout(session));
+    const workout = sessionToWorkout(session);
+    saveEntry(workout);
+    setFinished({ session, workoutId: workout.id });
     setSession(null);
   }
 
@@ -438,7 +450,7 @@ export function LogView({ workouts, setWorkouts, session, setSession, settings, 
         Log workout
       </ViewTitle>
 
-      {highlights && <SessionHighlights facts={highlights} onClose={() => setHighlights(null)} />}
+      {highlights && <SessionHighlights facts={highlights} onClose={() => setHighlights(null)} onContinue={finished && !session ? continueWorkout : null} />}
       {checkInWorkout && !session && <CheckInCard key={checkInWorkout.id} workout={checkInWorkout} context={coachContext} onSave={saveCheckIn} />}
       {coachReply && <CoachReply text={coachReply} onClose={() => setCoachReply(null)} />}
 
