@@ -30,7 +30,7 @@ All dates are local `YYYY-MM-DD` strings. Weights are stored in the unit chosen 
 type Workout = {
   id: string;
   date: string;
-  exercises: { name: string; sets: { weight: number; reps: number }[] }[]; // gym lifts, in the order done
+  exercises: { name: string; sets: { weight: number; reps: number; feel?: "easy" | "right" | "hard" }[] }[]; // gym lifts, in the order done; feel from the rest bar
   activities?: Activity[];   // non-gym; an activity-only entry has exercises: []
   notes: string;
   source?: "import";
@@ -68,7 +68,7 @@ type Settings = {
 type Session = { // the workout in progress
   date: string; startedAt: number | null; notes: string; routine?: string;
   coachNotes?: { exercise: string; text: string; restStartedAt: number }[]; coachQuiet?: boolean; // the coach's rest notes, and Quiet
-  exercises: { id: string; name: string; rest: number /* s */; sets: { id: string; weight: number | string; reps: number | string; done: boolean }[] }[];
+  exercises: { id: string; name: string; rest: number /* s */; sets: { id: string; weight: number | string; reps: number | string; done: boolean; feel?: string }[] }[];
 }; // weights/reps may be strings while typed; sessionToWorkout() turns them into numbers
 ```
 
@@ -79,6 +79,7 @@ Storage keys (all personal scope):
 | `gymbot:workouts` | `Workout[]` |
 | `gymbot:settings` | `Settings` |
 | `gymbot:session` | `Session \| null` |
+| `gymbot:rest` | the rest timer: `{ label, duration, startedAt, endsAt, exerciseId?, setId? }`, so a reload keeps counting |
 | `gymbot:chat` | last 60 coach messages `{ role, content }` |
 | `gymbot:form-checks` | last 30 `{ id, date, exercise, feedback }` |
 | `gymbot:daily-note` | `{ key: "date\|style", text }` (one coach note per day) |
@@ -105,7 +106,7 @@ App-level state: workouts, settings, chat, form checks, session, rest timer, ope
 - **Rep range**: the user's override, otherwise inferred. Take the median working-set reps over the last 8 sessions and pick the preset (3–5, 3–6, 5–8, 6–10, 8–12, 10–15, 12–20) whose midpoint is closest. This stays stable while the user follows the targets, because a full cycle from the bottom to the top of a range has that range's midpoint as its median (tested over 15 sessions).
 - **Rules**, in order:
   - More than 21 days since last time: **deload** (×0.9).
-  - Every set hit the top of the range: **add weight**, reps back to the bottom.
+  - Every set hit the top of the range: **add weight**, reps back to the bottom. Unless a set at that weight was rated too hard: **hold** the weight.
   - No set below the bottom: **add reps** (lowest + 1).
   - Missed the bottom two sessions running at the same weight: **deload**.
   - Otherwise: **repeat**.
@@ -126,9 +127,13 @@ App-level state: workouts, settings, chat, form checks, session, rest timer, ope
 ### Live workout
 - **Starting:** with all of Up next, by repeating the last *gym* workout (same order), or empty.
 - **Up next** lists only exercises not yet in the workout (Add, Add all).
-- **Sets:** editable weight and reps; ✓ marks a set done and starts rest automatically (except after the final set).
+- **Sets:** editable weight and reps; ✓ marks a set done and starts rest automatically (except after the final set). The rest timer is stored (`gymbot:rest`, an end time), so a reload keeps counting; a rest that ended while the app was closed is not shown.
+- **Set feel (`rateSet`, `SET_FEELS`):** after a set the rest bar asks Too easy, Just right or Too hard, one tap, once per set. Too easy or too hard moves the exercise's sets still to do at that weight one weight step, onto a weight that exists (2 reps without weight), so the next set fits how this one went. The feel is kept on the set (`feel`, optional), the coach sees it on the finish screen, and Autopilot holds the weight instead of adding to it when a top-weight set was too hard. No AI call.
+- **Next set (`nextSet`):** the rest bar shows the set after the rest (this exercise's next, else the first left in the workout), with the plates per side for lifts on a barbell (`PLATE_LIFTS`; not sleds or machines). A rest after a set ends with its workout.
+- **Finishing an exercise** scrolls to the one you're on next (the first with sets left), also when you trained out of order and it is further up.
 - **Reordering** happens in a compact list, so a moved exercise doesn't jump out from under the finger.
-- **Saving:** the session is persisted (survives tab switches and reloads). Finish saves only checked sets.
+- **Saving:** the session is persisted (survives tab switches and reloads), and opening the app mid-workout opens Log. Finish saves only checked sets.
+- **Finish screen (`WorkoutDone`):** full screen, "Workout done" with a short burst (none with reduced motion) and a vibration: minutes, sets and volume, the highlights (bests, weight increases, the week's progress), and one line from the coach (`WORKOUT_DONE_PROMPT`, one AI call). Done closes it; Continue this workout takes the saved workout back and reopens it, for a finish tapped by mistake.
 - **Coach between sets (`useRestNote`):** the first rest of each exercise gets one short line from the coach in the rest bar (`REST_NOTE_PROMPT`, under 20 words, nothing else: no sound, no extra rests). The kind rotates (`REST_NOTE_KINDS`: a cue, a question, the set's numbers, a fact), and the coach sees the coach context, the latest 6 chat messages and what it already said, so it follows up on the chat. Reply puts the note in the coach chat and opens it; Quiet stops the notes for that workout. While a workout is in progress the chat answers in 1 to 3 lines.
 - **History** reuses the same cards to edit a saved workout (`workoutToSession` → edit → `sessionToWorkout(…, { allSets: true })`).
 
@@ -225,6 +230,7 @@ The chat sends the last 12 messages.
 | `MUSCLE_CLASSIFIER_PROMPT` | Unknown exercises | Batches of 20, cached |
 | `EXERCISE_PHOTO_PROMPT` | Exercises without a same-named photo | Batches of 20, cached, `null` when none fits |
 | `REST_NOTE_PROMPT` | Rest bar during a workout | Once per exercise, kinds in turn, sees the latest chat |
+| `WORKOUT_DONE_PROMPT` | Finish screen | One line: something to be proud of, then recovery or the next session |
 | `MOTIVATION_PROMPT` | Daily note | Once a day per style, cached |
 | `CHECK_IN_PROMPT` | Post-workout check-in reply | Stored on the workout |
 
@@ -233,11 +239,11 @@ All JSON answers go through `askAIForJson`, which reads the outermost `{…}` so
 ## 7. UI map
 
 - **Coach:** like a messaging app, the title, the Today card and the input stay in place and only the chat scrolls. The chat opens at the latest message and follows new ones, unless the athlete scrolled back. The Today card is one line (its first fact) until tapped; tapping the input closes it again, to keep room for the keyboard · for a new athlete, the coach's first question instead of quick prompts · quick prompts (incl. "What should I eat today?") above the input.
-- **Log:** Import history (toggle) · Session saved (after a workout, Continue this workout undoes the finish) · check-in card · coach reply · Workout (Add exercise and Replace open the exercise picker; Save as a plan) or Start a workout (saved plans, the next one first in line) · Log an activity · Up next · Describe what you did · History (folded).
+- **Log:** Import history (toggle) · Workout done (full screen after Finish) · Session saved (after an activity) · check-in card · coach reply · Workout (Add exercise and Replace open the exercise picker; Save as a plan) or Start a workout (saved plans, the next one first in line) · Log an activity · Up next · Describe what you did · History (folded).
 - **Form:** exercise, focus note, file picker, frames, feedback, past checks.
 - **Progress:** stats · Activities (last 7 days) · muscle heatmap · estimated 1RM chart with trend line · weekly volume · best lifts.
 - **Goals:** goal cards (barbell loaded with plates you've lifted, forecast) · new goal · About you (with the "not medical advice" notice under injuries; units, bodyweight, experience, sessions per week, minutes per session, birth year, sex, height, training days, usual time, food preferences, workout music, coaching style, main focus, injuries and equipment) · What your coach knows (facts from chats, edit or delete) · Your data (export as text) · Feedback (kept by the server in `feedback.jsonl`)
-- **Everywhere:** rest timer bar (top, with the coach's note, Reply and Quiet), tab bar with a dot while a workout is in progress, exercise details sheet.
+- **Everywhere:** rest timer bar (top, with set feel, the next set, the coach's note, Reply and Quiet), tab bar with a dot while a workout is in progress, exercise details sheet.
 
 ## 8. Decision log
 
@@ -275,6 +281,6 @@ All JSON answers go through `askAIForJson`, which reads the outermost `{…}` so
 
 ## 10. Testing
 
-- `npm test`: unit tests for Autopilot, equipment steps, rep-range stability, rest, import, muscle rules, video library, live workout, exercise search and replace, forecasts, schedule and check-ins, activities and highlights. They import the domain modules directly.
+- `npm test`: unit tests for Autopilot, equipment steps, rep-range stability, rest, import, muscle rules, video library, live workout, set feel, exercise search and replace, forecasts, schedule and check-ins, activities and highlights. They import the domain modules directly.
 - `npm run test:server`: pytest for the backend: storage round-trip, daily backup, corrupt-file refusal, access gate, the `/api/ask` request checks, daily AI limit, usage log line and Gemini translation, the request size limit, app error reports, and errors becoming 502 (no network).
-- `npm run test:e2e`: Playwright on a Pixel 5-sized screen with a fixed clock (Sat 3 Oct 2026, 18:00), seeded storage, and a fake AI that records requests. Each test starts the Python server with its own seeded data file. Covers live workout (reorder, check-off, reload, finish, continue after a finish by mistake), the exercise picker (search, add, replace), history edit, activities, check-in, video-tag resolution, the Today card, export, a failed save being retried, and an app error reported once, and feedback.
+- `npm run test:e2e`: Playwright on a Pixel 5-sized screen with a fixed clock (Sat 3 Oct 2026, 18:00), seeded storage, and a fake AI that records requests. Each test starts the Python server with its own seeded data file. Covers live workout (reorder, check-off, reload during a rest, finish, the finish screen and continue after a finish by mistake, scroll back to an unfinished exercise, set feel), the exercise picker (search, add, replace), history edit, activities, check-in, video-tag resolution, the Today card, export, a failed save being retried, and an app error reported once, and feedback.

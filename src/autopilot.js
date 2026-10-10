@@ -44,7 +44,8 @@ export function workingSetHistory(workouts, name) {
     if (!sets.length) return [];
     const weight = Math.max(...sets.map((s) => s.weight));
     const pain = workout.checkIn?.skipped ? undefined : workout.checkIn?.pain;
-    return [{ date: workout.date, weight, reps: sets.filter((s) => s.weight === weight).map((s) => s.reps), pain }];
+    const tooHard = sets.some((s) => s.weight === weight && s.feel === "hard");
+    return [{ date: workout.date, weight, reps: sets.filter((s) => s.weight === weight).map((s) => s.reps), pain, tooHard }];
   });
 }
 
@@ -65,6 +66,7 @@ export function prescribe(history, [min, max], step, injuredMuscle) {
     return plan("hold", Math.min(max, Math.max(min, lowestReps)), last.weight, "You reported pain after the last session. Keep the weight until it's gone.");
   if (injuredMuscle)
     return plan("hold", Math.min(max, Math.max(min, lowestReps)), last.weight, `Easy on your ${MUSCLE_LABELS[injuredMuscle].toLowerCase()} (injuries in your profile). Keep the weight.`);
+  if (lowestReps >= max && last.tooHard) return plan("hold", max, last.weight, "You rated your top set too hard last time. Keep the weight until it feels right.");
   if (lowestReps >= max) return plan("increase", min, nextWeightUp(last.weight, step), `Every set reached ${max} reps.`);
   if (!missedRange(last)) return plan("reps", Math.min(max, lowestReps + 1), last.weight, `Stay at this weight until every set reaches ${max}.`);
   if (previous && previous.weight === last.weight && missedRange(previous) && last.weight > 0)

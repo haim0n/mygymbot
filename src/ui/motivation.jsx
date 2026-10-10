@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { X, ChevronDown, ChevronUp } from "lucide-react";
 import { COACH_STYLES, MAX_TODAY_FACTS, STORAGE_KEYS } from "../config.js";
-import { MOTIVATION_PROMPT } from "../prompts.js";
+import { MOTIVATION_PROMPT, WORKOUT_DONE_PROMPT } from "../prompts.js";
 import { usePersistentState } from "../storage.js";
 import { askAI } from "../ai.js";
-import { today } from "../dates.js";
+import { formatVolume, today } from "../dates.js";
+import { setsOf, workoutVolume } from "../training.js";
+import { finishedWorkoutRequest } from "../workout.js";
 import { Panel } from "./primitives.jsx";
 
 export const TONE_DOT = { plan: "bg-blue-600", celebrate: "bg-green-500", nudge: "bg-amber-500", info: "bg-zinc-400" };
@@ -71,7 +73,7 @@ export function TodayCard({ facts, note, open, onToggle, onNavigate }) {
   );
 }
 
-export function SessionHighlights({ facts, onClose, onContinue }) {
+export function SessionHighlights({ facts, onClose }) {
   return (
     <section className="rounded-2xl bg-zinc-900 p-4 text-white">
       <div className="mb-2 flex items-start justify-between">
@@ -81,11 +83,73 @@ export function SessionHighlights({ facts, onClose, onContinue }) {
         </button>
       </div>
       <FactList facts={facts} />
-      {onContinue && (
-        <button onClick={onContinue} className="mt-3 w-full rounded-lg border border-zinc-500 py-2.5 font-semibold text-white">
-          Continue this workout
-        </button>
-      )}
     </section>
+  );
+}
+
+const BURST_COLORS = ["#1d4ed8", "#22c55e", "#facc15", "#f97316", "#ec4899", "#a855f7"];
+const BURST = Array.from({ length: 18 }, (_, i) => {
+  const angle = (i / 18) * 2 * Math.PI;
+  const distance = 90 + (i % 3) * 35;
+  return { x: `${Math.round(Math.cos(angle) * distance)}px`, y: `${Math.round(Math.sin(angle) * distance)}px`, color: BURST_COLORS[i % BURST_COLORS.length] };
+});
+
+// The moment a workout is finished: what you did, what you beat, and a line from the coach. Continue undoes a finish tapped by mistake.
+export function WorkoutDone({ workout, minutes, facts, unit, context, onDone, onContinue }) {
+  const [coachLine, setCoachLine] = useState("");
+  const doneRef = useRef(null);
+  const sets = setsOf(workout).length;
+
+  useEffect(() => {
+    doneRef.current.focus();
+    navigator.vibrate?.([80, 60, 80, 60, 160]);
+    askAI(`${WORKOUT_DONE_PROMPT}\n\n${context}`, [{ role: "user", content: finishedWorkoutRequest(workout, minutes, facts, unit) }])
+      .then(setCoachLine)
+      .catch(() => {}); // the numbers are the celebration; the line is a bonus
+  }, []);
+
+  const stats = [
+    [minutes, "min"],
+    [sets, sets === 1 ? "set" : "sets"],
+    [formatVolume(workoutVolume(workout)), unit],
+  ];
+  return (
+    <div role="dialog" aria-modal="true" aria-labelledby="workout-done-title" className="fixed inset-0 z-30 overflow-y-auto bg-zinc-900 text-white" style={{ margin: 0 }}>
+      <div className="mx-auto flex min-h-full max-w-md flex-col px-5 pb-8 pt-16">
+        <div className="gb-burst relative py-6 text-center">
+          {BURST.map((dot, i) => (
+            <span key={i} aria-hidden="true" style={{ "--x": dot.x, "--y": dot.y, background: dot.color, animationDelay: `${(i % 3) * 80}ms` }} />
+          ))}
+          <h2 id="workout-done-title" className="gb-display relative text-5xl font-extrabold">Workout done</h2>
+        </div>
+        <dl className="mt-4 grid grid-cols-3 gap-2 text-center">
+          {stats.map(([value, label]) => (
+            <div key={label} className="rounded-2xl bg-zinc-800 py-3">
+              <dd className="gb-display text-3xl font-bold tabular-nums">{value}</dd>
+              <dt className="text-sm text-zinc-400">{label}</dt>
+            </div>
+          ))}
+        </dl>
+        {facts.length > 0 && (
+          <div className="mt-5">
+            <FactList facts={facts} />
+          </div>
+        )}
+        {coachLine && (
+          <p className="mt-5 rounded-2xl bg-zinc-800 p-4 text-zinc-100">
+            <span className="block text-xs font-semibold text-blue-300">Coach</span>
+            {coachLine}
+          </p>
+        )}
+        <div className="mt-auto space-y-3 pt-8">
+          <button ref={doneRef} onClick={onDone} className="w-full rounded-lg bg-blue-700 py-3 font-semibold text-white">
+            Done
+          </button>
+          <button onClick={onContinue} className="w-full py-3 text-sm font-semibold text-zinc-400">
+            Continue this workout
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

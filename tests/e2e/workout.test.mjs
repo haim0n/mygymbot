@@ -18,6 +18,10 @@ test("live workout: start with Up next, reorder, check off, survive a reload, fi
   const first = workout.locator("ol > li").first();
   await first.getByRole("button", { name: "Set 1 done" }).tap();
   assert.match(await page.locator("div.fixed.top-0").innerText(), /Resting after Hammer Curl/);
+  while (!(await stored(page, "gymbot:rest"))) await page.waitForTimeout(100); // saved
+  await page.reload(); // the rest keeps counting
+  assert.match(await page.locator("div.fixed.top-0").innerText(), /Resting after Hammer Curl/);
+  await page.getByRole("button", { name: /^Log/ }).tap();
   await page.getByRole("button", { name: "Skip" }).tap();
 
   await first.getByLabel("Set 2 weight").fill("8");
@@ -33,7 +37,45 @@ test("live workout: start with Up next, reorder, check off, survive a reload, fi
   await settle(page);
   const saved = (await stored(page, "gymbot:workouts")).at(-1);
   assert.deepEqual(saved.exercises, [{ name: "Hammer Curl (Dumbbell)", sets: [{ weight: 7, reps: 8 }, { weight: 8, reps: 8 }, { weight: 7, reps: 8 }] }]);
-  assert.ok(await section(page, "Session saved").isVisible());
+  const done = page.getByRole("dialog", { name: "Workout done" });
+  assert.match(await done.innerText(), /3\s+sets/);
+  await done.getByText("OK").waitFor(); // the coach's line
+  await done.getByRole("button", { name: "Done" }).tap();
+  assert.equal(await done.count(), 0);
+  assert.deepEqual(errors, []);
+});
+
+test("set feel: one tap in the rest bar moves the next sets, and the bar shows what comes next", async (t) => {
+  const { page, errors } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
+  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: /Start with Up next/ }).tap();
+  const first = section(page, "Workout").locator("ol > li").first();
+  const weight = Number(await first.getByLabel("Set 2 weight").inputValue());
+  await first.getByRole("button", { name: "Set 1 done" }).tap();
+  const bar = page.locator("div.fixed.top-0");
+  assert.match(await bar.innerText(), new RegExp(`Next set ${weight} kg × \\d+`));
+  await bar.getByRole("button", { name: "Too easy" }).tap();
+  await bar.getByText("Too easy: the next sets go up.").waitFor();
+  assert.ok(Number(await first.getByLabel("Set 2 weight").inputValue()) > weight);
+  assert.equal(await bar.getByRole("button", { name: "Too hard" }).count(), 0); // one answer per set
+  await settle(page);
+  assert.equal((await stored(page, "gymbot:session")).exercises[0].sets[0].feel, "easy");
+  assert.deepEqual(errors, []);
+});
+
+test("out of order: finishing the last exercise brings the first one not done into view", async (t) => {
+  const { page, errors } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
+  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: /Start with Up next/ }).tap();
+  const items = section(page, "Workout").locator("ol > li");
+  const inView = (item) => item.evaluate((el) => el.getBoundingClientRect().top >= 0 && el.getBoundingClientRect().bottom <= innerHeight);
+  await items.last().getByRole("button", { name: "Mark all done" }).tap();
+  await page.waitForFunction(() => {
+    const first = document.querySelector("[data-exercise-id]").getBoundingClientRect();
+    return first.top >= 0 && first.bottom <= innerHeight;
+  });
+  assert.ok(await inView(items.first()));
+  assert.ok(!(await inView(items.last())));
   assert.deepEqual(errors, []);
 });
 
@@ -49,10 +91,10 @@ test("finish by mistake: Continue this workout takes the saved workout back and 
   await settle(page);
   assert.equal((await stored(page, "gymbot:workouts")).length, 2);
 
-  await section(page, "Session saved").getByRole("button", { name: "Continue this workout" }).tap();
+  await page.getByRole("dialog", { name: "Workout done" }).getByRole("button", { name: "Continue this workout" }).tap();
   assert.deepEqual(await exerciseNames(workout), names);
   assert.equal(await workout.locator("ol > li").first().getByRole("button", { name: "Set 1 done" }).getAttribute("aria-pressed"), "true");
-  assert.equal(await section(page, "Session saved").count(), 0);
+  assert.equal(await page.getByRole("dialog", { name: "Workout done" }).count(), 0);
   await settle(page);
   assert.deepEqual(await stored(page, "gymbot:workouts"), [userWorkout]);
   assert.deepEqual(errors, []);

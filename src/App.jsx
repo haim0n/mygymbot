@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { MessageCircle, Dumbbell, Video, TrendingUp, Target, Loader2 } from "lucide-react";
 import { DEFAULT_SETTINGS, GLOBAL_CSS, STORAGE_KEYS } from "./config.js";
 import { usePersistentState, useSaveProblem } from "./storage.js";
@@ -6,7 +6,7 @@ import { today } from "./dates.js";
 import { exercisesByFrequency, logBodyweight, personalRecords } from "./training.js";
 import { buildAutopilotPlans } from "./autopilot.js";
 import { todayFacts } from "./motivation.js";
-import { saveRoutine } from "./workout.js";
+import { nextSet, rateSet, saveRoutine } from "./workout.js";
 import { buildCoachContext, isNewAthlete, rememberFacts } from "./coach-context.js";
 import { useDailyNote } from "./ui/motivation.jsx";
 import { useInjuryAreas, useLearnedMuscles } from "./ui/muscles.jsx";
@@ -103,6 +103,23 @@ export default function GymBot() {
   const dailyNote = useDailyNote({ enabled: loaded && workouts.length > 0, facts, context: coachContext, style: coachStyle });
   const { unit, daysPerWeek, notes } = settings.profile;
   const restNote = useRestNote({ rest: restTimer.rest, session, setSession, context: coachContext, chat });
+  const rest = restTimer.rest;
+  const restExercise = rest && session?.exercises.find((e) => e.id === rest.exerciseId);
+  const ratedSet = restExercise?.sets.find((set) => set.id === rest.setId && set.done);
+  const [restBarHeight, setRestBarHeight] = useState(112);
+  // A rest after a set ends with its workout (finished or discarded), also when that happened before a reload.
+  useEffect(() => {
+    if (sessionLoaded && !session && rest?.exerciseId) restTimer.stop();
+  }, [sessionLoaded, session, rest]);
+  // Scrolling to a card (scrollIntoView) keeps it clear of the rest bar on top and the tab bar below.
+  useEffect(() => {
+    document.documentElement.style.scrollPaddingTop = rest ? `${restBarHeight + 8}px` : "";
+    document.documentElement.style.scrollPaddingBottom = "64px";
+  }, [Boolean(rest), restBarHeight]);
+  // Opening the app mid-workout goes straight to it.
+  useEffect(() => {
+    if (sessionLoaded && session) setTab("log");
+  }, [sessionLoaded]);
   // Replying puts the note in the coach chat, so the conversation carries on from it.
   const replyToRestNote = () => {
     setChat((messages) => [...messages, { role: "assistant", content: restNote }]);
@@ -132,8 +149,20 @@ export default function GymBot() {
 
         {loaded ? (
           <>
-            <RestTimerBar timer={restTimer} note={restNote} onReply={replyToRestNote} onQuiet={() => setSession((s) => s && { ...s, coachQuiet: true })} />
-            <main className={`max-w-md mx-auto px-4 ${tab === "coach" ? "h-dvh flex flex-col pb-16" : "pb-24"} ${restTimer.rest ? (restNote ? "pt-44" : "pt-28") : "pt-6"}`}>{views[tab]}</main>
+            <RestTimerBar
+              timer={restTimer}
+              rated={ratedSet ? { exercise: restExercise, set: ratedSet } : null}
+              next={rest && session ? nextSet(session, rest.exerciseId) : null}
+              unit={unit}
+              onRate={(feel) => setSession((s) => s && rateSet(s, rest.exerciseId, rest.setId, feel, unit))}
+              note={restNote}
+              onReply={replyToRestNote}
+              onQuiet={() => setSession((s) => s && { ...s, coachQuiet: true })}
+              onHeight={setRestBarHeight}
+            />
+            <main className={`max-w-md mx-auto px-4 ${tab === "coach" ? "h-dvh flex flex-col pb-16" : "pb-24"} ${rest ? "" : "pt-6"}`} style={rest ? { paddingTop: restBarHeight + 24 } : undefined}>
+              {views[tab]}
+            </main>
             {saveProblem && (
               <p role="status" className="fixed inset-x-0 top-2 z-50 mx-auto w-fit rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-900 shadow">
                 {saveProblem === "refused" ? "Not saved. Reload the app." : "Not saved yet, trying again. Keep the app open."}

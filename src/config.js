@@ -13,6 +13,7 @@ export const STORAGE_KEYS = {
   muscleMap: "gymbot:muscle-map",
   exercisePhotos: "gymbot:exercise-photos", // { exercise name: photo id, or null when no photo fits }
   bodyweight: "gymbot:bodyweight", // [{ date, weight }], oldest first, one per day
+  rest: "gymbot:rest", // the rest timer, so a reload keeps counting: { label, duration (s), startedAt and endsAt (ms), exerciseId?, setId? }
 };
 
 export const EXPERIENCE_LEVELS = ["Beginner", "Intermediate", "Advanced"];
@@ -51,6 +52,15 @@ export const BIG_LIFT_EXTRA_REST = 60; // seconds, for squats, deadlifts and hip
 export const MAX_DAYS_BEFORE_EASING_BACK = 21;
 export const PLAN_LOOKBACK_DAYS = 56; // only plan lifts trained in the last 8 weeks
 export const NEW_EXERCISE_TARGET = { sets: 3, reps: 8 }; // a workout plan's exercise without an Autopilot target starts here; you fill in the weight
+// How a set felt, asked in the rest bar. Too easy or too hard moves the exercise's next sets one weight step (2 reps without weight).
+export const SET_FEELS = [
+  { id: "easy", label: "Too easy", change: 1 },
+  { id: "right", label: "Just right", change: 0 },
+  { id: "hard", label: "Too hard", change: -1 },
+];
+// Lifts loaded with plates on a 20 kg (45 lb) bar, for the plates per side in the rest bar. Sleds and machines aren't.
+export const PLATE_LIFTS = /barbell|bench press|squat|deadlift|overhead press|military press|push press|bent over row|pendlay row|clean|snatch|hip thrust/;
+export const NOT_PLATE_LIFTS = /dumbbell|kettlebell|machine|smith|cable|hack|goblet|leg press|pistol|split squat|bodyweight/;
 export const EXERCISE_SEARCH_LIMIT = 50; // rows the exercise picker shows; typing or a muscle finds the rest
 
 // Import: header names used by Strong, Hevy and similar apps (matched case-insensitively).
@@ -278,5 +288,8 @@ export const GLOBAL_CSS = `
 .gb-root { -webkit-tap-highlight-color: transparent; }
 .gb-root button { -webkit-user-select: none; user-select: none; }
 .gb-root button:active:not(:disabled) { opacity: 0.6; }
+/* The finish screen's burst: dots fly out from the middle and fade. Without motion they stay hidden. */
+.gb-burst span { position: absolute; left: 50%; top: 50%; width: 10px; height: 10px; border-radius: 9999px; opacity: 0; animation: gb-burst 1100ms ease-out both; }
+@keyframes gb-burst { from { opacity: 1; transform: translate(-50%, -50%) scale(1); } to { opacity: 0; transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) scale(0.4); } }
 @media (prefers-reduced-motion: reduce) { .gb-root * { animation: none !important; scroll-behavior: auto !important; } }
 `;

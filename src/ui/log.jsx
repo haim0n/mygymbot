@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Trash2, Plus, Sparkles, Loader2, X, Check, Timer, PlayCircle, ChevronUp, ChevronDown, ArrowUpDown, ArrowLeftRight } from "lucide-react";
 import { PLAN_STATUS, REP_RANGES } from "../config.js";
 import { LOG_PARSER_PROMPT } from "../prompts.js";
@@ -12,7 +12,7 @@ import { addExercises, addSet, completeExercise, currentExerciseId, editSet, mov
 import { pendingCheckIn } from "../schedule.js";
 import { activityEntry, activityLabel, paceText, sanitizeActivities } from "../activities.js";
 import { DeleteButton, ErrorText, Field, Panel, PrimaryButton, SectionTitle, ViewTitle, inputClass, useArmed } from "./primitives.jsx";
-import { SessionHighlights } from "./motivation.jsx";
+import { SessionHighlights, WorkoutDone } from "./motivation.jsx";
 import { VideoGuides } from "./videos.jsx";
 import { ExercisePicker, ExerciseThumb } from "./exercises.jsx";
 import { CheckInCard, CoachReply } from "./check-in.jsx";
@@ -167,11 +167,11 @@ export function ExerciseCard({ exercise, unit, mode, isCurrent = false, update, 
 
   function toggle(set) {
     update((s) => toggleSet(s, id, set.id));
-    if (!set.done) onSetDone(exercise);
+    if (!set.done) onSetDone(exercise, set);
   }
 
   return (
-    <li className={`rounded-xl border-2 p-3 ${isCurrent ? "border-blue-700" : "border-zinc-200"}`}>
+    <li data-exercise-id={id} className={`rounded-xl border-2 p-3 ${isCurrent ? "border-blue-700" : "border-zinc-200"}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-3">
           <ExerciseThumb name={exercise.name} size={52} />
@@ -241,6 +241,17 @@ export function ExerciseCard({ exercise, unit, mode, isCurrent = false, update, 
 export function ExerciseList({ session, setSession, unit, mode, onSetDone, onReplace }) {
   const [reordering, setReordering] = useState(false);
   const currentId = mode === "live" ? currentExerciseId(session) : null;
+  const listRef = useRef(null);
+
+  // Finishing an exercise brings the one you're on next into view, also when you went out of order and it is further up.
+  const doneIds = session.exercises.filter((e) => e.sets.length && e.sets.every((set) => set.done)).map((e) => e.id);
+  const previousDoneIds = useRef(doneIds);
+  useEffect(() => {
+    const justFinished = doneIds.some((id) => !previousDoneIds.current.includes(id));
+    previousDoneIds.current = doneIds;
+    if (justFinished && currentId) listRef.current?.querySelector(`[data-exercise-id="${currentId}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+
   if (reordering) return <ReorderList session={session} setSession={setSession} onDone={() => setReordering(false)} />;
 
   return (
@@ -254,7 +265,7 @@ export function ExerciseList({ session, setSession, unit, mode, onSetDone, onRep
           Reorder exercises
         </button>
       )}
-      <ol className="space-y-3">
+      <ol ref={listRef} className="space-y-3">
         {session.exercises.map((exercise) => (
           <ExerciseCard
             key={exercise.id}
@@ -320,8 +331,8 @@ export function WorkoutPanel({ session, setSession, unit, onFinish, onStartRest,
   const minutes = Math.max(0, Math.floor((now - session.startedAt) / 60_000));
 
   // Rest after every set except the very last one of the workout.
-  const onSetDone = (exercise) => {
-    if (total - done > 1) onStartRest(exercise.rest, exercise.name);
+  const onSetDone = (exercise, set) => {
+    if (total - done > 1) onStartRest(exercise.rest, exercise.name, { exerciseId: exercise.id, setId: set.id });
   };
 
   return (
@@ -378,7 +389,7 @@ export function LogView({ workouts, setWorkouts, session, setSession, settings, 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [highlights, setHighlights] = useState(null);
-  const [finished, setFinished] = useState(null); // { session, workoutId }: the workout just finished, so a finish tapped by mistake can be undone
+  const [finished, setFinished] = useState(null); // { session, workout, facts, minutes }: the finish screen, which can also undo the finish
   const [coachReply, setCoachReply] = useState(null);
   const checkInWorkout = pendingCheckIn(workouts);
   const routines = settings.routines ?? [];
@@ -393,7 +404,6 @@ export function LogView({ workouts, setWorkouts, session, setSession, settings, 
 
   // Saves a finished entry (a workout or an activity) and shows what to celebrate.
   function saveEntry(entry) {
-    setFinished(null);
     setHighlights(sessionHighlights(entry, workouts, settings));
     setWorkouts((all) => [...all, entry]);
     window.scrollTo({ top: 0, behavior: "smooth" }); // the highlights appear at the top
@@ -425,17 +435,18 @@ export function LogView({ workouts, setWorkouts, session, setSession, settings, 
 
   // Takes the saved workout back and reopens it as it was, unfinished sets included.
   function continueWorkout() {
-    setWorkouts((all) => all.filter((w) => w.id !== finished.workoutId));
+    setWorkouts((all) => all.filter((w) => w.id !== finished.workout.id));
     setSession(finished.session);
-    setHighlights(null);
     setFinished(null);
   }
 
   function finishWorkout() {
     const workout = sessionToWorkout(session);
-    saveEntry(workout);
-    setFinished({ session, workoutId: workout.id });
+    const minutes = Math.max(0, Math.floor((Date.now() - session.startedAt) / 60_000));
+    setFinished({ session, workout, facts: sessionHighlights(workout, workouts, settings), minutes });
+    setWorkouts((all) => [...all, workout]);
     setSession(null);
+    window.scrollTo({ top: 0 }); // after the finish screen, the check-in waits at the top
   }
 
   return (
@@ -450,7 +461,10 @@ export function LogView({ workouts, setWorkouts, session, setSession, settings, 
         Log workout
       </ViewTitle>
 
-      {highlights && <SessionHighlights facts={highlights} onClose={() => setHighlights(null)} onContinue={finished && !session ? continueWorkout : null} />}
+      {highlights && <SessionHighlights facts={highlights} onClose={() => setHighlights(null)} />}
+      {finished && (
+        <WorkoutDone {...finished} unit={unit} context={coachContext} onDone={() => setFinished(null)} onContinue={continueWorkout} />
+      )}
       {checkInWorkout && !session && <CheckInCard key={checkInWorkout.id} workout={checkInWorkout} context={coachContext} onSave={saveCheckIn} />}
       {coachReply && <CoachReply text={coachReply} onClose={() => setCoachReply(null)} />}
 

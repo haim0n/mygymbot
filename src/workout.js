@@ -1,10 +1,10 @@
-import { NEW_EXERCISE_TARGET, REST_NOTE_CHAT_MESSAGES, REST_NOTE_KINDS, ROUTINE_MARKER } from "./config.js";
+import { NEW_EXERCISE_TARGET, NOT_PLATE_LIFTS, PLATES, PLATE_LIFTS, REST_NOTE_CHAT_MESSAGES, REST_NOTE_KINDS, ROUTINE_MARKER, SET_FEELS } from "./config.js";
 import { today } from "./dates.js";
-import { cleanExerciseName, lastGymWorkout, newId, sortNewestFirst } from "./training.js";
-import { repeatSet, restSeconds } from "./autopilot.js";
+import { cleanExerciseName, describeSets, lastGymWorkout, newId, platesPerSide, sortNewestFirst } from "./training.js";
+import { nextWeightUp, repeatSet, restSeconds, weightStep } from "./autopilot.js";
 
 // The workout in progress. It's saved as you go, so closing the app mid-session loses nothing.
-// { date, startedAt, notes, exercises: [{ id, name, rest, sets: [{ id, weight, reps, done }] }] }
+// { date, startedAt, notes, exercises: [{ id, name, rest, sets: [{ id, weight, reps, done, feel? }] }] }
 // Weights and reps may be strings while being typed; they become numbers when the workout is saved.
 export const newSet = ({ weight, reps }, done = false) => ({ id: newId(), weight, reps, done });
 export const startSession = () => ({ date: today(), startedAt: Date.now(), notes: "", exercises: [] });
@@ -110,8 +110,56 @@ export function workoutToSession(workout) {
     date: workout.date,
     startedAt: null,
     notes: workout.notes ?? "",
-    exercises: workout.exercises.map((e) => sessionExercise(e.name, e.sets, { done: true })),
+    exercises: workout.exercises.map((e) => {
+      const exercise = sessionExercise(e.name, e.sets, { done: true });
+      return { ...exercise, sets: exercise.sets.map((set, i) => ({ ...set, ...(e.sets[i].feel && { feel: e.sets[i].feel }) })) }; // kept when you fix a saved workout
+    }),
   };
+}
+
+// Keeps how a done set felt (SET_FEELS). Too easy or too hard moves this exercise's sets still to do at the same weight
+// one step up or down, or by 2 reps without weight, so the next set fits how this one went.
+export function rateSet(session, exerciseId, setId, feel, unit) {
+  const { change } = SET_FEELS.find((f) => f.id === feel);
+  return withExercise(session, exerciseId, (exercise) => {
+    const weight = Number(exercise.sets.find((set) => set.id === setId)?.weight) || 0;
+    const moved = (set) => {
+      if (!change || set.done || (Number(set.weight) || 0) !== weight) return set;
+      if (!weight) return { ...set, reps: Math.max(1, (Number(set.reps) || 0) + 2 * change) };
+      return { ...set, weight: shiftedWeight(weight, change, weightStep(exercise.name, unit)) };
+    };
+    return { ...exercise, sets: exercise.sets.map((set) => (set.id === setId ? { ...set, feel } : moved(set))) };
+  });
+}
+
+// One step up or down, onto weights that exist: 81 kg on a 2.5 kg step goes to 82.5 or 80.
+const shiftedWeight = (weight, change, step) => (change > 0 ? nextWeightUp(weight, step) : Math.max(0, (Math.ceil(weight / step - 1e-9) - 1) * step));
+
+// What the rest bar says once a set is rated: whether the next sets moved, or the feel is only kept.
+export function feelResult(exercise, set, unit) {
+  const feel = SET_FEELS.find((f) => f.id === set.feel);
+  if (!feel) return null;
+  const weight = Number(set.weight) || 0;
+  const target = weight ? shiftedWeight(weight, feel.change, weightStep(exercise.name, unit)) : 0;
+  const moved = feel.change && exercise.sets.some((other) => !other.done && (Number(other.weight) || 0) === target);
+  return moved ? `${feel.label}: the next sets go ${feel.change > 0 ? "up" : "down"}.` : `${feel.label}: noted.`;
+}
+
+// "82.5 kg × 8. Per side: 25, 5, 1.25" for a lift on a barbell; the plates spare the mental maths between sets.
+export function describeNextSet({ exercise, set }, unit) {
+  const weight = Number(set.weight) || 0;
+  if (!weight) return `${set.reps} reps`;
+  const name = exercise.name.toLowerCase();
+  const onBar = PLATE_LIFTS.test(name) && !NOT_PLATE_LIFTS.test(name) && weight >= PLATES[unit].bar;
+  const plates = platesPerSide(weight, unit).map((plate) => plate.weight);
+  return `${weight} ${unit} × ${set.reps}${onBar ? `. ${plates.length ? `Per side: ${plates.join(", ")}` : "Empty bar"}` : ""}`;
+}
+
+// What comes after this rest: the exercise's next set, else the first set left in the workout. Null when all are done.
+export function nextSet(session, exerciseId) {
+  const same = session.exercises.find((e) => e.id === exerciseId);
+  const exercise = same?.sets.some((set) => !set.done) ? same : session.exercises.find((e) => e.sets.some((set) => !set.done));
+  return exercise ? { exercise, set: exercise.sets.find((set) => !set.done) } : null;
 }
 
 // The exercise you're on: the first one with sets still to do.
@@ -122,7 +170,7 @@ export function sessionToWorkout(session, { allSets = false } = {}) {
   const doneSets = (sets) =>
     sets
       .filter((set) => allSets || set.done)
-      .map((set) => ({ weight: Number(set.weight) || 0, reps: Math.round(Number(set.reps)) || 0 }))
+      .map((set) => ({ weight: Number(set.weight) || 0, reps: Math.round(Number(set.reps)) || 0, ...(set.feel && { feel: set.feel }) }))
       .filter((set) => set.reps > 0);
   return {
     id: newId(),
@@ -149,6 +197,20 @@ export function restNoteRequest(session, exerciseName, chat = []) {
     `Write ${REST_NOTE_KINDS[earlier.length % REST_NOTE_KINDS.length]}.`,
     talk.length > 0 && `LATEST COACH CHAT (oldest first):\n${talk.join("\n")}`,
     earlier.length > 0 && `You already said this workout:\n${earlier.join("\n")}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+const feelLabel = (feel) => SET_FEELS.find((f) => f.id === feel).label.toLowerCase();
+
+// The finished workout, for the coach's line on the finish screen.
+export function finishedWorkoutRequest(workout, minutes, highlights, unit) {
+  const feels = (sets) => [...new Set(sets.filter((set) => set.feel).map((set) => feelLabel(set.feel)))];
+  return [
+    `FINISHED WORKOUT (${minutes} min):`,
+    ...workout.exercises.map((e) => `- ${e.name}: ${describeSets(e.sets, unit)}${feels(e.sets).length ? ` (felt ${feels(e.sets).join(", ")})` : ""}`),
+    highlights.length > 0 && `HIGHLIGHTS:\n${highlights.map((fact) => `- ${fact.text}`).join("\n")}`,
   ]
     .filter(Boolean)
     .join("\n");

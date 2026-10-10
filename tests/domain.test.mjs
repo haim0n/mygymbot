@@ -321,6 +321,51 @@ test("Exercise picker: finds yours first, then common names, then the library; r
   assert.equal(session.exercises[2].id, deadlift.id);
 });
 
+test("Set feel: too easy or too hard moves the next sets at that weight; it is saved, and too hard holds Autopilot", () => {
+  let session = { ...app.startSession(), exercises: [app.sessionExercise("Bench Press", [{ weight: 80, reps: 8 }, { weight: 80, reps: 8 }, { weight: 80, reps: 8 }, { weight: 60, reps: 12 }]), app.sessionExercise("Push Up", [{ weight: 0, reps: 10 }, { weight: 0, reps: 10 }])] };
+  const [bench, pushUp] = session.exercises;
+  const sets = (s, i) => s.exercises[i].sets.map((x) => [x.weight, x.reps, x.feel]);
+  session = app.toggleSet(session, bench.id, bench.sets[0].id);
+  assert.deepEqual(app.nextSet(session, bench.id).set.id, bench.sets[1].id);
+
+  const easy = app.rateSet(session, bench.id, bench.sets[0].id, "easy", "kg");
+  assert.deepEqual(sets(easy, 0), [[80, 8, "easy"], [82.5, 8, undefined], [82.5, 8, undefined], [60, 12, undefined]]); // the drop set stays
+  assert.deepEqual(sets(app.rateSet(session, bench.id, bench.sets[0].id, "hard", "kg"), 0).slice(0, 2), [[80, 8, "hard"], [77.5, 8, undefined]]);
+  assert.deepEqual(sets(app.rateSet(session, bench.id, bench.sets[0].id, "right", "kg"), 0).slice(0, 2), [[80, 8, "right"], [80, 8, undefined]]);
+  assert.deepEqual(sets(app.rateSet(session, pushUp.id, pushUp.sets[0].id, "easy", "kg"), 1), [[0, 10, "easy"], [0, 12, undefined]]); // reps without weight
+  assert.equal(app.feelResult(easy.exercises[0], easy.exercises[0].sets[0], "kg"), "Too easy: the next sets go up.");
+  const lastOf80 = app.rateSet(app.toggleSet(app.toggleSet(session, bench.id, bench.sets[1].id), bench.id, bench.sets[2].id), bench.id, bench.sets[2].id, "easy", "kg");
+  assert.equal(app.feelResult(lastOf80.exercises[0], lastOf80.exercises[0].sets[2], "kg"), "Too easy: noted."); // only the drop set is left, and it stays
+  const offGrid = { ...session, exercises: [{ ...bench, sets: bench.sets.map((x) => ({ ...x, weight: 81 })) }] };
+  assert.equal(app.rateSet(offGrid, bench.id, bench.sets[0].id, "hard", "kg").exercises[0].sets[1].weight, 80); // onto a weight that exists
+
+  const next = (name, weight, reps = 5) => app.describeNextSet({ exercise: { name }, set: { weight, reps } }, "kg");
+  assert.equal(next("Bench Press", 82.5), "82.5 kg × 5. Per side: 25, 5, 1.25");
+  assert.equal(next("Back Squat", 20), "20 kg × 5. Empty bar");
+  assert.equal(next("Leg Press (Machine)", 120), "120 kg × 5"); // a sled, no bar
+  assert.equal(next("Bench Press (Dumbbell)", 30), "30 kg × 5");
+  assert.equal(next("Push Up", 0, 12), "12 reps");
+
+  let done = app.completeExercise(easy, bench.id);
+  assert.equal(app.nextSet(done, bench.id).exercise.id, pushUp.id); // then the next exercise
+  done = app.completeExercise(done, pushUp.id);
+  assert.equal(app.nextSet(done, bench.id), null);
+  const saved = app.sessionToWorkout(done);
+  assert.deepEqual(saved.exercises[0].sets[0], { weight: 80, reps: 8, feel: "easy" });
+  assert.equal(app.workoutToSession(saved).exercises[0].sets[0].feel, "easy"); // kept when a saved workout is fixed
+  assert.equal(app.repeatLastWorkout([{ ...saved, date: daysAgo(1) }], []).exercises[0].sets[0].feel, undefined); // a new workout starts unrated
+  assert.equal(
+    app.finishedWorkoutRequest(saved, 48, [{ tone: "celebrate", text: "New best on Bench Press." }], "kg"),
+    "FINISHED WORKOUT (48 min):\n- Bench Press: 80×8, 82.5×8, 82.5×8, 60×12 (felt too easy)\n- Push Up: 2×10 @ BW\nHIGHLIGHTS:\n- New best on Bench Press."
+  );
+
+  const benchWith = (feel) => [workout("1", daysAgo(3), [ex("Bench Press", [[80, 8], [80, 8], [80, 8]])].map((e) => ({ ...e, sets: e.sets.map((x, i) => (i === 2 && feel ? { ...x, feel } : x)) })))];
+  const planWith = (feel) => planFor(app.buildAutopilotPlans(benchWith(feel), settingsWith({ "Bench Press": [5, 8] })), "Bench Press");
+  assert.deepEqual(planWith("hard"), { status: "hold", sets: 3, reps: 8, weight: 80 });
+  assert.equal(planWith("easy").status, "increase");
+  assert.equal(planWith(null).status, "increase");
+});
+
 test("Onboarding: a new athlete is interviewed until a plan is saved or a workout logged, and the profile tag is checked", () => {
   const a = { name: "A", exercises: ["Goblet Squat"] };
   assert.equal(app.isNewAthlete(settingsWith(), []), true);
