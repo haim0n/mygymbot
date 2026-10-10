@@ -281,6 +281,46 @@ test("Workout plans: done in turn, started at Autopilot's targets, edited by nam
   assert.ok(app.buildCoachContext(settingsWith(), [], [], {}, null).includes("WORKOUT PLANS (done in turn):\nnone saved"));
 });
 
+test("Exercise picker: finds yours first, then common names, then the library; replacing keeps the place and the done sets", () => {
+  const yours = ["Bench Press (Dumbbell)", "Zercher Squat"];
+  const found = (query, options) => app.searchExercises(query, yours, options);
+  assert.deepEqual(found("").slice(0, 3), ["Bench Press (Dumbbell)", "Zercher Squat", "Bench Press"]); // the library waits for a search
+  assert.ok(!found("").includes("Yoke Walk"));
+  assert.deepEqual(found("bench").slice(0, 3), ["Bench Press (Dumbbell)", "Bench Press", "Incline Bench Press"]);
+  assert.ok(found("pull up").includes("Pull Up") && found("pullup").includes("Pull Up"));
+  assert.ok(found("yoke").includes("Yoke Walk"));
+  assert.ok(found("chin").includes("Chin-Up") && !found("chin").some((name) => /machine/i.test(name))); // words start, not letters anywhere
+  assert.ok(found("lat pull").includes("Lat Pulldown"));
+  const lats = found("", { muscle: "lats" });
+  assert.ok(lats.indexOf("Pull Up") < lats.indexOf("Barbell Row")); // works the lats first, ahead of rows
+  assert.equal(found("zercher").filter((name) => name.toLowerCase() === "zercher squat").length, 1); // yours and the common name are one
+  assert.deepEqual(found("xyzzy"), []);
+  assert.ok(found("", { muscle: "chest" }).every((name) => app.musclesFor(name, {}).primary.includes("chest")));
+  assert.equal(app.searchExercises("", ["Landmine Press"], { muscle: "chest", learnedMuscles: { "Landmine Press": { primary: ["chest"], secondary: [] } } })[0], "Landmine Press");
+  assert.equal(found("", { muscle: "chest" })[0], "Bench Press (Dumbbell)");
+  assert.equal(found("").length, app.EXERCISE_SEARCH_LIMIT);
+
+  const plans = app.buildAutopilotPlans([userWorkout(daysAgo(3))], settingsWith());
+  let session = app.routineSession({ name: "A", exercises: ["Zercher Squat", "Deadlift"] }, plans);
+  const [squat, deadlift] = session.exercises;
+  const sets = (s) => s.exercises.map((e) => [e.name, e.sets.map((x) => [x.weight, x.reps, x.done])]);
+  assert.deepEqual(sets(app.replaceExercise(session, squat.id, "Goblet Squat", plans)), [
+    ["Goblet Squat", [["", 8, false], ["", 8, false], ["", 8, false]]],
+    ["Deadlift", [["", 8, false], ["", 8, false], ["", 8, false]]],
+  ]);
+  assert.deepEqual(sets(app.replaceExercise(session, squat.id, "Bench Press (Dumbbell)", plans))[0], ["Bench Press (Dumbbell)", [[44, 10, false], [44, 10, false]]]); // its Autopilot target
+
+  session = app.toggleSet(session, squat.id, squat.sets[0].id);
+  session = app.editSet(session, squat.id, squat.sets[0].id, "weight", "60");
+  session = app.replaceExercise(session, squat.id, "Leg Press", plans);
+  assert.deepEqual(sets(session), [
+    ["Zercher Squat", [["60", 8, true]]], // done before the machine was taken: still logged
+    ["Leg Press", [["", 8, false], ["", 8, false]]],
+    ["Deadlift", [["", 8, false], ["", 8, false], ["", 8, false]]],
+  ]);
+  assert.equal(session.exercises[2].id, deadlift.id);
+});
+
 test("Onboarding: a new athlete is interviewed until a plan is saved or a workout logged, and the profile tag is checked", () => {
   const a = { name: "A", exercises: ["Goblet Squat"] };
   assert.equal(app.isNewAthlete(settingsWith(), []), true);

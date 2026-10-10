@@ -51,6 +51,7 @@ export const BIG_LIFT_EXTRA_REST = 60; // seconds, for squats, deadlifts and hip
 export const MAX_DAYS_BEFORE_EASING_BACK = 21;
 export const PLAN_LOOKBACK_DAYS = 56; // only plan lifts trained in the last 8 weeks
 export const NEW_EXERCISE_TARGET = { sets: 3, reps: 8 }; // a workout plan's exercise without an Autopilot target starts here; you fill in the weight
+export const EXERCISE_SEARCH_LIMIT = 50; // rows the exercise picker shows; typing or a muscle finds the rest
 
 // Import: header names used by Strong, Hevy and similar apps (matched case-insensitively).
 export const COLUMN_ALIASES = {

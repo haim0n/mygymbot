@@ -1,20 +1,20 @@
 import { useState, useEffect } from "react";
-import { Trash2, Plus, Sparkles, Loader2, X, Check, Timer, PlayCircle, ChevronUp, ChevronDown, ArrowUpDown } from "lucide-react";
+import { Trash2, Plus, Sparkles, Loader2, X, Check, Timer, PlayCircle, ChevronUp, ChevronDown, ArrowUpDown, ArrowLeftRight } from "lucide-react";
 import { PLAN_STATUS, REP_RANGES } from "../config.js";
 import { LOG_PARSER_PROMPT } from "../prompts.js";
 import { askAIForJson } from "../ai.js";
 import { formatClock, formatDate, formatShortDate, formatVolume, today } from "../dates.js";
-import { describeSets, lastGymWorkout, normalizeName, sanitizeExercises, sortNewestFirst, workoutVolume, guideFor } from "../training.js";
-import { formatRange, repeatSet } from "../autopilot.js";
+import { describeSets, lastGymWorkout, sanitizeExercises, sortNewestFirst, workoutVolume, guideFor } from "../training.js";
+import { formatRange } from "../autopilot.js";
 import { sessionHighlights } from "../motivation.js";
 import { describeMuscles, musclesFor } from "../muscles.js";
-import { addExercises, addSet, completeExercise, currentExerciseId, editSet, moveExercise, nextRoutine, planExercise, planSession, removeExercise, removeSet, repeatLastWorkout, routineSession, sessionExercise, sessionSetCounts, sessionToWorkout, startSession, toggleSet, workoutToSession } from "../workout.js";
+import { addExercises, addSet, completeExercise, currentExerciseId, editSet, moveExercise, newExerciseSets, nextRoutine, planExercise, planSession, removeExercise, removeSet, repeatLastWorkout, replaceExercise, routineSession, sessionExercise, sessionSetCounts, sessionToWorkout, startSession, targetExercise, toggleSet, workoutToSession } from "../workout.js";
 import { pendingCheckIn } from "../schedule.js";
 import { activityEntry, activityLabel, paceText, sanitizeActivities } from "../activities.js";
 import { DeleteButton, ErrorText, Field, Panel, PrimaryButton, SectionTitle, ViewTitle, inputClass, useArmed } from "./primitives.jsx";
 import { SessionHighlights } from "./motivation.jsx";
 import { VideoGuides } from "./videos.jsx";
-import { ExerciseThumb } from "./exercises.jsx";
+import { ExercisePicker, ExerciseThumb } from "./exercises.jsx";
 import { CheckInCard, CoachReply } from "./check-in.jsx";
 import { ActivityIcon, ActivityPanel } from "./activities.jsx";
 import { ImportPanel } from "./import-history.jsx";
@@ -157,7 +157,7 @@ export function SetRow({ set, number, unit, onEdit, children }) {
 }
 
 // An exercise in a workout. `live`: check sets off as you train. `edit`: fix a saved workout.
-export function ExerciseCard({ exercise, unit, mode, isCurrent = false, update, onSetDone }) {
+export function ExerciseCard({ exercise, unit, mode, isCurrent = false, update, onSetDone, onReplace }) {
   const [showVideo, setShowVideo] = useState(false);
   const guide = guideFor(exercise.name);
   const id = exercise.id;
@@ -184,6 +184,11 @@ export function ExerciseCard({ exercise, unit, mode, isCurrent = false, update, 
           {guide && (
             <IconButton label={`${showVideo ? "Hide" : "Show"} technique video for ${exercise.name}`} onClick={() => setShowVideo((open) => !open)}>
               <PlayCircle className="w-5 h-5" />
+            </IconButton>
+          )}
+          {live && !allDone && (
+            <IconButton label={`Replace ${exercise.name}`} onClick={() => onReplace(exercise)}>
+              <ArrowLeftRight className="w-5 h-5" />
             </IconButton>
           )}
           <IconButton label={`Remove ${exercise.name}`} onClick={() => update((s) => removeExercise(s, id))}>
@@ -233,7 +238,7 @@ export function ExerciseCard({ exercise, unit, mode, isCurrent = false, update, 
   );
 }
 
-export function ExerciseList({ session, setSession, unit, mode, onSetDone }) {
+export function ExerciseList({ session, setSession, unit, mode, onSetDone, onReplace }) {
   const [reordering, setReordering] = useState(false);
   const currentId = mode === "live" ? currentExerciseId(session) : null;
   if (reordering) return <ReorderList session={session} setSession={setSession} onDone={() => setReordering(false)} />;
@@ -259,6 +264,7 @@ export function ExerciseList({ session, setSession, unit, mode, onSetDone }) {
             isCurrent={exercise.id === currentId}
             update={setSession}
             onSetDone={onSetDone}
+            onReplace={onReplace}
           />
         ))}
       </ol>
@@ -307,7 +313,7 @@ export function SaveRoutineForm({ session, setSession, onSave }) {
   );
 }
 
-export function WorkoutPanel({ session, setSession, unit, onFinish, onStartRest, onSaveRoutine }) {
+export function WorkoutPanel({ session, setSession, unit, onFinish, onStartRest, onSaveRoutine, onFindExercise }) {
   const [discardArmed, armDiscard] = useArmed();
   const now = useNow(30_000);
   const { done, total } = sessionSetCounts(session);
@@ -326,8 +332,12 @@ export function WorkoutPanel({ session, setSession, unit, onFinish, onStartRest,
           {minutes} min, {done} of {total} sets
         </span>
       </div>
-      {session.exercises.length === 0 && <p className="-mt-1 text-sm text-zinc-500">Add exercises from Up next or the form below.</p>}
-      <ExerciseList session={session} setSession={setSession} unit={unit} mode="live" onSetDone={onSetDone} />
+      {session.exercises.length === 0 && <p className="-mt-1 text-sm text-zinc-500">Add exercises here or from Up next below.</p>}
+      <ExerciseList session={session} setSession={setSession} unit={unit} mode="live" onSetDone={onSetDone} onReplace={onFindExercise} />
+      <button onClick={() => onFindExercise(null)} className="flex w-full items-center justify-center gap-2 rounded-lg border border-blue-700 py-2.5 font-semibold text-blue-700">
+        <Plus className="w-5 h-5" />
+        Add exercise
+      </button>
       {session.exercises.length > 0 && <SaveRoutineForm session={session} setSession={setSession} onSave={onSaveRoutine} />}
       <SessionDetails session={session} setSession={setSession} />
       <PrimaryButton onClick={onFinish} disabled={done === 0}>
@@ -362,9 +372,9 @@ export function WorkoutEditor({ workout, unit, onSave, onCancel }) {
   );
 }
 
-export function LogView({ workouts, setWorkouts, session, setSession, settings, plans, learnedMuscles, coachContext, onRangeChange, onStartRest, onSaveRoutine, onDeleteRoutine, showImport, setShowImport, unit }) {
+export function LogView({ workouts, setWorkouts, session, setSession, settings, plans, yourExercises, learnedMuscles, coachContext, onRangeChange, onStartRest, onSaveRoutine, onDeleteRoutine, showImport, setShowImport, unit }) {
   const [description, setDescription] = useState("");
-  const [manual, setManual] = useState({ name: "", sets: "3", reps: "8", weight: "" });
+  const [picker, setPicker] = useState(null); // null while closed, else { replacing: the exercise to swap, or null to add one }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [highlights, setHighlights] = useState(null);
@@ -405,22 +415,16 @@ export function LogView({ workouts, setWorkouts, session, setSession, settings, 
     }
   }
 
-  function addManual() {
-    const name = normalizeName(manual.name);
-    const sets = Number(manual.sets);
-    const reps = Number(manual.reps);
-    const weight = Number(manual.weight) || 0;
-    if (!name || sets < 1 || reps < 1) return;
-    addToSession(sessionExercise(name, repeatSet(sets, { reps, weight })));
-    setManual((m) => ({ ...m, name: "", weight: "" }));
+  function pickExercise(name) {
+    if (picker.replacing) setSession((s) => replaceExercise(s, picker.replacing.id, name, plans));
+    else addToSession(targetExercise(name, plans, newExerciseSets()));
+    setPicker(null);
   }
 
   function finishWorkout() {
     saveEntry(sessionToWorkout(session));
     setSession(null);
   }
-
-  const updateManual = (field) => (e) => setManual((m) => ({ ...m, [field]: e.target.value }));
 
   return (
     <div className="space-y-4">
@@ -441,7 +445,7 @@ export function LogView({ workouts, setWorkouts, session, setSession, settings, 
       {showImport && <ImportPanel workouts={workouts} setWorkouts={setWorkouts} unit={unit} />}
 
       {session ? (
-        <WorkoutPanel session={session} setSession={setSession} unit={unit} onFinish={finishWorkout} onStartRest={onStartRest} onSaveRoutine={onSaveRoutine} />
+        <WorkoutPanel session={session} setSession={setSession} unit={unit} onFinish={finishWorkout} onStartRest={onStartRest} onSaveRoutine={onSaveRoutine} onFindExercise={(replacing) => setPicker({ replacing })} />
       ) : (
         <StartWorkoutPanel
           routines={routines}
@@ -470,54 +474,28 @@ export function LogView({ workouts, setWorkouts, session, setSession, settings, 
         onStartRest={onStartRest}
       />
 
-      <Panel className="space-y-4">
-        <SectionTitle>Add exercises</SectionTitle>
-        <div className="space-y-2">
-          <Field label="Describe what you did">
-            <textarea
-              rows={3}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Squat 3x5 at 100, bench 80 for 8, 8, 7, then a 5 km run in 28 min"
-              className={inputClass}
-            />
-          </Field>
-          <button
-            onClick={addFromDescription}
-            disabled={busy || !description.trim()}
-            className="w-full flex items-center justify-center gap-2 rounded-lg border border-blue-700 text-blue-700 font-semibold py-2.5 disabled:opacity-40"
-          >
-            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-            Add from description
-          </button>
-          <ErrorText message={error} />
-        </div>
-
-        <div className="space-y-2 pt-2 border-t border-zinc-200">
-          <Field label="Or add one exercise">
-            <input list="exercise-names" value={manual.name} onChange={updateManual("name")} placeholder="Exercise" className={inputClass} />
-          </Field>
-          <div className="grid grid-cols-4 gap-2 items-end">
-            <Field label="Sets">
-              <input type="number" inputMode="numeric" min="1" value={manual.sets} onChange={updateManual("sets")} className={inputClass} />
-            </Field>
-            <Field label="Reps">
-              <input type="number" inputMode="numeric" min="1" value={manual.reps} onChange={updateManual("reps")} className={inputClass} />
-            </Field>
-            <Field label={unit}>
-              <input type="number" inputMode="decimal" min="0" value={manual.weight} onChange={updateManual("weight")} placeholder="BW" className={inputClass} />
-            </Field>
-            <button
-              onClick={addManual}
-              disabled={!manual.name.trim()}
-              aria-label="Add exercise"
-              className="h-11 rounded-lg bg-zinc-900 text-white flex items-center justify-center disabled:opacity-40"
-            >
-              <Plus className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
+      <Panel className="space-y-2">
+        <SectionTitle>Describe what you did</SectionTitle>
+        <textarea
+          rows={3}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Squat 3x5 at 100, bench 80 for 8, 8, 7, then a 5 km run in 28 min"
+          aria-label="Describe what you did"
+          className={inputClass}
+        />
+        <button
+          onClick={addFromDescription}
+          disabled={busy || !description.trim()}
+          className="w-full flex items-center justify-center gap-2 rounded-lg border border-blue-700 text-blue-700 font-semibold py-2.5 disabled:opacity-40"
+        >
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+          Add from description
+        </button>
+        <ErrorText message={error} />
       </Panel>
+
+      {picker && <ExercisePicker yourNames={yourExercises} replacing={picker.replacing?.name} onPick={pickExercise} onClose={() => setPicker(null)} />}
 
       <WorkoutHistory
         workouts={workouts}

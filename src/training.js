@@ -1,7 +1,8 @@
-import { PLATES, VIDEO_LIBRARY } from "./config.js";
+import { EXERCISE_SEARCH_LIMIT, PLATES, VIDEO_LIBRARY } from "./config.js";
 import { formatShortDate, parseDate, toDateKey, today, weekStart } from "./dates.js";
 import { EXERCISE_PHOTOS } from "./exercise-photos.js";
 import { PHOTO_MATCHES } from "./photo-matches.js";
+import { musclesFor } from "./muscles.js";
 
 export const normalizeName = (name) => name.trim().toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 // "Bench Press (Barbell)" from other apps becomes "Bench Press"; other equipment stays in the name.
@@ -24,6 +25,29 @@ export function photoFor(name, learnedPhotos = {}) {
   const known = knownPhoto(name);
   if (known !== undefined) return known;
   return EXERCISE_PHOTOS.includes(learnedPhotos[name]) ? learnedPhotos[name] : null;
+}
+
+// The exercises the picker offers besides yours: common names first, then the photo library's own names.
+const COMMON_NAMES = Object.keys(PHOTO_MATCHES);
+const LIBRARY_NAMES = EXERCISE_PHOTOS.map((id) => id.replace(/^3_4_/, "3/4 ").replace(/_/g, " "));
+
+// Exercises for the picker, yours first (most done first), then common names, then the library. Each typed word must start a
+// word of the name ("chin" finds Chin Up, not Machine; "pullup" finds Pull Up). A muscle keeps the exercises that work it
+// most, those that work it first ahead. The library comes in only when you search, as it is long.
+export function searchExercises(query, yourNames, { muscle = null, learnedMuscles = {} } = {}) {
+  const words = query.split(/\s+/).map(photoKey).filter(Boolean);
+  const candidates = [...yourNames, ...COMMON_NAMES, ...(words.length || muscle ? LIBRARY_NAMES : [])];
+  const seen = new Set();
+  const found = candidates.filter((name) => {
+    const key = photoKey(name);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    const nameWords = name.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+    const startsAWord = (word) => nameWords.some((_, i) => nameWords.slice(i).join("").startsWith(word));
+    return words.every(startsAWord) && (!muscle || Boolean(musclesFor(name, learnedMuscles)?.primary.includes(muscle)));
+  });
+  const worksFirst = (name) => !muscle || musclesFor(name, learnedMuscles).primary[0] === muscle;
+  return [...found.filter(worksFirst), ...found.filter((name) => !worksFirst(name))].slice(0, EXERCISE_SEARCH_LIMIT);
 }
 
 export function guideFor(exercise) {

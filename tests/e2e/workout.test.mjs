@@ -37,6 +37,41 @@ test("live workout: start with Up next, reorder, check off, survive a reload, fi
   assert.deepEqual(errors, []);
 });
 
+test("exercise picker: find an exercise by name, add it, then replace it with one for the same muscle", async (t) => {
+  const { page, errors } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
+  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: "Start an empty workout" }).tap();
+  const workout = section(page, "Workout");
+
+  await workout.getByRole("button", { name: "Add exercise" }).tap();
+  const picker = page.getByRole("dialog", { name: "Add an exercise" });
+  await picker.getByLabel("Search exercises").fill("bench");
+  await picker.getByText("Bench Press", { exact: true }).tap();
+  await workout.getByRole("button", { name: "Show details for Bench Press" }).waitFor();
+  assert.equal(await picker.count(), 0);
+  assert.deepEqual(await exerciseNames(workout), ["Bench Press"]);
+
+  const card = workout.locator("ol > li").first();
+  await card.getByLabel("Set 1 weight").fill("80");
+  await card.getByRole("button", { name: "Set 1 done" }).tap();
+  await page.getByRole("button", { name: "Skip" }).tap();
+  await card.getByRole("button", { name: "Replace Bench Press" }).tap(); // the bench is taken
+  const replacing = page.getByRole("dialog", { name: "Replace" });
+  assert.equal(await replacing.getByRole("button", { name: "Chest", exact: true }).getAttribute("aria-pressed"), "true"); // alternatives without typing
+  await replacing.getByLabel("Search exercises").fill("fly");
+  assert.equal(await replacing.getByRole("button", { name: "Chest", exact: true }).getAttribute("aria-pressed"), "false"); // typing searches every muscle
+  await replacing.getByText("Chest Fly (Dumbbell)", { exact: true }).tap();
+  assert.deepEqual(await exerciseNames(workout), ["Bench Press", "Chest Fly (Dumbbell)"]); // the done set stays logged
+
+  await workout.getByRole("button", { name: "Add exercise" }).tap();
+  await picker.getByLabel("Search exercises").fill("pullup");
+  assert.equal(await picker.getByRole("button", { name: /^Add “/ }).count(), 0); // Pull Up is listed, so no second spelling
+  await picker.getByLabel("Search exercises").fill("landmine twist");
+  await picker.getByLabel("Search exercises").press("Enter"); // nothing listed: adds the name as typed
+  assert.deepEqual((await exerciseNames(workout)).at(-1), "Landmine Twist");
+  assert.deepEqual(errors, []);
+});
+
 test("rest notes: the coach writes once per exercise while resting; Reply continues in the chat, Quiet stops it", async (t) => {
   let notes = 0;
   const { page, errors, aiRequests } = await openApp(t, {

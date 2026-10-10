@@ -35,9 +35,11 @@ export function repeatLastWorkout(workouts, plans) {
 // Saved workout plans are "routines" in code, since Autopilot's per-exercise targets are already "plans".
 // A routine's exercises in its order, at Autopilot's targets. The workout keeps the routine's name, which decides the next one.
 export function routineSession(routine, plans) {
-  const newExerciseSets = repeatSet(NEW_EXERCISE_TARGET.sets, { reps: NEW_EXERCISE_TARGET.reps, weight: "" });
-  return { ...startSession(), routine: routine.name, exercises: routine.exercises.map((name) => targetExercise(name, plans, newExerciseSets)) };
+  return { ...startSession(), routine: routine.name, exercises: routine.exercises.map((name) => targetExercise(name, plans, newExerciseSets())) };
 }
+
+// The sets of an exercise you haven't done before; you fill in the weight.
+export const newExerciseSets = () => repeatSet(NEW_EXERCISE_TARGET.sets, { reps: NEW_EXERCISE_TARGET.reps, weight: "" });
 
 // Routines are done in turn: the one after the latest workout's routine, else the first.
 export function nextRoutine(routines, workouts) {
@@ -74,6 +76,19 @@ export function moveItem(list, index, offset) {
 }
 
 export const addExercises = (session, exercises) => withExercises(session, (list) => [...list, ...exercises]);
+// Another exercise in the same place (the machine is taken), at its Autopilot target, else with the sets still to do and the
+// weight left to fill in. Sets already done stay logged under the old exercise, just before the new one.
+export function replaceExercise(session, exerciseId, name, plans) {
+  return withExercises(session, (list) =>
+    list.flatMap((old) => {
+      if (old.id !== exerciseId) return [old];
+      const done = old.sets.filter((set) => set.done);
+      const toDo = old.sets.filter((set) => !set.done).map((set) => ({ reps: set.reps, weight: "" }));
+      const replacement = targetExercise(name, plans, toDo.length ? toDo : newExerciseSets());
+      return done.length ? [{ ...old, sets: done }, replacement] : [replacement];
+    })
+  );
+}
 export const removeExercise = (session, exerciseId) => withExercises(session, (list) => list.filter((e) => e.id !== exerciseId));
 export const moveExercise = (session, exerciseId, offset) =>
   withExercises(session, (list) => moveItem(list, list.findIndex((e) => e.id === exerciseId), offset));
