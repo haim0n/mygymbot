@@ -74,7 +74,7 @@ def create_app(stores: Stores, iap_audience: str | None, commit: str | None = No
             request.state.user = await asyncio.to_thread(iap.user_email, token, iap_audience)
         except iap.NotSignedIn as error:
             logger.warning("Refused a request without IAP identity: %s", error)
-            return PlainTextResponse("Sign in through GymBot's address.", status_code=401)
+            return PlainTextResponse("Sign in through MyGymBot's address.", status_code=401)
         return await call_next(request)
 
     @app.middleware("http")

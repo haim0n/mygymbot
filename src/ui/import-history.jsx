@@ -72,7 +72,7 @@ export function ImportPanel({ workouts, setWorkouts, unit }) {
         <p className="text-sm font-semibold text-green-700">Imported {importedCount} workouts. Your charts and targets now include them.</p>
       )}
       <p className="text-xs text-zinc-500">
-        CSV files are read on your phone. Screenshots, and the first 5 rows of a CSV layout GymBot doesn't recognise, are sent to the coach to read.
+        CSV files are read on your phone. Screenshots, and the first 5 rows of a CSV layout MyGymBot doesn't recognise, are sent to the coach to read.
       </p>
     </Panel>
   );

@@ -75,6 +75,6 @@ export const section = (page, heading) =>
   page.locator("section", { has: page.getByRole("heading", typeof heading === "string" ? { name: heading, exact: true } : { name: heading }) });
 export const stored = (page, key) => page.evaluate(async (k) => (await fetch(`/api/storage/${encodeURIComponent(k)}`)).json(), key);
 export const settle = (page) => page.waitForTimeout(400); // storage writes are debounced by 300 ms
-export const isCoachChat = (body) => body.system.startsWith("You are GymBot, a direct");
+export const isCoachChat = (body) => body.system.startsWith("You are MyGymBot, a direct");
 export const exerciseNames = (list) =>
   list.getByRole("button", { name: /^Show details for / }).evaluateAll((els) => els.map((e) => e.getAttribute("aria-label").replace("Show details for ", "")));

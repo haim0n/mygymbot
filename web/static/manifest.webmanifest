@@ -1,6 +1,6 @@
 {
-  "name": "GymBot",
-  "short_name": "GymBot",
+  "name": "MyGymBot",
+  "short_name": "MyGymBot",
   "description": "AI workout coach",
   "start_url": "/",
   "scope": "/",

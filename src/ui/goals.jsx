@@ -204,7 +204,7 @@ export function GoalsView({ settings, setSettings, records, workouts }) {
       <ExportPanel />
       <FeedbackPanel />
       <p className="text-center text-xs text-zinc-400">{MEDICAL_NOTICE}</p>
-      <p className="text-center text-xs text-zinc-400">GymBot {[APP_VERSION, deployedCommit()].filter(Boolean).join(" ")}</p>
+      <p className="text-center text-xs text-zinc-400">MyGymBot {[APP_VERSION, deployedCommit()].filter(Boolean).join(" ")}</p>
     </div>
   );
 }
@@ -255,7 +255,7 @@ function FeedbackPanel() {
     <Panel className="space-y-3">
       <div>
         <SectionTitle>Feedback</SectionTitle>
-        <p className="-mt-1 text-sm text-zinc-500">What works, what doesn't, what you miss. It goes straight to the people who build GymBot.</p>
+        <p className="-mt-1 text-sm text-zinc-500">What works, what doesn't, what you miss. It goes straight to the people who build MyGymBot.</p>
       </div>
       <textarea
         rows={3}
@@ -306,7 +306,7 @@ export function ExportPanel() {
     <Panel className="space-y-3">
       <div>
         <SectionTitle>Your data</SectionTitle>
-        <p className="-mt-1 text-sm text-zinc-500">Everything you've logged, as text you can keep or move to another copy of GymBot.</p>
+        <p className="-mt-1 text-sm text-zinc-500">Everything you've logged, as text you can keep or move to another copy of MyGymBot.</p>
       </div>
       {text && <textarea readOnly rows={6} value={text} onFocus={(e) => e.target.select()} aria-label="Exported data" className={inputClass} />}
       {text ? <PrimaryButton onClick={copy}>{copied ? "Copied" : "Copy"}</PrimaryButton> : <PrimaryButton onClick={exportData} busy={busy}>Export data</PrimaryButton>}

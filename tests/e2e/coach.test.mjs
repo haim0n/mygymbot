@@ -30,7 +30,7 @@ test("check-in: asks about the latest workout, sends, saves, then goes away", as
 test("coach: video tags become library links; anything else is dropped", async (t) => {
   const { page, errors } = await openApp(t, {
     seed: { "gymbot:workouts": [userWorkout] },
-    ai: (body) => (body.system.startsWith("You are GymBot, a direct") ? "Neutral grip.\n[video: Hammer Curl]\n[video: Zercher Squat]\nhttps://example.com/fake" : "OK"),
+    ai: (body) => (body.system.startsWith("You are MyGymBot, a direct") ? "Neutral grip.\n[video: Hammer Curl]\n[video: Zercher Squat]\nhttps://example.com/fake" : "OK"),
   });
   await page.getByPlaceholder("Message your coach").fill("how do I do hammer curls?");
   await page.getByRole("button", { name: "Send" }).tap();
