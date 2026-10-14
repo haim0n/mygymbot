@@ -13,13 +13,13 @@ test("activities: log a run and yoga; Progress and the coach see them", async (t
   await panel.getByLabel("Minutes").fill("28");
   await panel.getByLabel("Distance (km)").fill("5");
   await panel.getByRole("radio", { name: "Moderate" }).tap();
-  await panel.getByRole("button", { name: "Save running" }).tap();
+  await panel.getByRole("button", { name: "Save", exact: true }).tap();
   assert.ok((await section(page, "Session saved").innerText()).includes("Running 28 min, 5 km (5:36 /km) logged."));
 
   await panel.getByRole("button", { name: "Yoga", exact: true }).tap();
   assert.equal(await panel.getByLabel(/^Distance/).count(), 0); // no distance for yoga
   await panel.getByLabel("Minutes").fill("45");
-  await panel.getByRole("button", { name: "Save yoga" }).tap();
+  await panel.getByRole("button", { name: "Save", exact: true }).tap();
 
   await page.getByRole("button", { name: "Progress", exact: true }).tap();
   const week = await section(page, "Activities, last 7 days")

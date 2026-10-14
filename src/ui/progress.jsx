@@ -120,14 +120,12 @@ export function ProgressView({ workouts, records, exerciseNames, learnedMuscles,
 
       {exerciseNames.length > 0 && (
       <Panel>
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <h2 className="gb-display text-2xl font-bold text-zinc-900">Estimated 1RM</h2>
-          <select value={selected} onChange={(e) => setSelected(e.target.value)} className="w-40 rounded-lg border border-zinc-300 bg-white px-2 py-1.5 text-sm">
-            {exerciseNames.map((name) => (
-              <option key={name}>{name}</option>
-            ))}
-          </select>
-        </div>
+        <h2 className="gb-display text-2xl font-bold text-zinc-900">Estimated 1RM</h2>
+        <select value={selected} onChange={(e) => setSelected(e.target.value)} aria-label="Exercise" className={`${inputClass} mb-3 mt-2`}>
+          {exerciseNames.map((name) => (
+            <option key={name}>{name}</option>
+          ))}
+        </select>
         <ResponsiveContainer width="100%" height={180}>
           <LineChart data={trend} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
             <CartesianGrid stroke={CHART.grid} vertical={false} />
@@ -147,7 +145,7 @@ export function ProgressView({ workouts, records, exerciseNames, learnedMuscles,
           <BarChart data={volume} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
             <CartesianGrid stroke={CHART.grid} vertical={false} />
             <XAxis dataKey="week" tick={CHART.tick} tickLine={false} axisLine={false} interval={1} />
-            <YAxis tick={CHART.tick} tickLine={false} axisLine={false} tickFormatter={formatVolume} />
+            <YAxis tick={CHART.tick} tickLine={false} axisLine={false} tickFormatter={formatVolume} interval={0} />
             <Tooltip contentStyle={CHART.tooltip} formatter={(v) => [`${v} ${unit}`, "Volume"]} />
             <Bar dataKey="volume" fill={CHART.accent} radius={[4, 4, 0, 0]} />
           </BarChart>

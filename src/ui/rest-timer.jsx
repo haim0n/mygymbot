@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { formatClock } from "../dates.js";
 import { REST_NOTE_PROMPT } from "../prompts.js";
 import { askAI } from "../ai.js";
-import { SET_FEELS, STORAGE_KEYS } from "../config.js";
+import { SET_FEEL_SCROLL_DELAY_MS, SET_FEELS, STORAGE_KEYS } from "../config.js";
 import { usePersistentState } from "../storage.js";
-import { describeNextSet, feelResult, restNoteRequest, wantsRestNote } from "../workout.js";
+import { describeNextSet, restNoteRequest, wantsRestNote } from "../workout.js";
+import { usePresence } from "./primitives.jsx";
 
 export const REST_FINISHED_DISPLAY_MS = 4000;
 
@@ -42,6 +43,7 @@ export function useRestTimer() {
   }, [rest]);
 
   const remaining = rest ? Math.max(0, Math.ceil((rest.endsAt - now) / 1000)) : 0;
+  const progress = rest ? Math.min(1, Math.max(0, (rest.endsAt - now) / (rest.duration * 1000))) : 0; // exact, so the bar glides
   const finished = Boolean(rest) && remaining === 0;
 
   useEffect(() => {
@@ -52,24 +54,40 @@ export function useRestTimer() {
     return () => clearTimeout(hide);
   }, [finished]);
 
-  // `set` ({ exerciseId, setId }): the set just done, so the bar can ask how it felt.
-  function start(seconds, label, set = {}) {
-    // Audio must be unlocked during a tap, so the chime can play later.
+  // Audio must be unlocked during a tap, so the chime can play later.
+  function unlockAudio() {
     if (!audioRef.current) {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       audioRef.current = AudioContextClass ? new AudioContextClass() : null;
     }
     audioRef.current?.resume?.();
+  }
+
+  // A rest kept across a reload has no audio yet: the browser allows it only after a tap, so any tap counts.
+  useEffect(() => {
+    if (!rest || audioRef.current) return;
+    window.addEventListener("pointerdown", unlockAudio, { once: true });
+    return () => window.removeEventListener("pointerdown", unlockAudio);
+  }, [Boolean(rest)]);
+
+  // `set` ({ exerciseId, setId }): the set just done, so its card can ask how it felt.
+  function start(seconds, label, set = {}) {
+    unlockAudio();
     setNow(Date.now());
     setRest({ label, duration: seconds, startedAt: Date.now(), endsAt: Date.now() + seconds * 1000, ...set });
   }
 
+  // The bar shows the part of the rest still to go: less time shortens it, more time past the start fills it again.
   const adjust = (seconds) =>
-    setRest((r) => r && { ...r, duration: Math.max(1, r.duration + seconds), endsAt: Math.max(Date.now(), r.endsAt + seconds * 1000) });
+    setRest((r) => {
+      if (!r) return r;
+      const endsAt = Math.max(Date.now(), r.endsAt + seconds * 1000);
+      return { ...r, endsAt, duration: Math.max(r.duration, Math.ceil((endsAt - Date.now()) / 1000)) };
+    });
 
   const stop = () => setRest(null);
 
-  return { rest, remaining, finished, start, adjust, stop };
+  return { rest, remaining, progress, finished, start, adjust, stop };
 }
 
 // The coach keeps the athlete company between sets with one short line, the first time each exercise rests.
@@ -90,33 +108,35 @@ export function useRestNote({ rest, session, setSession, context, chat }) {
 
 export function TimerButton({ children, onClick, label }) {
   return (
-    <button onClick={onClick} aria-label={label} className="rounded-lg bg-zinc-700 px-3 py-2 text-sm font-semibold text-white">
+    <button onClick={onClick} aria-label={label} className="h-11 min-w-11 rounded-lg bg-zinc-700 px-3 text-sm font-semibold text-white">
       {children}
     </button>
   );
 }
 
-// The rest bar: the countdown, one tap on how the set felt (it moves the next sets), what comes next, and the coach's note.
-// `rated`: { exercise, set } just done, or null for a rest started by hand. Reports its height, since the page starts below it.
-export function RestTimerBar({ timer, rated, next, unit, onRate, note, onReply, onQuiet, onHeight }) {
-  const { rest, remaining, finished, adjust, stop } = timer;
+// The rest bar: the countdown, what comes next, and the coach's note. It drops in from the top and slides back up when the
+// rest ends. Reports its height, since the page starts below it.
+export function RestTimerBar({ timer, next, unit, note, onReply, onQuiet, onHeight }) {
+  const { rest, remaining, progress, finished, adjust, stop } = timer;
+  const { mounted, leaving, onAnimationEnd } = usePresence(Boolean(rest));
   const barRef = useRef(null);
+  const lastView = useRef(null);
   const [noteOpen, setNoteOpen] = useState(false);
   const onHeightRef = useRef(onHeight);
   onHeightRef.current = onHeight;
-  useEffect(() => {
+  // Measured before the first paint, so the page doesn't move twice; the observer follows a note that comes later.
+  useLayoutEffect(() => {
     if (!barRef.current) return;
-    const observer = new ResizeObserver(() => onHeightRef.current(barRef.current.offsetHeight));
+    onHeightRef.current(barRef.current.offsetHeight);
+    const observer = new ResizeObserver(() => barRef.current && onHeightRef.current(barRef.current.offsetHeight));
     observer.observe(barRef.current);
     return () => observer.disconnect();
-  }, [Boolean(rest)]);
-  if (!rest) return null;
-  const progress = Math.min(1, remaining / rest.duration);
-  const sameExercise = next?.exercise.id === rest.exerciseId;
-  const ratedText = rated && feelResult(rated.exercise, rated.set, unit);
+  }, [mounted]);
+  if (!mounted) return null;
 
-  return (
-    <div ref={barRef} className="fixed top-0 inset-x-0 z-10 bg-zinc-900 text-white">
+  if (rest) {
+    const sameExercise = next?.exercise.id === rest.exerciseId;
+    lastView.current = (
       <div className="max-w-md mx-auto px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -132,19 +152,8 @@ export function RestTimerBar({ timer, rated, next, unit, onRate, note, onReply, 
           )}
         </div>
         <div className="mt-2 h-1 overflow-hidden rounded-full bg-zinc-700">
-          <div className="h-full bg-blue-500" style={{ width: `${progress * 100}%` }} />
+          <div className="h-full origin-left bg-blue-500" style={{ transform: `scaleX(${progress})`, transition: "transform 250ms linear" }} />
         </div>
-        {rated && !finished && (ratedText ? (
-          <p className="mt-2 flex min-h-10 items-center text-sm text-zinc-200">{ratedText}</p>
-        ) : (
-          <div className="mt-2 flex gap-2" role="group" aria-label="How was that set?">
-            {SET_FEELS.map((f) => (
-              <button key={f.id} onClick={() => onRate(f.id)} className="h-10 flex-1 rounded-full bg-zinc-700 text-sm font-semibold text-white">
-                {f.label}
-              </button>
-            ))}
-          </div>
-        ))}
         {next && (
           <p className="mt-2 text-sm text-zinc-300">
             {!(finished && sameExercise) && <span className="font-semibold text-white">{sameExercise ? "Next set" : `Next: ${next.exercise.name}`} </span>}
@@ -152,18 +161,57 @@ export function RestTimerBar({ timer, rated, next, unit, onRate, note, onReply, 
           </p>
         )}
         {note && (
-          <div className="mt-2 flex items-start gap-3">
+          <div className="gb-fade mt-1 flex items-center gap-1">
             <p onClick={() => setNoteOpen((open) => !open)} className={`flex-1 text-sm leading-snug text-zinc-200 ${noteOpen ? "" : "line-clamp-2"}`}>
               {note}
             </p>
-            <button onClick={onReply} className="shrink-0 text-sm font-semibold text-blue-300">Reply</button>
-            <button onClick={onQuiet} className="shrink-0 text-sm text-zinc-400">Quiet</button>
+            <button onClick={onReply} className="h-10 shrink-0 rounded-lg px-2 text-sm font-semibold text-blue-300">Reply</button>
+            <button onClick={onQuiet} className="h-10 shrink-0 rounded-lg px-2 text-sm text-zinc-400">Quiet</button>
           </div>
         )}
+        <span className="sr-only" aria-live="assertive">
+          {finished ? "Rest over. Time for your next set." : ""}
+        </span>
       </div>
-      <span className="sr-only" aria-live="assertive">
-        {finished ? "Rest over. Time for your next set." : ""}
-      </span>
+    );
+  }
+
+  return (
+    <div ref={barRef} onAnimationEnd={onAnimationEnd} aria-hidden={leaving || undefined} className={`fixed top-0 inset-x-0 z-10 bg-zinc-900 text-white shadow-lg ${leaving ? "gb-drop-out pointer-events-none" : "gb-drop-in"}`}>
+      {lastView.current}
+    </div>
+  );
+}
+
+// One tap on how the set just done felt, under that set while you rest; the sets still to do move with it.
+// `prompt`: { result: what the tap did, or null before it; onRate(feel) }. `scroll`: false when the list is already moving on
+// to the next exercise, so the two scrolls don't fight.
+export function SetFeel({ prompt, scroll }) {
+  const ref = useRef(null);
+  // Once open, and again when the bar grows, the row and its set must be in sight: clear of the rest bar on top and the tab
+  // bar below. Not when you have scrolled away from it.
+  useEffect(() => {
+    if (!scroll) return;
+    const show = setTimeout(() => {
+      const box = ref.current?.getBoundingClientRect();
+      if (box && box.bottom > 0 && box.top < innerHeight) ref.current.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }, SET_FEEL_SCROLL_DELAY_MS);
+    return () => clearTimeout(show);
+  }, [prompt.barHeight]);
+  return (
+    // the top scroll margin takes in the set row above (44 px and its padding), so the set shows with its question
+    <div ref={ref} className="pb-1.5 pl-7 pt-0.5" style={{ scrollMarginTop: 52, scrollMarginBottom: 12 }}>
+      {prompt.result ? (
+        <p className="gb-fade flex min-h-10 items-center rounded-xl bg-blue-50 px-3 py-2 text-sm font-medium text-blue-900">{prompt.result}</p>
+      ) : (
+        <div role="group" aria-label="How was that set?" className="flex gap-2">
+          {SET_FEELS.map((feel) => (
+            <button key={feel.id} onClick={() => prompt.onRate(feel.id)} className="h-10 flex-1 rounded-full bg-zinc-100 text-sm font-semibold text-zinc-700">
+              {feel.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

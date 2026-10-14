@@ -1,4 +1,4 @@
-import { EXERCISE_SEARCH_LIMIT, PLATES, VIDEO_LIBRARY } from "./config.js";
+import { EXERCISE_ALIASES, EXERCISE_SEARCH_LIMIT, PLATES, VIDEO_LIBRARY } from "./config.js";
 import { formatShortDate, parseDate, toDateKey, today, weekStart } from "./dates.js";
 import { EXERCISE_PHOTOS } from "./exercise-photos.js";
 import { PHOTO_MATCHES } from "./photo-matches.js";
@@ -31,20 +31,36 @@ export function photoFor(name, learnedPhotos = {}) {
 const COMMON_NAMES = Object.keys(PHOTO_MATCHES);
 const LIBRARY_NAMES = EXERCISE_PHOTOS.map((id) => id.replace(/^3_4_/, "3/4 ").replace(/_/g, " "));
 
+// The same exercise written another way: "Hammer Curls" and "Hammer Curl", "Seated Row (Cable)" and "Seated Cable Row", "Chinup" and "Chin-Up".
+const sameExerciseKey = (name) => name.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).map((word) => word.replace(/s$/, "")).sort().join("");
+// Words with gym shorthand spelled out, for both what you type and the names ("RDL" in an imported history).
+const searchWords = (text) =>
+  text
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .flatMap((word) => (Object.hasOwn(EXERCISE_ALIASES, word) ? EXERCISE_ALIASES[word].split(" ") : [word]))
+    .filter(Boolean);
+
 // Exercises for the picker, yours first (most done first), then common names, then the library. Each typed word must start a
-// word of the name ("chin" finds Chin Up, not Machine; "pullup" finds Pull Up). A muscle keeps the exercises that work it
-// most, those that work it first ahead. The library comes in only when you search, as it is long.
+// word of the name ("chin" finds Chin Up, not Machine; "pullup" finds Pull Up); gym shorthand ("db", "rdl") is spelled out.
+// A muscle keeps the exercises that work it most, those that work it first ahead. The library comes in only when you search,
+// as it is long, and skips the photos a name above already shows.
 export function searchExercises(query, yourNames, { muscle = null, learnedMuscles = {} } = {}) {
-  const words = query.split(/\s+/).map(photoKey).filter(Boolean);
+  const words = searchWords(query);
   const candidates = [...yourNames, ...COMMON_NAMES, ...(words.length || muscle ? LIBRARY_NAMES : [])];
+  const libraryStart = yourNames.length + COMMON_NAMES.length;
   const seen = new Set();
-  const found = candidates.filter((name) => {
-    const key = photoKey(name);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    const nameWords = name.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const shownPhotos = new Set();
+  const found = candidates.filter((name, index) => {
+    const nameWords = searchWords(name);
     const startsAWord = (word) => nameWords.some((_, i) => nameWords.slice(i).join("").startsWith(word));
-    return words.every(startsAWord) && (!muscle || Boolean(musclesFor(name, learnedMuscles)?.primary.includes(muscle)));
+    if (!words.every(startsAWord) || (muscle && !musclesFor(name, learnedMuscles)?.primary.includes(muscle))) return false;
+    const key = sameExerciseKey(name);
+    const photo = knownPhoto(name);
+    if (seen.has(key) || (index >= libraryStart && shownPhotos.has(photo))) return false;
+    seen.add(key);
+    if (photo) shownPhotos.add(photo);
+    return true;
   });
   const worksFirst = (name) => !muscle || musclesFor(name, learnedMuscles).primary[0] === muscle;
   return [...found.filter(worksFirst), ...found.filter((name) => !worksFirst(name))].slice(0, EXERCISE_SEARCH_LIMIT);

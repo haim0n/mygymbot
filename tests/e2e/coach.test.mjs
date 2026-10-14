@@ -10,6 +10,7 @@ test("check-in: asks about the latest workout, sends, saves, then goes away", as
   });
   await page.getByRole("button", { name: /^Log/ }).tap();
   const card = section(page, "How did it go?");
+  assert.match(await card.innerText(), /yesterday's workout/); // asked the day after, not right after the finish screen
   assert.ok(await card.getByRole("button", { name: "Send to coach" }).isDisabled());
 
   await card.getByRole("radio", { name: "Hard" }).tap();
@@ -100,7 +101,7 @@ test("coach memory: what the athlete says is remembered, shown in Goals, editabl
 
   await page.getByRole("button", { name: "Goals", exact: true }).tap();
   await panel.getByRole("button", { name: "Delete fact 1" }).tap();
-  await panel.getByRole("button", { name: "Tap to delete" }).tap();
+  await panel.getByRole("button", { name: "Tap again to delete" }).tap();
   await panel.getByText("Tell your coach about preferences").waitFor();
   await settle(page);
   assert.deepEqual((await stored(page, "gymbot:settings")).coachMemory, []);
@@ -135,6 +136,11 @@ test("onboarding: a new athlete's coach asks first, then the profile and plans i
   assert.deepEqual([saved.profile.experience, saved.profile.daysPerWeek, saved.profile.sessionMinutes, saved.profile.focus, saved.profile.music], ["Beginner", 3, 45, "General fitness", "hip hop"]);
   assert.deepEqual(saved.routines.map((r) => r.name), ["A", "B"]);
   assert.equal(aiRequests.filter((b) => b.system.includes("motivation note")).length, 0); // no daily note before there's anything to say
+
+  await page.getByRole("button", { name: "Clear chat" }).tap(); // the chat is gone for good, so it takes a second tap
+  await page.getByText("Here's your start.").waitFor();
+  await page.getByRole("button", { name: "Tap again to clear" }).tap();
+  await page.getByText("Here's your start.").waitFor({ state: "detached" });
   assert.deepEqual(errors, []);
 });
 

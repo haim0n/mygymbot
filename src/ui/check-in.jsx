@@ -3,7 +3,7 @@ import { X } from "lucide-react";
 import { EFFORT_OPTIONS, PAIN_OPTIONS } from "../config.js";
 import { CHECK_IN_PROMPT } from "../prompts.js";
 import { askAI } from "../ai.js";
-import { formatShortDate } from "../dates.js";
+import { daysBetween, formatShortDate, today } from "../dates.js";
 import { formatWorkoutLine } from "../coach-context.js";
 import { ErrorText, Field, Panel, PrimaryButton, RichText, SectionTitle, inputClass } from "./primitives.jsx";
 
@@ -18,7 +18,7 @@ export function ChoiceRow({ label, options, value, onChange }) {
             role="radio"
             aria-checked={value === option}
             onClick={() => onChange(option)}
-            className={`rounded-full border px-3 py-1.5 text-sm font-semibold ${value === option ? "border-blue-700 bg-blue-700 text-white" : "border-zinc-300 text-zinc-700"}`}
+            className={`inline-flex items-center rounded-full border px-3 h-10 text-sm font-semibold ${value === option ? "border-blue-700 bg-blue-700 text-white" : "border-zinc-300 text-zinc-700"}`}
           >
             {option}
           </button>
@@ -57,9 +57,11 @@ export function CheckInCard({ workout, context, onSave }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <SectionTitle>How did it go?</SectionTitle>
-          <p className="-mt-2 text-sm text-zinc-500">Your coach is checking in on your {formatShortDate(workout.date)} workout.</p>
+          <p className="-mt-2 text-sm text-zinc-500">
+            Your coach is checking in on {daysBetween(workout.date, today()) === 1 ? "yesterday's workout" : `your ${formatShortDate(workout.date)} workout`}.
+          </p>
         </div>
-        <button onClick={() => onSave({ skipped: true })} className="shrink-0 pt-1 text-sm font-semibold text-zinc-500">
+        <button onClick={() => onSave({ skipped: true })} className="gb-tap mt-1 shrink-0 text-sm font-semibold text-zinc-500">
           Skip
         </button>
       </div>
@@ -81,7 +83,7 @@ export function CoachReply({ text, onClose }) {
     <Panel className="space-y-2">
       <div className="flex items-start justify-between gap-3">
         <SectionTitle>From your coach</SectionTitle>
-        <button onClick={onClose} aria-label="Close" className="text-zinc-400">
+        <button onClick={onClose} aria-label="Close" className="-m-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-zinc-400">
           <X className="w-5 h-5" />
         </button>
       </div>

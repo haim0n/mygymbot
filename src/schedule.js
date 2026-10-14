@@ -18,10 +18,12 @@ export function todayPlan(profile, workouts, now = new Date()) {
   return { status: "planned", time };
 }
 
-// The latest workout, if it's recent and you haven't told the coach how it went.
+// The latest workout, if it's recent and you haven't told the coach how it went. Asked from the next day: right after a
+// workout the finish screen has just shown it, and soreness or pain shows up a day later.
 export function pendingCheckIn(workouts) {
   const latest = sortNewestFirst(workouts)[0];
-  return latest && !latest.checkIn && daysBetween(latest.date, today()) <= CHECK_IN_WINDOW_DAYS ? latest : null;
+  const days = latest ? daysBetween(latest.date, today()) : null;
+  return latest && !latest.checkIn && days >= 1 && days <= CHECK_IN_WINDOW_DAYS ? latest : null;
 }
 
 // Straight-line trend of an exercise's best estimated 1RM per session over the last 12 weeks

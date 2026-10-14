@@ -46,7 +46,7 @@ export function ActivityPanel({ unit, onSave }) {
             key={name}
             onClick={() => setType(type === name ? null : name)}
             aria-pressed={type === name}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold ${type === name ? "border-blue-700 bg-blue-700 text-white" : "border-zinc-300 text-zinc-700"}`}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 h-10 text-sm font-semibold ${type === name ? "border-blue-700 bg-blue-700 text-white" : "border-zinc-300 text-zinc-700"}`}
           >
             <Icon size={16} />
             {name}
@@ -58,7 +58,7 @@ export function ActivityPanel({ unit, onSave }) {
         <div className="space-y-3 border-t border-zinc-200 pt-3">
           <div className="grid grid-cols-2 gap-2">
             <Field label="Minutes">
-              <input type="number" inputMode="numeric" min="1" value={form.minutes} onChange={update("minutes")} className={inputClass} />
+              <input type="number" inputMode="numeric" min="1" value={form.minutes} onChange={update("minutes")} placeholder="30" className={inputClass} />
             </Field>
             {distanceUnit && (
               <Field label={`Distance (${distanceUnit})`}>
@@ -74,7 +74,7 @@ export function ActivityPanel({ unit, onSave }) {
             <input value={form.notes} onChange={update("notes")} placeholder="Intervals, felt light" className={inputClass} />
           </Field>
           <PrimaryButton onClick={save} disabled={!(Number(form.minutes) > 0)}>
-            Save {type.toLowerCase()}
+            Save
           </PrimaryButton>
         </div>
       )}

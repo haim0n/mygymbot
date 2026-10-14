@@ -15,8 +15,8 @@ export function weekStart(dateKey) {
 }
 
 export function formatVolume(n) {
-  if (n >= 10_000) return `${Math.round(n / 1000)}k`;
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  if (n >= 100_000) return `${Math.round(n / 1000)}k`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`;
   return String(Math.round(n));
 }
 

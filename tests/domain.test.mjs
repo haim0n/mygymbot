@@ -299,6 +299,20 @@ test("Exercise picker: finds yours first, then common names, then the library; r
   assert.equal(app.searchExercises("", ["Landmine Press"], { muscle: "chest", learnedMuscles: { "Landmine Press": { primary: ["chest"], secondary: [] } } })[0], "Landmine Press");
   assert.equal(found("", { muscle: "chest" })[0], "Bench Press (Dumbbell)");
   assert.equal(found("").length, app.EXERCISE_SEARCH_LIMIT);
+  // Gym shorthand, as a whole word only.
+  assert.ok(found("rdl").includes("Romanian Deadlift (Dumbbell)") && found("ohp")[0] === "Overhead Press");
+  assert.ok(found("db row").every((name) => /dumbbell/i.test(name) && /row/i.test(name)) && found("db row").length > 0);
+  assert.ok(!found("oh").includes("Overhead Press"));
+  assert.equal(app.searchExercises("rdl", ["RDL"])[0], "RDL"); // your own shorthand names still match
+  assert.equal(app.searchExercises("db bench", ["DB Bench Press"])[0], "DB Bench Press");
+  assert.deepEqual(app.searchExercises("constructor", []), []); // not an alias
+  assert.deepEqual(app.searchExercises("", ["Chin-Up", "Chinup"]).slice(0, 1), ["Chin-Up"]);
+  assert.ok(!app.searchExercises("", ["Chin-Up", "Chinup"]).includes("Chinup"));
+  // One row per exercise: plurals, word order and the library's photo of a name already listed.
+  assert.deepEqual(found("hammer curl").filter((name) => /^hammer curls?$/i.test(name)), ["Hammer Curl"]);
+  assert.equal(found("seated cable row").filter((name) => /^seated (cable )?rows?( \(cable\))?$/i.test(name)).length, 1);
+  assert.deepEqual(found("squat bands").filter((name) => /^squats? .*with bands$/i.test(name)), ["Squat with Bands"]);
+  assert.ok(found("seated cable rows").includes("Seated Cable Rows")); // a name that doesn't match never hides one that does
 
   const plans = app.buildAutopilotPlans([userWorkout(daysAgo(3))], settingsWith());
   let session = app.routineSession({ name: "A", exercises: ["Zercher Squat", "Deadlift"] }, plans);
@@ -319,6 +333,8 @@ test("Exercise picker: finds yours first, then common names, then the library; r
     ["Deadlift", [["", 8, false], ["", 8, false], ["", 8, false]]],
   ]);
   assert.equal(session.exercises[2].id, deadlift.id);
+  // Fixing a saved workout: the sets stay, under the right name.
+  assert.deepEqual(sets(app.renameExercise(session, session.exercises[0].id, "Front Squat"))[0], ["Front Squat", [["60", 8, true]]]);
 });
 
 test("Set feel: too easy or too hard moves the next sets at that weight; it is saved, and too hard holds Autopilot", () => {
@@ -373,6 +389,7 @@ test("Onboarding: a new athlete is interviewed until a plan is saved or a workou
   assert.equal(app.isNewAthlete(settingsWith(), [userWorkout(daysAgo(3))]), false);
   assert.ok(app.buildCoachContext(settingsWith(), [], [], {}, null).includes("NEW ATHLETE"));
   assert.ok(!app.buildCoachContext({ ...settingsWith(), routines: [a] }, [], [], {}, null).includes("NEW ATHLETE"));
+  assert.ok(!app.buildCoachContext(settingsWith(), [], [], {}, app.startSession()).includes("NEW ATHLETE")); // not during their first workout
 
   assert.deepEqual(app.parseProfileTag(" [profile: name: Dana; experience: beginner; DAYSPERWEEK: 3; focus: fat loss; notes: home gym: dumbbells; music: rock] "), {
     name: "Dana", experience: "Beginner", daysPerWeek: 3, focus: "Fat loss", notes: "home gym: dumbbells", music: "rock",
@@ -478,6 +495,7 @@ test("Schedule and check-ins", () => {
   assert.equal(app.pendingCheckIn([...older, yesterday])?.id, "y");
   assert.equal(app.pendingCheckIn([...older, { ...yesterday, checkIn: { skipped: true } }]), null);
   assert.equal(app.pendingCheckIn(older), null); // 3 days ago is outside the window
+  assert.equal(app.pendingCheckIn([...older, yesterday, workout("t", daysAgo(0), [ex("Squat", [[100, 5]])])]), null); // today's: asked tomorrow
 });
 
 test("Activities: pace per sport, cleaning parser output, weekly summary, training days", () => {
@@ -524,4 +542,21 @@ test("Highlights: new bests, earned increases, longest activities", () => {
 test("Version: the app shows the same version as package.json", async () => {
   const { version } = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   assert.equal(app.APP_VERSION, version);
+});
+
+test("Workout duration: minutes, then hours, then the day a workout left open started", () => {
+  const start = new Date(2026, 9, 3, 18, 0).getTime();
+  const later = (minutes) => start + minutes * 60_000;
+  assert.equal(app.formatElapsed(start, later(45)), "45 min");
+  assert.equal(app.formatElapsed(start, later(80)), "1 h 20 min");
+  assert.equal(app.formatElapsed(start, later(8348)), `Started ${app.formatShortDate("2026-10-03")}`);
+  assert.equal(app.formatElapsed(start, later(0.2)), "1 min");
+  assert.equal(app.workoutMinutes({ startedAt: start }, later(0.2)), 1);
+  assert.equal(app.workoutMinutes({ startedAt: start }, later(45)), 45);
+  assert.equal(app.workoutMinutes({ startedAt: start }, later(8348)), null); // left open: no minutes
+  const lateStart = new Date(2026, 9, 3, 23, 30).getTime();
+  assert.equal(app.formatElapsed(lateStart, lateStart + 40 * 60_000), "40 min"); // past midnight is still the same workout
+  assert.ok(!app.leftOpen(lateStart, lateStart + 40 * 60_000) && app.leftOpen(start, later(7 * 60)));
+  assert.deepEqual([999, 1000, 12500, 123456].map(app.formatVolume), ["999", "1k", "12.5k", "123k"]);
+  assert.ok(app.finishedWorkoutRequest({ exercises: [] }, null, [], "kg").startsWith("FINISHED WORKOUT:"));
 });

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useLayoutEffect, useRef } from "react";
 import { MessageCircle, Dumbbell, Video, TrendingUp, Target, Loader2 } from "lucide-react";
 import { DEFAULT_SETTINGS, GLOBAL_CSS, STORAGE_KEYS } from "./config.js";
 import { usePersistentState, useSaveProblem } from "./storage.js";
@@ -6,7 +6,7 @@ import { today } from "./dates.js";
 import { exercisesByFrequency, logBodyweight, personalRecords } from "./training.js";
 import { buildAutopilotPlans } from "./autopilot.js";
 import { todayFacts } from "./motivation.js";
-import { nextSet, rateSet, saveRoutine } from "./workout.js";
+import { feelResult, nextSet, rateSet, saveRoutine } from "./workout.js";
 import { buildCoachContext, isNewAthlete, rememberFacts } from "./coach-context.js";
 import { useDailyNote } from "./ui/motivation.jsx";
 import { useInjuryAreas, useLearnedMuscles } from "./ui/muscles.jsx";
@@ -107,6 +107,31 @@ export default function GymBot() {
   const restExercise = rest && session?.exercises.find((e) => e.id === rest.exerciseId);
   const ratedSet = restExercise?.sets.find((set) => set.id === rest.setId && set.done);
   const [restBarHeight, setRestBarHeight] = useState(112);
+  const feelPrompt = ratedSet && {
+    setId: ratedSet.id,
+    result: feelResult(restExercise, ratedSet, unit),
+    onRate: (feel) => setSession((s) => s && rateSet(s, rest.exerciseId, rest.setId, feel, unit)),
+    barHeight: restBarHeight, // when the coach's note makes the bar taller, the row checks it is still in sight
+  };
+  // The page starts below the rest bar. When the bar comes, goes or grows, the page scrolls by as much, so the set you just
+  // ticked stays under your finger instead of jumping. Near the top there is no room to scroll back when the bar goes, so
+  // the page eases up with the bar instead. The scroll position is read before the padding changes, as the browser clamps it.
+  const mainPaddingTop = rest ? restBarHeight + 24 : 24;
+  const previousPaddingTop = useRef(mainPaddingTop);
+  const scrollBefore = useRef(0);
+  const easePadding = useRef(false); // kept until the next change, so a render mid-way doesn't cut the easing short
+  const paddingChange = mainPaddingTop - previousPaddingTop.current;
+  if (paddingChange) {
+    scrollBefore.current = window.scrollY;
+    easePadding.current = paddingChange < 0 && scrollBefore.current < -paddingChange;
+  }
+  const [openedAt] = useState(Date.now());
+  const restoredRest = rest && rest.startedAt < openedAt; // after a reload nobody's finger is on a set: the page just starts below the bar
+  useLayoutEffect(() => {
+    const change = mainPaddingTop - previousPaddingTop.current;
+    previousPaddingTop.current = mainPaddingTop;
+    if (change && !easePadding.current && !restoredRest) window.scrollTo(0, scrollBefore.current + change);
+  }, [mainPaddingTop]);
   // A rest after a set ends with its workout (finished or discarded), also when that happened before a reload.
   useEffect(() => {
     if (sessionLoaded && !session && rest?.exerciseId) restTimer.stop();
@@ -115,6 +140,7 @@ export default function GymBot() {
   useEffect(() => {
     document.documentElement.style.scrollPaddingTop = rest ? `${restBarHeight + 8}px` : "";
     document.documentElement.style.scrollPaddingBottom = "64px";
+    document.documentElement.style.overflowAnchor = "none"; // the page is kept still by hand (above); the browser's anchoring fought it
   }, [Boolean(rest), restBarHeight]);
   // Opening the app mid-workout goes straight to it.
   useEffect(() => {
@@ -129,7 +155,7 @@ export default function GymBot() {
   const views = {
     coach: <CoachView chat={chat} setChat={setChat} context={coachContext} briefing={{ facts, note: dailyNote }} newAthlete={isNewAthlete(settings, workouts)} onNavigate={setTab} onSaveRoutine={storeRoutine} onSaveProfile={storeProfile} onOpenImport={openImport} onRemember={remember} />,
     log: (
-      <LogView workouts={workouts} setWorkouts={setWorkouts} session={session} setSession={setSession} settings={settings} coachContext={coachContext} plans={plans} yourExercises={namesInUse} learnedMuscles={learnedMuscles} onRangeChange={setRepRange} onStartRest={restTimer.start} onSaveRoutine={storeRoutine} onDeleteRoutine={deleteRoutine} showImport={showImport} setShowImport={setShowImport} unit={unit} />
+      <LogView workouts={workouts} setWorkouts={setWorkouts} session={session} setSession={setSession} settings={settings} coachContext={coachContext} plans={plans} yourExercises={namesInUse} learnedMuscles={learnedMuscles} onRangeChange={setRepRange} onStartRest={restTimer.start} feelPrompt={feelPrompt} onSaveRoutine={storeRoutine} onDeleteRoutine={deleteRoutine} showImport={showImport} setShowImport={setShowImport} unit={unit} />
     ),
     form: <FormCheckView profileNotes={notes} formChecks={formChecks} setFormChecks={setFormChecks} />,
     progress: <ProgressView workouts={workouts} records={records} exerciseNames={exerciseNames} learnedMuscles={learnedMuscles} unit={unit} daysPerWeek={daysPerWeek} onNavigate={setTab}
@@ -151,16 +177,14 @@ export default function GymBot() {
           <>
             <RestTimerBar
               timer={restTimer}
-              rated={ratedSet ? { exercise: restExercise, set: ratedSet } : null}
               next={rest && session ? nextSet(session, rest.exerciseId) : null}
               unit={unit}
-              onRate={(feel) => setSession((s) => s && rateSet(s, rest.exerciseId, rest.setId, feel, unit))}
               note={restNote}
               onReply={replyToRestNote}
               onQuiet={() => setSession((s) => s && { ...s, coachQuiet: true })}
               onHeight={setRestBarHeight}
             />
-            <main className={`max-w-md mx-auto px-4 ${tab === "coach" ? "h-dvh flex flex-col pb-16" : "pb-24"} ${rest ? "" : "pt-6"}`} style={rest ? { paddingTop: restBarHeight + 24 } : undefined}>
+            <main className={`max-w-md mx-auto px-4 ${tab === "coach" ? "h-dvh flex flex-col pb-16" : "pb-24"} ${easePadding.current ? "gb-ease-padding" : ""}`} style={{ paddingTop: mainPaddingTop }}>
               {views[tab]}
             </main>
             {saveProblem && (

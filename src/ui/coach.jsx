@@ -3,13 +3,14 @@ import { Send, Loader2 } from "lucide-react";
 import { CHAT_CONTEXT_SIZE, CHAT_HISTORY_SIZE, QUICK_PROMPTS } from "../config.js";
 import { COACH_PROMPT, ONBOARDING_GREETING } from "../prompts.js";
 import { askAI, recentTurns } from "../ai.js";
-import { ErrorText, RichText, ViewTitle, inputClass } from "./primitives.jsx";
+import { ErrorText, RichText, ViewTitle, inputClass, useArmed } from "./primitives.jsx";
 import { TodayCard } from "./motivation.jsx";
 
 export function CoachView({ chat, setChat, context, briefing, newAthlete, onNavigate, onSaveRoutine, onSaveProfile, onOpenImport, onRemember }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [clearArmed, armClear] = useArmed(); // the chat is gone for good, so it takes a second tap
   const [todayOpen, setTodayOpen] = useState(false);
   const paneRef = useRef(null);
   const followNew = useRef(true); // false while the athlete has scrolled back to read
@@ -57,8 +58,8 @@ export function CoachView({ chat, setChat, context, briefing, newAthlete, onNavi
   }
 
   const clearButton = chat.length > 0 && (
-    <button onClick={() => setChat([])} className="text-sm text-zinc-500">
-      Clear chat
+    <button onClick={clearArmed ? () => setChat([]) : armClear} className={`gb-tap text-sm ${clearArmed ? "font-semibold text-red-600" : "text-zinc-500"}`}>
+      {clearArmed ? "Tap again to clear" : "Clear chat"}
     </button>
   );
 
@@ -70,7 +71,8 @@ export function CoachView({ chat, setChat, context, briefing, newAthlete, onNavi
         <p className="text-zinc-600 mb-4">Ask anything about your training. Your coach sees your goals, profile and recent workouts.</p>
       )}
 
-      <div ref={paneRef} onScroll={onScroll} className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+      {/* No scroll anchoring: its 1 px nudge looked like scrolling back, and the chat stopped following new messages */}
+      <div ref={paneRef} onScroll={onScroll} className="flex-1 min-h-0 overflow-y-auto overscroll-contain [mask-image:linear-gradient(to_bottom,transparent,black_16px)]" style={{ overflowAnchor: "none" }}>
         <div className="space-y-3 pb-3">
           {shown.map((message, i) =>
             message.role === "user" ? (
@@ -100,7 +102,7 @@ export function CoachView({ chat, setChat, context, briefing, newAthlete, onNavi
                 key={prompt}
                 onClick={() => send(prompt)}
                 disabled={busy}
-                className="shrink-0 rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-700 disabled:opacity-40"
+                className="shrink-0 inline-flex items-center rounded-full border border-zinc-300 bg-white px-3 h-10 text-sm text-zinc-700 disabled:opacity-40"
               >
                 {prompt}
               </button>

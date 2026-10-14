@@ -133,7 +133,7 @@ export function buildCoachContext({ profile, goals, routines = [], coachMemory =
       .join(", ")}`,
     `ACTIVITIES, LAST 7 DAYS: ${activitySummary(workouts).map((s) => `${s.type}: ${summaryText(s)}`).join("; ") || "none"}`,
     `RECENT WORKOUTS (newest first):\n${recent.join("\n") || "none logged yet"}`,
-    isNewAthlete({ routines }, workouts) && ONBOARDING_PROMPT,
+    isNewAthlete({ routines }, workouts) && !session && ONBOARDING_PROMPT, // not mid-workout: the rest notes would carry on the interview
   ]
     .filter(Boolean)
     .join("\n\n");

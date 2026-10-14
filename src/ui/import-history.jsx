@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { formatLongDate } from "../dates.js";
 import { exercisesByFrequency, sortOldestFirst } from "../training.js";
 import { readImportFiles, withoutDuplicates, workoutsFromCsv } from "../import.js";
@@ -50,8 +51,11 @@ export function ImportPanel({ workouts, setWorkouts, unit }) {
 
       <FilePicker busy={reading} title={reading ? "Reading your history" : "Choose a CSV or screenshots"} onFiles={importFiles} />
 
-      <details className="text-sm">
-        <summary className="cursor-pointer font-semibold text-blue-700">Can't pick a file? Paste the CSV text instead</summary>
+      <details className="group text-sm">
+        <summary className="flex min-h-10 cursor-pointer list-none items-center gap-1 font-semibold text-blue-700 [&::-webkit-details-marker]:hidden">
+          Can't pick a file? Paste the CSV text instead
+          <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
+        </summary>
         <div className="mt-2 space-y-2">
           <textarea
             rows={5}
@@ -72,7 +76,7 @@ export function ImportPanel({ workouts, setWorkouts, unit }) {
         <p className="text-sm font-semibold text-green-700">Imported {importedCount} workouts. Your charts and targets now include them.</p>
       )}
       <p className="text-xs text-zinc-500">
-        CSV files are read on your phone. Screenshots, and the first 5 rows of a CSV layout MyGymBot doesn't recognise, are sent to the coach to read.
+        CSV files are read on your phone. Screenshots, and the first 5 rows of a CSV layout MyGymBot doesn't recognize, are sent to the coach to read.
       </p>
     </Panel>
   );

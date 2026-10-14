@@ -38,14 +38,14 @@ test("live workout: start with Up next, reorder, check off, survive a reload, fi
   const saved = (await stored(page, "gymbot:workouts")).at(-1);
   assert.deepEqual(saved.exercises, [{ name: "Hammer Curl (Dumbbell)", sets: [{ weight: 7, reps: 8 }, { weight: 8, reps: 8 }, { weight: 7, reps: 8 }] }]);
   const done = page.getByRole("dialog", { name: "Workout done" });
-  assert.match(await done.innerText(), /3\s+sets/);
   await done.getByText("OK").waitFor(); // the coach's line
+  await page.waitForFunction(() => /3\s+sets/.test(document.querySelector("[aria-labelledby=workout-done-title]").innerText)); // counted up
   await done.getByRole("button", { name: "Done" }).tap();
-  assert.equal(await done.count(), 0);
+  await done.waitFor({ state: "detached" }); // fades out
   assert.deepEqual(errors, []);
 });
 
-test("set feel: one tap in the rest bar moves the next sets, and the bar shows what comes next", async (t) => {
+test("set feel: one tap under the set just done moves the next sets, and the rest bar shows what comes next", async (t) => {
   const { page, errors } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
   await page.getByRole("button", { name: /^Log/ }).tap();
   await page.getByRole("button", { name: /Start with Up next/ }).tap();
@@ -54,12 +54,19 @@ test("set feel: one tap in the rest bar moves the next sets, and the bar shows w
   await first.getByRole("button", { name: "Set 1 done" }).tap();
   const bar = page.locator("div.fixed.top-0");
   assert.match(await bar.innerText(), new RegExp(`Next set ${weight} kg × \\d+`));
-  await bar.getByRole("button", { name: "Too easy" }).tap();
-  await bar.getByText("Too easy: the next sets go up.").waitFor();
+  const feel = first.getByRole("group", { name: "How was that set?" });
+  assert.ok(await feel.isVisible()); // under the set, not in the bar
+  assert.equal(await bar.getByRole("button", { name: "Too easy" }).count(), 0);
+  await feel.getByRole("button", { name: "Too easy" }).tap();
+  await first.getByText("Too easy: the next sets go up.").waitFor();
   assert.ok(Number(await first.getByLabel("Set 2 weight").inputValue()) > weight);
-  assert.equal(await bar.getByRole("button", { name: "Too hard" }).count(), 0); // one answer per set
+  assert.equal(await first.getByRole("button", { name: "Too hard" }).count(), 0); // one answer per set
   await settle(page);
   assert.equal((await stored(page, "gymbot:session")).exercises[0].sets[0].feel, "easy");
+
+  await page.getByRole("button", { name: "Skip" }).tap(); // the rest ends: the row closes, and the bar slides away
+  await first.getByText("Too easy: the next sets go up.").waitFor({ state: "detached" });
+  await bar.waitFor({ state: "detached" });
   assert.deepEqual(errors, []);
 });
 
@@ -92,11 +99,37 @@ test("finish by mistake: Continue this workout takes the saved workout back and 
   assert.equal((await stored(page, "gymbot:workouts")).length, 2);
 
   await page.getByRole("dialog", { name: "Workout done" }).getByRole("button", { name: "Continue this workout" }).tap();
+  await page.getByRole("dialog", { name: "Workout done" }).waitFor({ state: "detached" }); // fades out, then the workout is back
   assert.deepEqual(await exerciseNames(workout), names);
   assert.equal(await workout.locator("ol > li").first().getByRole("button", { name: "Set 1 done" }).getAttribute("aria-pressed"), "true");
-  assert.equal(await page.getByRole("dialog", { name: "Workout done" }).count(), 0);
   await settle(page);
   assert.deepEqual(await stored(page, "gymbot:workouts"), [userWorkout]);
+  assert.deepEqual(errors, []);
+});
+
+test("left open: hours later the workout asks to be saved as that day or trained today; removing logged sets takes two taps", async (t) => {
+  const { page, errors } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
+  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: /Start with Up next/ }).tap();
+  const workout = section(page, "Workout");
+  const first = workout.locator("ol > li").first();
+  await first.getByRole("button", { name: "Set 1 done" }).tap();
+  await page.getByRole("button", { name: "Skip" }).tap();
+
+  await page.clock.fastForward("07:00:00"); // 18:00 to 01:00, like a workout never finished
+  const banner = workout.getByText("This workout has been open since Oct 3.");
+  await banner.waitFor();
+  assert.ok(await workout.getByRole("button", { name: "Save it as Oct 3" }).isVisible());
+  await workout.getByRole("button", { name: "Train it today" }).tap();
+  await banner.waitFor({ state: "detached" });
+  await settle(page);
+  assert.equal((await stored(page, "gymbot:session")).date, "2026-10-04");
+
+  const name = (await exerciseNames(workout))[0];
+  await first.getByRole("button", { name: `Remove ${name}` }).tap(); // a set is logged: armed, not removed
+  assert.equal((await exerciseNames(workout))[0], name);
+  await first.getByRole("button", { name: `Tap again to remove ${name}` }).tap();
+  assert.notEqual((await exerciseNames(workout))[0], name);
   assert.deepEqual(errors, []);
 });
 
@@ -111,7 +144,8 @@ test("exercise picker: find an exercise by name, add it, then replace it with on
   await picker.getByLabel("Search exercises").fill("bench");
   await picker.getByText("Bench Press", { exact: true }).tap();
   await workout.getByRole("button", { name: "Show details for Bench Press" }).waitFor();
-  assert.equal(await picker.count(), 0);
+  await picker.waitFor({ state: "detached" }); // slides away
+  assert.equal(await page.evaluate(() => history.state), null); // its Back entry is gone too
   assert.deepEqual(await exerciseNames(workout), ["Bench Press"]);
 
   const card = workout.locator("ol > li").first();
@@ -132,6 +166,18 @@ test("exercise picker: find an exercise by name, add it, then replace it with on
   await picker.getByLabel("Search exercises").fill("landmine twist");
   await picker.getByLabel("Search exercises").press("Enter"); // nothing listed: adds the name as typed
   assert.deepEqual((await exerciseNames(workout)).at(-1), "Landmine Twist");
+
+  // Android's Back closes the sheet and stays in the app; closing another way leaves no Back entry behind.
+  const url = page.url();
+  await workout.getByRole("button", { name: "Add exercise" }).tap();
+  await picker.waitFor();
+  await page.goBack();
+  await picker.waitFor({ state: "detached" });
+  assert.equal(page.url(), url);
+  await workout.getByRole("button", { name: "Add exercise" }).tap();
+  await picker.getByRole("button", { name: "Close", exact: true }).tap();
+  await picker.waitFor({ state: "detached" });
+  assert.equal(await page.evaluate(() => history.state), null);
   assert.deepEqual(errors, []);
 });
 
@@ -225,11 +271,17 @@ test("history: folded by default, then edit a saved workout", async (t) => {
   await history.getByRole("button", { name: /Sep 23/ }).tap();
   await history.getByRole("button", { name: "Edit" }).tap();
   await history.locator("ol > li").first().getByLabel("Set 3 reps").fill("5");
+  await history.getByRole("button", { name: "Replace Front Squat (Kettlebell)" }).tap(); // logged under the wrong name
+  const picker = page.getByRole("dialog", { name: "Replace" });
+  await picker.getByLabel("Search exercises").fill("goblet");
+  await picker.getByText("Goblet Squat (Kettlebell)", { exact: true }).tap();
+  await picker.waitFor({ state: "detached" });
   await history.getByRole("button", { name: "Save changes" }).tap();
   await settle(page);
   const saved = (await stored(page, "gymbot:workouts"))[0];
   assert.equal(saved.id, "sep23");
   assert.deepEqual(saved.exercises[0].sets.at(-1), { weight: 32, reps: 5 });
+  assert.deepEqual(saved.exercises[1], { name: "Goblet Squat (Kettlebell)", sets: userWorkout.exercises[1].sets }); // the sets stay
   assert.deepEqual(errors, []);
 });
 

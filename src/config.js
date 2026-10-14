@@ -61,7 +61,15 @@ export const SET_FEELS = [
 // Lifts loaded with plates on a 20 kg (45 lb) bar, for the plates per side in the rest bar. Sleds and machines aren't.
 export const PLATE_LIFTS = /barbell|bench press|squat|deadlift|overhead press|military press|push press|bent over row|pendlay row|clean|snatch|hip thrust/;
 export const NOT_PLATE_LIFTS = /dumbbell|kettlebell|machine|smith|cable|hack|goblet|leg press|pistol|split squat|bodyweight/;
+export const LEFT_OPEN_HOURS = 6; // a workout going longer than this was left open (one past midnight is not)
+export const SET_FEEL_SCROLL_DELAY_MS = 300; // the set feel row is checked for being in sight once it has grown open (.gb-reveal)
 export const EXERCISE_SEARCH_LIMIT = 50; // rows the exercise picker shows; typing or a muscle finds the rest
+// Gym shorthand the exercise search understands, as a whole typed word ("db row" finds Dumbbell Row).
+export const EXERCISE_ALIASES = {
+  db: "dumbbell", bb: "barbell", kb: "kettlebell", bw: "bodyweight",
+  rdl: "romanian deadlift", sldl: "stiff leg deadlift", dl: "deadlift", ohp: "overhead press", bp: "bench press",
+  bss: "bulgarian split squat", hspu: "handstand push up", ghr: "glute ham raise",
+};
 
 // Import: header names used by Strong, Hevy and similar apps (matched case-insensitively).
 export const COLUMN_ALIASES = {
@@ -284,12 +292,48 @@ export const GLOBAL_CSS = `
 .gb-root { font-family: 'Barlow', system-ui, sans-serif; color-scheme: light; }
 .gb-display { font-family: 'Barlow Condensed', 'Arial Narrow', system-ui, sans-serif; letter-spacing: -0.01em; }
 .gb-root :focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
+/* Fields show focus as one blue border, not a border plus a ring around it. */
+.gb-root :is(input:not([type=checkbox], [type=radio]), textarea, select):focus-visible { outline: none; border-color: #1d4ed8; box-shadow: 0 0 0 1px #1d4ed8; }
 /* Feel like an app, not a web page: no grey flash on tap, no text selection on a long press of a button. */
 .gb-root { -webkit-tap-highlight-color: transparent; }
 .gb-root button { -webkit-user-select: none; user-select: none; }
 .gb-root button:active:not(:disabled) { opacity: 0.6; }
-/* The finish screen's burst: dots fly out from the middle and fade. Without motion they stay hidden. */
-.gb-burst span { position: absolute; left: 50%; top: 50%; width: 10px; height: 10px; border-radius: 9999px; opacity: 0; animation: gb-burst 1100ms ease-out both; }
-@keyframes gb-burst { from { opacity: 1; transform: translate(-50%, -50%) scale(1); } to { opacity: 0; transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) scale(0.4); } }
+.gb-root textarea { resize: none; } /* a resize handle is a web page leftover */
+/* A small text button gets a 40 px tall tap area without taking more room: the area reaches past it, invisibly. */
+.gb-tap { position: relative; }
+.gb-tap::after { content: ""; position: absolute; inset: -10px -8px; }
+/* The finish screen's burst: dots and confetti fly out from the middle, spin and fade. Without motion they stay hidden. */
+.gb-burst span { position: absolute; left: 50%; top: 50%; width: var(--size); height: var(--size); opacity: 0; animation: gb-burst 1500ms cubic-bezier(0.15, 0.75, 0.3, 1) both; }
+@keyframes gb-burst {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(0.3) rotate(0); }
+  15% { opacity: 1; transform: translate(-50%, -50%) scale(1.1) rotate(0); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) scale(0.5) rotate(var(--spin)); }
+}
+/* Motion uses only transform and opacity (and grid rows for a height), so it stays smooth on a phone. Each way out has its own
+   keyframes: swapping a class to the same keyframes reversed doesn't restart the animation, it jumps to the end. */
+.gb-pop { animation: gb-pop 550ms cubic-bezier(0.3, 1.5, 0.5, 1) both; }
+@keyframes gb-pop { from { opacity: 0; transform: scale(0.6); } }
+.gb-rise { animation: gb-rise 450ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes gb-rise { from { opacity: 0; transform: translateY(12px); } }
+.gb-fade { animation: gb-fade 250ms ease-out both; }
+@keyframes gb-fade { from { opacity: 0; } }
+.gb-fade-out { animation: gb-fade-out 220ms ease-in both; }
+@keyframes gb-fade-out { to { opacity: 0; } }
+/* Bottom sheets slide up from the bottom and back down; the rest bar drops in from the top and back up. */
+.gb-sheet-in { animation: gb-sheet-in 320ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+@keyframes gb-sheet-in { from { transform: translateY(100%); } }
+.gb-sheet-out { animation: gb-sheet-out 220ms cubic-bezier(0.4, 0, 1, 1) both; }
+@keyframes gb-sheet-out { to { transform: translateY(100%); } }
+.gb-drop-in { animation: gb-drop-in 280ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+@keyframes gb-drop-in { from { transform: translateY(-100%); } }
+.gb-drop-out { animation: gb-drop-out 220ms cubic-bezier(0.4, 0, 1, 1) both; }
+@keyframes gb-drop-out { to { transform: translateY(-100%); } }
+.gb-ease-padding { transition: padding-top 220ms cubic-bezier(0.4, 0, 1, 1); } /* the page moving up with the bar as it goes, near the top */
+/* A row that grows open and shrinks closed, so the rows below slide instead of jumping. */
+.gb-reveal { display: grid; grid-template-rows: 1fr; animation: gb-reveal 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes gb-reveal { from { grid-template-rows: 0fr; opacity: 0; } }
+.gb-reveal.gb-reveal-out { grid-template-rows: 0fr; opacity: 0; visibility: hidden; animation: gb-reveal-out 220ms cubic-bezier(0.4, 0, 1, 1) both; }
+@keyframes gb-reveal-out { from { grid-template-rows: 1fr; opacity: 1; visibility: visible; } 45% { opacity: 0; } } /* faded before it is cut */
+.gb-reveal > * { min-height: 0; overflow: clip; overflow-clip-margin: 4px; }
 @media (prefers-reduced-motion: reduce) { .gb-root * { animation: none !important; scroll-behavior: auto !important; } }
 `;

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Trash2, Loader2, Upload } from "lucide-react";
 import { IMPORT_MARKER, VIDEO_MARKER } from "../config.js";
 import { parseRoutineTag } from "../workout.js";
@@ -8,6 +8,50 @@ import { guideFor } from "../training.js";
 
 export const inputClass =
   "w-full rounded-lg bg-white border border-zinc-300 px-3 py-2.5 text-base text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-blue-700";
+
+export const reducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+// Keeps something on screen while its way-out animation runs, then lets it go. Without motion it goes at once.
+export function usePresence(show) {
+  const [mounted, setMounted] = useState(show);
+  if (show && !mounted) setMounted(true);
+  const leaving = !show && mounted && !reducedMotion();
+  if (!show && mounted && !leaving) setMounted(false);
+  const onAnimationEnd = (event) => event.target === event.currentTarget && !show && setMounted(false);
+  return { mounted: show || leaving, leaving, onAnimationEnd };
+}
+
+// A row that grows open and shrinks closed, so what is below slides instead of jumping.
+export function Reveal({ show, children }) {
+  const { mounted, leaving, onAnimationEnd } = usePresence(show);
+  const lastChildren = useRef(children);
+  if (show) lastChildren.current = children;
+  if (!mounted) return null;
+  return (
+    <div className={`gb-reveal ${leaving ? "gb-reveal-out" : ""}`} onAnimationEnd={onAnimationEnd} aria-hidden={leaving || undefined}>
+      <div>{lastChildren.current}</div>
+    </div>
+  );
+}
+
+// Android's Back closes the sheet or screen on top instead of leaving the app: while open, it has its own history entry.
+export function useBackToClose(onClose) {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    history.pushState({ gbLayer: true }, "");
+    let wentBack = false;
+    const onBack = () => {
+      wentBack = true;
+      onCloseRef.current();
+    };
+    window.addEventListener("popstate", onBack);
+    return () => {
+      window.removeEventListener("popstate", onBack);
+      if (!wentBack && history.state?.gbLayer) history.back(); // closed another way: take its entry away too
+    };
+  }, []);
+}
 
 export function Panel({ children, className = "" }) {
   return <section className={`rounded-2xl bg-white p-4 ${className}`}>{children}</section>;
@@ -97,11 +141,11 @@ export function useArmed() {
 export function DeleteButton({ onConfirm, label = "Delete" }) {
   const [armed, arm] = useArmed();
   return armed ? (
-    <button onClick={onConfirm} className="text-sm font-semibold text-red-600">
-      Tap to delete
+    <button onClick={onConfirm} className="gb-tap shrink-0 text-sm font-semibold text-red-600">
+      Tap again to delete
     </button>
   ) : (
-    <button onClick={arm} aria-label={label} className="text-zinc-400 hover:text-red-600">
+    <button onClick={arm} aria-label={label} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-zinc-400">
       <Trash2 className="w-4 h-4" />
     </button>
   );
@@ -137,7 +181,7 @@ export function RichText({ text, onSaveRoutine, onSaveProfile, onOpenImport }) {
         if (routine) return <RoutineSuggestion key={i} routine={routine} onSave={onSaveRoutine} />;
         if (IMPORT_MARKER.test(line))
           return onOpenImport ? (
-            <button key={i} onClick={onOpenImport} className="rounded-full border border-blue-700 px-3 py-1 text-sm font-semibold text-blue-700">
+            <button key={i} onClick={onOpenImport} className="inline-flex items-center rounded-full border border-blue-700 px-3 h-10 text-sm font-semibold text-blue-700">
               Import history
             </button>
           ) : null;
@@ -183,7 +227,7 @@ export function ProfileSuggestion({ profile, onSave }) {
           setSaved(true);
         }}
         disabled={saved}
-        className="mt-2 rounded-full border border-blue-700 px-3 py-1 text-sm font-semibold text-blue-700 disabled:opacity-40"
+        className="mt-2 inline-flex items-center rounded-full border border-blue-700 px-3 h-10 text-sm font-semibold text-blue-700 disabled:opacity-40"
       >
         {saved ? "Saved" : "Save to profile"}
       </button>
@@ -212,7 +256,7 @@ export function RoutineSuggestion({ routine, onSave }) {
           }}
           disabled={saved}
           aria-label={`Save plan ${routine.name}`}
-          className="mt-2 rounded-full border border-blue-700 px-3 py-1 text-sm font-semibold text-blue-700 disabled:opacity-40"
+          className="mt-2 inline-flex items-center rounded-full border border-blue-700 px-3 h-10 text-sm font-semibold text-blue-700 disabled:opacity-40"
         >
           {saved ? "Saved" : "Save plan"}
         </button>

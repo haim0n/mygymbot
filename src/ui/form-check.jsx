@@ -100,7 +100,7 @@ export function FormCheckView({ profileNotes, formChecks, setFormChecks }) {
           <div className="divide-y divide-zinc-200">
             {formChecks.map((check) => (
               <details key={check.id} className="py-3">
-                <summary className="flex justify-between cursor-pointer list-none">
+                <summary className="flex justify-between cursor-pointer list-none [&::-webkit-details-marker]:hidden">
                   <span className="font-semibold text-zinc-900">{check.exercise}</span>
                   <span className="text-sm text-zinc-500">{formatDate(check.date)}</span>
                 </summary>

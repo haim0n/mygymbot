@@ -1,5 +1,5 @@
-import { NEW_EXERCISE_TARGET, NOT_PLATE_LIFTS, PLATES, PLATE_LIFTS, REST_NOTE_CHAT_MESSAGES, REST_NOTE_KINDS, ROUTINE_MARKER, SET_FEELS } from "./config.js";
-import { today } from "./dates.js";
+import { LEFT_OPEN_HOURS, NEW_EXERCISE_TARGET, NOT_PLATE_LIFTS, PLATES, PLATE_LIFTS, REST_NOTE_CHAT_MESSAGES, REST_NOTE_KINDS, ROUTINE_MARKER, SET_FEELS } from "./config.js";
+import { formatShortDate, toDateKey, today } from "./dates.js";
 import { cleanExerciseName, describeSets, lastGymWorkout, newId, platesPerSide, sortNewestFirst } from "./training.js";
 import { nextWeightUp, repeatSet, restSeconds, weightStep } from "./autopilot.js";
 
@@ -89,6 +89,8 @@ export function replaceExercise(session, exerciseId, name, plans) {
     })
   );
 }
+// Fixing a saved workout: the sets were right, the exercise was another one.
+export const renameExercise = (session, exerciseId, name) => withExercises(session, (list) => list.map((e) => (e.id === exerciseId ? { ...e, name } : e)));
 export const removeExercise = (session, exerciseId) => withExercises(session, (list) => list.filter((e) => e.id !== exerciseId));
 export const moveExercise = (session, exerciseId, offset) =>
   withExercises(session, (list) => moveItem(list, list.findIndex((e) => e.id === exerciseId), offset));
@@ -205,10 +207,24 @@ export function restNoteRequest(session, exerciseName, chat = []) {
 const feelLabel = (feel) => SET_FEELS.find((f) => f.id === feel).label.toLowerCase();
 
 // The finished workout, for the coach's line on the finish screen.
+// A workout started more than LEFT_OPEN_HOURS ago was left open: its clock says nothing about how long it took.
+export const leftOpen = (startedAt, now) => now - startedAt > LEFT_OPEN_HOURS * 3_600_000;
+export const startedOn = (startedAt) => toDateKey(new Date(startedAt));
+
+// How long a workout has been going, at least a minute: "45 min", "1 h 20 min", or for one left open, when it started.
+export function formatElapsed(startedAt, now) {
+  if (leftOpen(startedAt, now)) return `Started ${formatShortDate(startedOn(startedAt))}`;
+  const minutes = Math.max(1, Math.round((now - startedAt) / 60_000));
+  return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
+}
+
+// How long a finished workout took, at least a minute; null for one left open.
+export const workoutMinutes = (session, now) => (leftOpen(session.startedAt, now) ? null : Math.max(1, Math.round((now - session.startedAt) / 60_000)));
+
 export function finishedWorkoutRequest(workout, minutes, highlights, unit) {
   const feels = (sets) => [...new Set(sets.filter((set) => set.feel).map((set) => feelLabel(set.feel)))];
   return [
-    `FINISHED WORKOUT (${minutes} min):`,
+    minutes ? `FINISHED WORKOUT (${minutes} min):` : "FINISHED WORKOUT:",
     ...workout.exercises.map((e) => `- ${e.name}: ${describeSets(e.sets, unit)}${feels(e.sets).length ? ` (felt ${feels(e.sets).join(", ")})` : ""}`),
     highlights.length > 0 && `HIGHLIGHTS:\n${highlights.map((fact) => `- ${fact.text}`).join("\n")}`,
   ]

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { Fragment, useState, useEffect, useRef } from "react";
 import { Trash2, Plus, Sparkles, Loader2, X, Check, Timer, PlayCircle, ChevronUp, ChevronDown, ArrowUpDown, ArrowLeftRight } from "lucide-react";
 import { PLAN_STATUS, REP_RANGES } from "../config.js";
 import { LOG_PARSER_PROMPT } from "../prompts.js";
@@ -8,10 +8,11 @@ import { describeSets, lastGymWorkout, sanitizeExercises, sortNewestFirst, worko
 import { formatRange } from "../autopilot.js";
 import { sessionHighlights } from "../motivation.js";
 import { describeMuscles, musclesFor } from "../muscles.js";
-import { addExercises, addSet, completeExercise, currentExerciseId, editSet, moveExercise, newExerciseSets, nextRoutine, planExercise, planSession, removeExercise, removeSet, repeatLastWorkout, replaceExercise, routineSession, sessionExercise, sessionSetCounts, sessionToWorkout, startSession, targetExercise, toggleSet, workoutToSession } from "../workout.js";
+import { addExercises, addSet, completeExercise, currentExerciseId, editSet, moveExercise, newExerciseSets, nextRoutine, planExercise, planSession, removeExercise, removeSet, renameExercise, workoutMinutes, formatElapsed, leftOpen, startedOn, repeatLastWorkout, replaceExercise, routineSession, sessionExercise, sessionSetCounts, sessionToWorkout, startSession, targetExercise, toggleSet, workoutToSession } from "../workout.js";
 import { pendingCheckIn } from "../schedule.js";
 import { activityEntry, activityLabel, paceText, sanitizeActivities } from "../activities.js";
-import { DeleteButton, ErrorText, Field, Panel, PrimaryButton, SectionTitle, ViewTitle, inputClass, useArmed } from "./primitives.jsx";
+import { DeleteButton, ErrorText, Field, Panel, PrimaryButton, Reveal, SectionTitle, ViewTitle, inputClass, useArmed } from "./primitives.jsx";
+import { SetFeel } from "./rest-timer.jsx";
 import { SessionHighlights, WorkoutDone } from "./motivation.jsx";
 import { VideoGuides } from "./videos.jsx";
 import { ExercisePicker, ExerciseThumb } from "./exercises.jsx";
@@ -30,7 +31,7 @@ export function useNow(intervalMs) {
 
 export function IconButton({ label, onClick, disabled = false, children }) {
   return (
-    <button onClick={onClick} disabled={disabled} aria-label={label} className="rounded-lg p-1.5 text-zinc-500 disabled:opacity-30">
+    <button onClick={onClick} disabled={disabled} aria-label={label} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-zinc-500 disabled:opacity-30">
       {children}
     </button>
   );
@@ -55,7 +56,7 @@ export function StartWorkoutPanel({ routines, next, planCount, lastWorkout, onSt
                   <span className="font-semibold text-zinc-900">{routine.name}</span>
                   {routine === next && <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">Next</span>}
                 </div>
-                <p className="text-sm text-zinc-500">{routine.exercises.join(", ")}</p>
+                <p className="line-clamp-2 text-sm text-zinc-500">{routine.exercises.join(", ")}</p>
               </div>
               <DeleteButton label={`Delete plan ${routine.name}`} onConfirm={() => onDeleteRoutine(routine.name)} />
               <button
@@ -77,9 +78,13 @@ export function StartWorkoutPanel({ routines, next, planCount, lastWorkout, onSt
           Repeat your {formatShortDate(lastWorkout.date)} workout ({plural(lastWorkout.exercises.length)})
         </button>
       )}
-      <button onClick={onStartEmpty} className="w-full text-sm font-semibold text-zinc-500">
-        Start an empty workout
-      </button>
+      {routines.length || planCount || lastWorkout ? (
+        <button onClick={onStartEmpty} className="gb-tap w-full text-sm font-semibold text-zinc-500">
+          Start an empty workout
+        </button>
+      ) : (
+        <PrimaryButton onClick={onStartEmpty}>Start an empty workout</PrimaryButton> // nothing else to start from yet
+      )}
     </Panel>
   );
 }
@@ -157,13 +162,14 @@ export function SetRow({ set, number, unit, onEdit, children }) {
 }
 
 // An exercise in a workout. `live`: check sets off as you train. `edit`: fix a saved workout.
-export function ExerciseCard({ exercise, unit, mode, isCurrent = false, update, onSetDone, onReplace }) {
-  const [showVideo, setShowVideo] = useState(false);
-  const guide = guideFor(exercise.name);
+// `feelPrompt` ({ setId, ... }, see SetFeel): asks under the set just done how it felt, while you rest.
+export function ExerciseCard({ exercise, unit, mode, isCurrent = false, update, onSetDone, onReplace, feelPrompt }) {
+  const [removeArmed, armRemove] = useArmed();
   const id = exercise.id;
   const live = mode === "live";
   const lastSet = exercise.sets.at(-1);
   const allDone = exercise.sets.every((set) => set.done);
+  const anyDone = exercise.sets.some((set) => set.done);
 
   function toggle(set) {
     update((s) => toggleSet(s, id, set.id));
@@ -177,59 +183,67 @@ export function ExerciseCard({ exercise, unit, mode, isCurrent = false, update, 
           <ExerciseThumb name={exercise.name} size={52} />
           <div className="min-w-0">
             {isCurrent && <div className="text-xs font-semibold text-blue-700">Now</div>}
-            <div className={`font-semibold ${live && allDone ? "text-zinc-400" : "text-zinc-900"}`}>{exercise.name}</div>
+            <div className={`line-clamp-2 font-semibold ${live && allDone ? "text-zinc-400" : "text-zinc-900"}`}>{exercise.name}</div>
           </div>
         </div>
         <div className="flex shrink-0 items-center">
-          {guide && (
-            <IconButton label={`${showVideo ? "Hide" : "Show"} technique video for ${exercise.name}`} onClick={() => setShowVideo((open) => !open)}>
-              <PlayCircle className="w-5 h-5" />
-            </IconButton>
-          )}
-          {live && !allDone && (
+          {onReplace && !(live && allDone) && (
             <IconButton label={`Replace ${exercise.name}`} onClick={() => onReplace(exercise)}>
               <ArrowLeftRight className="w-5 h-5" />
             </IconButton>
           )}
-          <IconButton label={`Remove ${exercise.name}`} onClick={() => update((s) => removeExercise(s, id))}>
-            <X className="w-5 h-5" />
-          </IconButton>
+          {/* Sets already done are lost with it, so then it takes a second tap */}
+          {removeArmed ? (
+            <IconButton label={`Tap again to remove ${exercise.name}`} onClick={() => update((s) => removeExercise(s, id))}>
+              <Trash2 className="w-5 h-5 text-red-600" />
+            </IconButton>
+          ) : (
+            <IconButton label={`Remove ${exercise.name}`} onClick={anyDone ? armRemove : () => update((s) => removeExercise(s, id))}>
+              <X className="w-5 h-5" />
+            </IconButton>
+          )}
         </div>
       </div>
-      {showVideo && guide && <VideoGuides guide={guide} />}
 
       <div className="mt-1">
         {exercise.sets.map((set, i) => (
-          <SetRow key={set.id} set={set} number={i + 1} unit={unit} onEdit={(field, value) => update((s) => editSet(s, id, set.id, field, value))}>
-            {live ? (
-              <button
-                onClick={() => toggle(set)}
-                aria-pressed={set.done}
-                aria-label={`Set ${i + 1} done`}
-                className={`flex h-11 w-11 items-center justify-center rounded-full ${set.done ? "bg-green-600 text-white" : "border-2 border-zinc-300 text-zinc-300"}`}
-              >
-                <Check className="w-5 h-5" />
-              </button>
-            ) : (
-              <IconButton label={`Remove set ${i + 1}`} onClick={() => update((s) => removeSet(s, id, set.id))}>
-                <Trash2 className="w-4 h-4" />
-              </IconButton>
+          <Fragment key={set.id}>
+            <SetRow set={set} number={i + 1} unit={unit} onEdit={(field, value) => update((s) => editSet(s, id, set.id, field, value))}>
+              {live ? (
+                <button
+                  onClick={() => toggle(set)}
+                  aria-pressed={set.done}
+                  aria-label={`Set ${i + 1} done`}
+                  className={`flex h-11 w-11 items-center justify-center rounded-full ${set.done ? "bg-green-600 text-white" : "border-2 border-zinc-300 text-zinc-300"}`}
+                >
+                  <Check className="w-5 h-5" />
+                </button>
+              ) : (
+                <IconButton label={`Remove set ${i + 1}`} onClick={() => update((s) => removeSet(s, id, set.id))}>
+                  <Trash2 className="w-4 h-4" />
+                </IconButton>
+              )}
+            </SetRow>
+            {live && (
+              <Reveal show={feelPrompt?.setId === set.id}>
+                <SetFeel prompt={feelPrompt} scroll={!allDone} />
+              </Reveal>
             )}
-          </SetRow>
+          </Fragment>
         ))}
       </div>
 
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm font-semibold">
-        <button onClick={() => update((s) => addSet(s, id))} className="text-blue-700">
+        <button onClick={() => update((s) => addSet(s, id))} className="gb-tap text-blue-700">
           Add set
         </button>
         {live && lastSet && exercise.sets.length > 1 && (
-          <button onClick={() => update((s) => removeSet(s, id, lastSet.id))} className="text-zinc-500">
+          <button onClick={() => update((s) => removeSet(s, id, lastSet.id))} className="gb-tap text-zinc-500">
             Remove last set
           </button>
         )}
         {live && !allDone && (
-          <button onClick={() => update((s) => completeExercise(s, id))} className="text-zinc-500">
+          <button onClick={() => update((s) => completeExercise(s, id))} className="gb-tap text-zinc-500">
             Mark all done
           </button>
         )}
@@ -238,7 +252,7 @@ export function ExerciseCard({ exercise, unit, mode, isCurrent = false, update, 
   );
 }
 
-export function ExerciseList({ session, setSession, unit, mode, onSetDone, onReplace }) {
+export function ExerciseList({ session, setSession, unit, mode, onSetDone, onReplace, feelPrompt }) {
   const [reordering, setReordering] = useState(false);
   const currentId = mode === "live" ? currentExerciseId(session) : null;
   const listRef = useRef(null);
@@ -259,7 +273,7 @@ export function ExerciseList({ session, setSession, unit, mode, onSetDone, onRep
       {session.exercises.length > 1 && (
         <button
           onClick={() => setReordering(true)}
-          className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-1.5 text-sm font-semibold text-zinc-700"
+          className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-3 h-10 text-sm font-semibold text-zinc-700"
         >
           <ArrowUpDown className="w-4 h-4" />
           Reorder exercises
@@ -276,6 +290,7 @@ export function ExerciseList({ session, setSession, unit, mode, onSetDone, onRep
             update={setSession}
             onSetDone={onSetDone}
             onReplace={onReplace}
+            feelPrompt={feelPrompt}
           />
         ))}
       </ol>
@@ -310,41 +325,63 @@ export function SaveRoutineForm({ session, setSession, onSave }) {
 
   if (name === null)
     return (
-      <button onClick={() => setName(session.routine ?? "")} className="text-sm font-semibold text-blue-700">
+      <button onClick={() => setName(session.routine ?? "")} className="gb-tap text-sm font-semibold text-blue-700">
         {savedAs ? `Saved as plan ${savedAs}` : "Save as a plan"}
       </button>
     );
   return (
     <div className="flex gap-2">
       <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Plan name, like A" aria-label="Plan name" className={inputClass} />
-      <button onClick={save} disabled={!name.trim()} className="shrink-0 rounded-lg bg-zinc-900 px-4 font-semibold text-white disabled:opacity-40">
+      <button onClick={save} disabled={!name.trim()} className="shrink-0 rounded-lg bg-blue-700 px-4 font-semibold text-white disabled:opacity-40">
         Save
       </button>
     </div>
   );
 }
 
-export function WorkoutPanel({ session, setSession, unit, onFinish, onStartRest, onSaveRoutine, onFindExercise }) {
+export function WorkoutPanel({ session, setSession, unit, onFinish, onStartRest, feelPrompt, onSaveRoutine, onFindExercise }) {
   const [discardArmed, armDiscard] = useArmed();
   const now = useNow(30_000);
   const { done, total } = sessionSetCounts(session);
-  const minutes = Math.max(0, Math.floor((now - session.startedAt) / 60_000));
 
   // Rest after every set except the very last one of the workout.
   const onSetDone = (exercise, set) => {
     if (total - done > 1) onStartRest(exercise.rest, exercise.name, { exerciseId: exercise.id, setId: set.id });
   };
 
+  const isLeftOpen = leftOpen(session.startedAt, now);
+  const sameDay = startedOn(session.startedAt) === today();
+
   return (
     <Panel className="space-y-3">
       <div className="flex items-baseline justify-between gap-3">
         <SectionTitle>{session.routine ? `Workout ${session.routine}` : "Workout"}</SectionTitle>
         <span className="text-sm text-zinc-500 tabular-nums">
-          {minutes} min, {done} of {total} sets
+          {!isLeftOpen && formatElapsed(session.startedAt, now)}
+          {total > 0 && `${isLeftOpen ? "" : ", "}${done} of ${total} sets`}
         </span>
       </div>
-      {session.exercises.length === 0 && <p className="-mt-1 text-sm text-zinc-500">Add exercises here or from Up next below.</p>}
-      <ExerciseList session={session} setSession={setSession} unit={unit} mode="live" onSetDone={onSetDone} onReplace={onFindExercise} />
+      {isLeftOpen && (
+        // A workout left open: done back then and never finished, or started early and trained now
+        <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+          <p>
+            This workout has been open since{" "}
+            {sameDay ? new Date(session.startedAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : formatShortDate(startedOn(session.startedAt))}.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {done > 0 && (
+              <button onClick={onFinish} className="h-10 rounded-lg bg-amber-900 px-3 font-semibold text-white">
+                {sameDay ? "Finish it" : `Save it as ${formatShortDate(session.date)}`}
+              </button>
+            )}
+            <button onClick={() => setSession((s) => ({ ...s, date: today(), startedAt: Date.now() }))} className="h-10 rounded-lg border border-amber-900 px-3 font-semibold">
+              {sameDay ? "Restart the clock" : "Train it today"}
+            </button>
+          </div>
+        </div>
+      )}
+      {session.exercises.length === 0 && <p className="-mt-1 text-sm text-zinc-500">No exercises yet. Add the first one below.</p>}
+      <ExerciseList session={session} setSession={setSession} unit={unit} mode="live" onSetDone={onSetDone} onReplace={onFindExercise} feelPrompt={feelPrompt} />
       <button onClick={() => onFindExercise(null)} className="flex w-full items-center justify-center gap-2 rounded-lg border border-blue-700 py-2.5 font-semibold text-blue-700">
         <Plus className="w-5 h-5" />
         Add exercise
@@ -356,7 +393,7 @@ export function WorkoutPanel({ session, setSession, unit, onFinish, onStartRest,
       </PrimaryButton>
       <button
         onClick={discardArmed ? () => setSession(null) : armDiscard}
-        className={`w-full text-sm font-semibold ${discardArmed ? "text-red-600" : "text-zinc-500"}`}
+        className={`gb-tap w-full text-sm font-semibold ${discardArmed ? "text-red-600" : "text-zinc-500"}`}
       >
         {discardArmed ? "Tap again to discard this workout" : "Discard workout"}
       </button>
@@ -364,26 +401,36 @@ export function WorkoutPanel({ session, setSession, unit, onFinish, onStartRest,
   );
 }
 
-// Fix a saved workout with the same cards used while training: edit sets, add or remove them, reorder exercises.
-export function WorkoutEditor({ workout, unit, onSave, onCancel }) {
+// Fix a saved workout with the same cards used while training: edit sets, add or remove them, reorder exercises, and
+// replace an exercise logged under the wrong name (its sets stay).
+export function WorkoutEditor({ workout, unit, yourExercises, onSave, onCancel }) {
   const [draft, setDraft] = useState(() => workoutToSession(workout));
+  const [replacing, setReplacing] = useState(null);
   const setCount = draft.exercises.reduce((sum, e) => sum + e.sets.length, 0);
 
   return (
     <div className="mt-2 space-y-3">
-      <ExerciseList session={draft} setSession={setDraft} unit={unit} mode="edit" />
+      <ExerciseList session={draft} setSession={setDraft} unit={unit} mode="edit" onReplace={setReplacing} />
+      {replacing && (
+        <ExercisePicker
+          yourNames={yourExercises}
+          replacing={replacing.name}
+          onPick={(name) => setDraft((d) => renameExercise(d, replacing.id, name))}
+          onClose={() => setReplacing(null)}
+        />
+      )}
       <SessionDetails session={draft} setSession={setDraft} />
       <PrimaryButton onClick={() => onSave({ ...workout, ...sessionToWorkout(draft, { allSets: true }), id: workout.id })} disabled={setCount === 0}>
         Save changes
       </PrimaryButton>
-      <button onClick={onCancel} className="w-full text-sm font-semibold text-zinc-500">
+      <button onClick={onCancel} className="gb-tap w-full text-sm font-semibold text-zinc-500">
         Cancel
       </button>
     </div>
   );
 }
 
-export function LogView({ workouts, setWorkouts, session, setSession, settings, plans, yourExercises, learnedMuscles, coachContext, onRangeChange, onStartRest, onSaveRoutine, onDeleteRoutine, showImport, setShowImport, unit }) {
+export function LogView({ workouts, setWorkouts, session, setSession, settings, plans, yourExercises, learnedMuscles, coachContext, onRangeChange, onStartRest, feelPrompt, onSaveRoutine, onDeleteRoutine, showImport, setShowImport, unit }) {
   const [description, setDescription] = useState("");
   const [picker, setPicker] = useState(null); // null while closed, else { replacing: the exercise to swap, or null to add one }
   const [busy, setBusy] = useState(false);
@@ -430,19 +477,17 @@ export function LogView({ workouts, setWorkouts, session, setSession, settings, 
   function pickExercise(name) {
     if (picker.replacing) setSession((s) => replaceExercise(s, picker.replacing.id, name, plans));
     else addToSession(targetExercise(name, plans, newExerciseSets()));
-    setPicker(null);
   }
 
-  // Takes the saved workout back and reopens it as it was, unfinished sets included.
+  // Takes the saved workout back and reopens it as it was, unfinished sets included. The finish screen closes itself.
   function continueWorkout() {
     setWorkouts((all) => all.filter((w) => w.id !== finished.workout.id));
     setSession(finished.session);
-    setFinished(null);
   }
 
   function finishWorkout() {
     const workout = sessionToWorkout(session);
-    const minutes = Math.max(0, Math.floor((Date.now() - session.startedAt) / 60_000));
+    const minutes = workoutMinutes(session, Date.now());
     setFinished({ session, workout, facts: sessionHighlights(workout, workouts, settings), minutes });
     setWorkouts((all) => [...all, workout]);
     setSession(null);
@@ -453,7 +498,7 @@ export function LogView({ workouts, setWorkouts, session, setSession, settings, 
     <div className="space-y-4">
       <ViewTitle
         action={
-          <button onClick={() => setShowImport((open) => !open)} className="text-sm font-semibold text-blue-700">
+          <button onClick={() => setShowImport((open) => !open)} className="gb-tap text-sm font-semibold text-blue-700">
             {showImport ? "Close import" : "Import history"}
           </button>
         }
@@ -471,7 +516,7 @@ export function LogView({ workouts, setWorkouts, session, setSession, settings, 
       {showImport && <ImportPanel workouts={workouts} setWorkouts={setWorkouts} unit={unit} />}
 
       {session ? (
-        <WorkoutPanel session={session} setSession={setSession} unit={unit} onFinish={finishWorkout} onStartRest={onStartRest} onSaveRoutine={onSaveRoutine} onFindExercise={(replacing) => setPicker({ replacing })} />
+        <WorkoutPanel session={session} setSession={setSession} unit={unit} onFinish={finishWorkout} onStartRest={onStartRest} feelPrompt={feelPrompt} onSaveRoutine={onSaveRoutine} onFindExercise={(replacing) => setPicker({ replacing })} />
       ) : (
         <StartWorkoutPanel
           routines={routines}
@@ -486,7 +531,7 @@ export function LogView({ workouts, setWorkouts, session, setSession, settings, 
         />
       )}
 
-      <ActivityPanel unit={unit} onSave={saveEntry} />
+      {!session && <ActivityPanel unit={unit} onSave={saveEntry} />}
 
       <AutopilotPanel
         plans={plans}
@@ -500,32 +545,36 @@ export function LogView({ workouts, setWorkouts, session, setSession, settings, 
         onStartRest={onStartRest}
       />
 
-      <Panel className="space-y-2">
-        <SectionTitle>Describe what you did</SectionTitle>
-        <textarea
-          rows={3}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Squat 3x5 at 100, bench 80 for 8, 8, 7, then a 5 km run in 28 min"
-          aria-label="Describe what you did"
-          className={inputClass}
-        />
-        <button
-          onClick={addFromDescription}
-          disabled={busy || !description.trim()}
-          className="w-full flex items-center justify-center gap-2 rounded-lg border border-blue-700 text-blue-700 font-semibold py-2.5 disabled:opacity-40"
-        >
-          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-          Add from description
-        </button>
-        <ErrorText message={error} />
-      </Panel>
+      {/* During a workout the page is the workout: logging something else waits until it is finished */}
+      {!session && (
+        <Panel className="space-y-2">
+          <SectionTitle>Describe what you did</SectionTitle>
+          <textarea
+            rows={3}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Squat 3x5 at 100, bench 80 for 8, 8, 7, then a 5 km run in 28 min"
+            aria-label="Describe what you did"
+            className={inputClass}
+          />
+          <button
+            onClick={addFromDescription}
+            disabled={busy || !description.trim()}
+            className="w-full flex items-center justify-center gap-2 rounded-lg border border-blue-700 text-blue-700 font-semibold py-2.5 disabled:opacity-40"
+          >
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+            Add from description
+          </button>
+          <ErrorText message={error} />
+        </Panel>
+      )}
 
       {picker && <ExercisePicker yourNames={yourExercises} replacing={picker.replacing?.name} onPick={pickExercise} onClose={() => setPicker(null)} />}
 
       <WorkoutHistory
         workouts={workouts}
         unit={unit}
+        yourExercises={yourExercises}
         onUpdate={(updated) => setWorkouts((all) => all.map((w) => (w.id === updated.id ? updated : w)))}
         onDelete={(id) => setWorkouts((all) => all.filter((w) => w.id !== id))}
       />
@@ -547,7 +596,7 @@ export function AutopilotPanel({ plans, learnedMuscles, unit, inWorkout, addedNa
       <div className="flex items-start justify-between gap-3">
         <SectionTitle>Up next</SectionTitle>
         {inWorkout && remaining.length > 1 && (
-          <button onClick={() => onAddAll(remaining)} className="shrink-0 pt-1 text-sm font-semibold text-blue-700">
+          <button onClick={() => onAddAll(remaining)} className="gb-tap mt-1 shrink-0 text-sm font-semibold text-blue-700">
             Add all {remaining.length}
           </button>
         )}
@@ -571,7 +620,7 @@ export function AutopilotPanel({ plans, learnedMuscles, unit, inWorkout, addedNa
         ))}
       </ul>
       {remaining.length > AUTOPILOT_PREVIEW_COUNT && (
-        <button onClick={() => setShowAll((v) => !v)} className="mt-1 text-sm font-semibold text-blue-700">
+        <button onClick={() => setShowAll((v) => !v)} className="gb-tap mt-1 text-sm font-semibold text-blue-700">
           {showAll ? "Show fewer" : `Show all ${remaining.length} exercises`}
         </button>
       )}
@@ -590,14 +639,12 @@ export function PlanRow({ plan, muscles, unit, onAdd, onRangeChange, onRest }) {
     <li className="py-3 flex gap-3">
       <ExerciseThumb name={plan.name} size={64} />
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-semibold text-zinc-900">{plan.name}</span>
-          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${className}`}>{label}</span>
-        </div>
+        <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${className}`}>{label}</span>
+        <div className="mt-0.5 font-semibold text-zinc-900">{plan.name}</div>
         <div className="gb-display text-2xl font-bold text-zinc-900 leading-tight tabular-nums">
           {sets}×{reps} @ {load(weight)}
         </div>
-        {muscles && <p className="text-sm font-medium text-red-700">{describeMuscles(muscles)}</p>}
+        {muscles && <p className="text-sm font-medium text-zinc-700">{describeMuscles(muscles)}</p>}
         <p className="text-sm text-zinc-500">
           Last: {load(plan.last.weight)} × {plan.last.reps.join(", ")} on {formatShortDate(plan.last.date)}. {plan.reason}
         </p>
@@ -606,7 +653,7 @@ export function PlanRow({ plan, muscles, unit, onAdd, onRangeChange, onRest }) {
           <button
             onClick={onRest}
             aria-label={`Start a ${formatClock(plan.rest)} rest for ${plan.name}`}
-            className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-1.5 text-sm font-semibold text-zinc-700"
+            className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-3 h-10 text-sm font-semibold text-zinc-700"
           >
             <Timer className="w-4 h-4" />
             Rest {formatClock(plan.rest)}
@@ -614,7 +661,7 @@ export function PlanRow({ plan, muscles, unit, onAdd, onRangeChange, onRest }) {
           <button
             onClick={onAdd}
             aria-label={`Add ${plan.name} to your workout`}
-            className="inline-flex items-center gap-1 rounded-full border border-blue-700 px-3 py-1 text-sm font-semibold text-blue-700"
+            className="inline-flex items-center gap-1 rounded-full border border-blue-700 px-3 h-10 text-sm font-semibold text-blue-700"
           >
             <Plus className="w-4 h-4" />
             Add
@@ -623,7 +670,7 @@ export function PlanRow({ plan, muscles, unit, onAdd, onRangeChange, onRest }) {
             value={formatRange(plan.range)}
             onChange={(e) => onRangeChange(REP_RANGES.find((r) => formatRange(r) === e.target.value))}
             aria-label={`Rep range for ${plan.name}`}
-            className="bg-transparent text-sm text-zinc-600"
+            className="h-10 rounded-full bg-zinc-100 px-3 text-sm font-semibold text-zinc-700"
           >
             {REP_RANGES.map((range) => (
               <option key={formatRange(range)} value={formatRange(range)}>
@@ -635,7 +682,7 @@ export function PlanRow({ plan, muscles, unit, onAdd, onRangeChange, onRest }) {
             <button
               onClick={() => setShowVideos((open) => !open)}
               aria-expanded={showVideos}
-              className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-1.5 text-sm font-semibold text-zinc-700"
+              className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-3 h-10 text-sm font-semibold text-zinc-700"
             >
               <PlayCircle className="w-4 h-4" />
               {showVideos ? "Hide video" : "Video"}
@@ -652,10 +699,15 @@ export const HISTORY_LIMIT = 20;
 
 // Folded by default: one line with the count. Open it for one compact row per workout,
 // and tap a row for its sets, Edit and Delete.
-export function WorkoutHistory({ workouts, unit, onUpdate, onDelete }) {
+export function WorkoutHistory({ workouts, unit, yourExercises, onUpdate, onDelete }) {
   const [open, setOpen] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [editingId, setEditingId] = useState(null);
+  const openRow = useRef(null);
+  // A row opened near the bottom would open under the tab bar: bring what it shows into sight.
+  useEffect(() => {
+    openRow.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [expandedId]);
   if (!workouts.length) return null;
 
   const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -664,7 +716,7 @@ export function WorkoutHistory({ workouts, unit, onUpdate, onDelete }) {
   return (
     <Panel>
       <h2 className="gb-display text-2xl font-bold text-zinc-900">
-        <button onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center justify-between gap-3">
+        <button onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex min-h-10 w-full items-center justify-between gap-3">
           History
           <span className="flex items-center gap-1 text-base font-semibold text-zinc-500">
             {plural(workouts.length, "workout")}
@@ -681,7 +733,7 @@ export function WorkoutHistory({ workouts, unit, onUpdate, onDelete }) {
               const editing = editingId === workout.id;
               const expanded = editing || expandedId === workout.id;
               return (
-                <li key={workout.id} className="py-2">
+                <li key={workout.id} ref={expandedId === workout.id ? openRow : null} className="py-2">
                   <button
                     onClick={() => setExpandedId(expanded ? null : workout.id)}
                     aria-expanded={expanded}
@@ -707,6 +759,7 @@ export function WorkoutHistory({ workouts, unit, onUpdate, onDelete }) {
                     <WorkoutEditor
                       workout={workout}
                       unit={unit}
+                      yourExercises={yourExercises}
                       onSave={(updated) => {
                         onUpdate(updated);
                         setEditingId(null);
@@ -720,18 +773,18 @@ export function WorkoutHistory({ workouts, unit, onUpdate, onDelete }) {
                       <ul className="mt-1 space-y-1.5 text-sm text-zinc-600">
                         {(workout.activities ?? []).map((activity) => (
                           <li key={activity.id} className="flex items-center gap-2">
-                            <ActivityIcon type={activity.type} size={32} />
+                            <ActivityIcon type={activity.type} size={40} />
                             <span>
                               {activityLabel(activity)}{" "}
-                              <span className="text-zinc-400">{[paceText(activity), activity.effort?.toLowerCase()].filter(Boolean).join(", ")}</span>
+                              <span className="text-zinc-500">{[paceText(activity), activity.effort?.toLowerCase()].filter(Boolean).join(", ")}</span>
                             </span>
                           </li>
                         ))}
                         {workout.exercises.map((exercise, i) => (
                           <li key={i} className="flex items-center gap-2">
-                            <ExerciseThumb name={exercise.name} size={32} />
+                            <ExerciseThumb name={exercise.name} size={40} />
                             <span>
-                              {exercise.name} <span className="text-zinc-400">{describeSets(exercise.sets, unit)}</span>
+                              {exercise.name} <span className="whitespace-nowrap text-zinc-500">{describeSets(exercise.sets, unit)}</span>
                             </span>
                           </li>
                         ))}
@@ -739,13 +792,14 @@ export function WorkoutHistory({ workouts, unit, onUpdate, onDelete }) {
                       {workout.notes && <p className="mt-1 text-sm italic text-zinc-500">{workout.notes}</p>}
                       {workout.checkIn && !workout.checkIn.skipped && (
                         <p className="mt-1 text-sm text-zinc-500">
-                          Felt {workout.checkIn.effort.toLowerCase()}, pain: {workout.checkIn.pain.toLowerCase()}
+                          Felt {workout.checkIn.effort.toLowerCase()}
+                          {workout.checkIn.pain !== "No" && `, pain: ${workout.checkIn.pain.toLowerCase()}`}
                           {workout.checkIn.note ? ` (${workout.checkIn.note})` : ""}
                         </p>
                       )}
                       <div className="mt-2 flex items-center gap-5">
                         {workout.exercises.length > 0 && (
-                          <button onClick={() => setEditingId(workout.id)} className="text-sm font-semibold text-blue-700">
+                          <button onClick={() => setEditingId(workout.id)} className="gb-tap text-sm font-semibold text-blue-700">
                             Edit
                           </button>
                         )}
