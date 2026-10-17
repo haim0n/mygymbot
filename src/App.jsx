@@ -153,14 +153,15 @@ export default function GymBot() {
     setTab("coach");
   };
 
+  const bodyweight = { log: bodyweightLog, profile: settings.profile, onLog: (weight) => setBodyweightLog((log) => logBodyweight(log, today(), weight)) };
   const views = {
     coach: <CoachView chat={chat} setChat={setChat} context={coachContext} briefing={{ facts, note: dailyNote }} newAthlete={isNewAthlete(settings, workouts)} onNavigate={setTab} onSaveRoutine={storeRoutine} onSaveProfile={storeProfile} onOpenImport={openImport} onRemember={remember} />,
     log: (
-      <LogView workouts={workouts} setWorkouts={setWorkouts} session={session} setSession={setSession} settings={settings} coachContext={coachContext} plans={plans} yourExercises={namesInUse} learnedMuscles={learnedMuscles} onRangeChange={setRepRange} onStartRest={restTimer.start} feelPrompt={feelPrompt} onSaveRoutine={storeRoutine} onDeleteRoutine={deleteRoutine} showImport={showImport} setShowImport={setShowImport} unit={unit} />
+      <LogView workouts={workouts} setWorkouts={setWorkouts} session={session} setSession={setSession} settings={settings} coachContext={coachContext} plans={plans} yourExercises={namesInUse} learnedMuscles={learnedMuscles} onRangeChange={setRepRange} onStartRest={restTimer.start} feelPrompt={feelPrompt} onSaveRoutine={storeRoutine} onDeleteRoutine={deleteRoutine} showImport={showImport} setShowImport={setShowImport} bodyweight={bodyweight} unit={unit} />
     ),
     form: <FormCheckView profileNotes={notes} formChecks={formChecks} setFormChecks={setFormChecks} />,
     progress: <ProgressView workouts={workouts} records={records} exerciseNames={exerciseNames} learnedMuscles={learnedMuscles} unit={unit} daysPerWeek={daysPerWeek} onNavigate={setTab}
-        bodyweight={{ log: bodyweightLog, profile: settings.profile, onLog: (weight) => setBodyweightLog((log) => logBodyweight(log, today(), weight)) }} />,
+        bodyweight={bodyweight} />,
     goals: <GoalsView settings={settings} setSettings={setSettings} records={records} workouts={workouts} />,
   };
 

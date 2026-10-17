@@ -5,7 +5,7 @@ import { MOTIVATION_PROMPT, WORKOUT_DONE_PROMPT } from "../prompts.js";
 import { usePersistentState } from "../storage.js";
 import { askAI } from "../ai.js";
 import { formatVolume, today } from "../dates.js";
-import { setsOf, workoutVolume } from "../training.js";
+import { currentBodyweight, setsOf, workoutVolume } from "../training.js";
 import { finishedWorkoutRequest } from "../workout.js";
 import { Panel, reducedMotion, useBackToClose } from "./primitives.jsx";
 
@@ -142,7 +142,38 @@ function Stat({ value, label, format = Math.round, delay }) {
 
 // The moment a workout is finished: what you did, what you beat, and a line from the coach. Continue undoes a finish tapped by
 // mistake. It fades in over the page and out again; Android's Back is Done.
-export function WorkoutDone({ workout, minutes, facts, unit, context, onDone, onContinue }) {
+// Weighing in at the end of a workout, where athletes expect it; the history is in Progress.
+function WeighIn({ log, profile, unit, onLog }) {
+  const [draft, setDraft] = useState("");
+  const weight = Number(draft);
+  const logged = log.at(-1)?.date === today() ? log.at(-1).weight : null;
+  const last = currentBodyweight(log, profile);
+  function save() {
+    if (!(weight > 0)) return;
+    onLog(weight);
+    setDraft("");
+  }
+  if (logged) return <p className="gb-fade flex min-h-11 items-center text-sm text-zinc-400">Bodyweight today: {logged} {unit}. Your history is in Progress.</p>;
+  return (
+    <div className="flex gap-2">
+      <input
+        type="number"
+        inputMode="decimal"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && save()}
+        placeholder={last ? `Bodyweight (last ${last} ${unit})` : `Bodyweight (${unit})`}
+        aria-label="Bodyweight today"
+        className="h-11 min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-3 text-white placeholder:text-zinc-500 focus:border-blue-500 focus:outline-none"
+      />
+      <button onClick={save} disabled={!(weight > 0)} className="h-11 shrink-0 rounded-lg bg-zinc-700 px-4 font-semibold text-white disabled:opacity-40">
+        Log
+      </button>
+    </div>
+  );
+}
+
+export function WorkoutDone({ workout, minutes, facts, unit, context, bodyweight, onDone, onContinue }) {
   const [coachLine, setCoachLine] = useState("");
   const [leaving, setLeaving] = useState(null); // the action to run once faded out
   const doneRef = useRef(null);
@@ -197,6 +228,7 @@ export function WorkoutDone({ workout, minutes, facts, unit, context, onDone, on
           </p>
         )}
         <div className="gb-rise mt-auto space-y-3 pt-8" style={{ animationDelay: "750ms" }}>
+          <WeighIn {...bodyweight} unit={unit} />
           <button ref={doneRef} onClick={() => leave(onDone)} className="w-full rounded-lg bg-blue-700 py-3 font-semibold text-white">
             Done
           </button>

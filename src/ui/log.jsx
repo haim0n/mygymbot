@@ -430,7 +430,7 @@ export function WorkoutEditor({ workout, unit, yourExercises, onSave, onCancel }
   );
 }
 
-export function LogView({ workouts, setWorkouts, session, setSession, settings, plans, yourExercises, learnedMuscles, coachContext, onRangeChange, onStartRest, feelPrompt, onSaveRoutine, onDeleteRoutine, showImport, setShowImport, unit }) {
+export function LogView({ workouts, setWorkouts, session, setSession, settings, plans, yourExercises, learnedMuscles, coachContext, onRangeChange, onStartRest, feelPrompt, onSaveRoutine, onDeleteRoutine, showImport, setShowImport, bodyweight, unit }) {
   const [description, setDescription] = useState("");
   const [picker, setPicker] = useState(null); // null while closed, else { replacing: the exercise to swap, or null to add one }
   const [busy, setBusy] = useState(false);
@@ -508,7 +508,7 @@ export function LogView({ workouts, setWorkouts, session, setSession, settings, 
 
       {highlights && <SessionHighlights facts={highlights} onClose={() => setHighlights(null)} />}
       {finished && (
-        <WorkoutDone {...finished} unit={unit} context={coachContext} onDone={() => setFinished(null)} onContinue={continueWorkout} />
+        <WorkoutDone {...finished} unit={unit} context={coachContext} bodyweight={bodyweight} onDone={() => setFinished(null)} onContinue={continueWorkout} />
       )}
       {checkInWorkout && !session && <CheckInCard key={checkInWorkout.id} workout={checkInWorkout} context={coachContext} onSave={saveCheckIn} />}
       {coachReply && <CoachReply text={coachReply} onClose={() => setCoachReply(null)} />}

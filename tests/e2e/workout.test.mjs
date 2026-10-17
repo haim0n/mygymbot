@@ -40,6 +40,11 @@ test("live workout: start with Up next, reorder, check off, survive a reload, fi
   const done = page.getByRole("dialog", { name: "Workout done" });
   await done.getByText("OK").waitFor(); // the coach's line
   await page.waitForFunction(() => /3\s+sets/.test(document.querySelector("[aria-labelledby=workout-done-title]").innerText)); // counted up
+  await done.getByLabel("Bodyweight today").fill("80.5");
+  await done.getByRole("button", { name: "Log" }).tap();
+  await done.getByText("Bodyweight today: 80.5 kg.").waitFor();
+  await settle(page);
+  assert.deepEqual(await stored(page, "gymbot:bodyweight"), [{ date: "2026-10-03", weight: 80.5 }]);
   await done.getByRole("button", { name: "Done" }).tap();
   await done.waitFor({ state: "detached" }); // fades out
   assert.deepEqual(errors, []);
