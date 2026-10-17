@@ -1,4 +1,4 @@
-import { LEFT_OPEN_HOURS, NEW_EXERCISE_TARGET, NOT_PLATE_LIFTS, PLATES, PLATE_LIFTS, REST_NOTE_CHAT_MESSAGES, REST_NOTE_KINDS, ROUTINE_MARKER, SET_FEELS } from "./config.js";
+import { LEFT_OPEN_HOURS, NEW_EXERCISE_TARGET, NOT_PLATE_LIFTS, PLATES, PLATE_LIFTS, REST_FUN_ITEMS, REST_FUN_KINDS, REST_NOTE_CHAT_MESSAGES, REST_NOTE_KINDS, ROUTINE_MARKER, SET_FEELS } from "./config.js";
 import { formatShortDate, toDateKey, today } from "./dates.js";
 import { cleanExerciseName, describeSets, lastGymWorkout, newId, platesPerSide, sortNewestFirst } from "./training.js";
 import { nextWeightUp, repeatSet, restSeconds, weightStep } from "./autopilot.js";
@@ -202,6 +202,26 @@ export function restNoteRequest(session, exerciseName, chat = []) {
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+// What the one call for a workout's rest reading asks for.
+export const restFunRequest = (kind, topic = "") => `Write ${REST_FUN_ITEMS} ${REST_FUN_KINDS[kind].ask(topic.trim())}.`;
+
+// The AI's items, checked: a text each, and a reveal only for the kinds that have one.
+export function parseRestFun(answer, kind) {
+  const items = Array.isArray(answer?.items) ? answer.items : [];
+  const clean = (value) => (typeof value === "string" ? value.trim() : "");
+  return items
+    .filter((item) => clean(item?.text))
+    .slice(0, REST_FUN_ITEMS)
+    .map((item) => ({ text: clean(item.text), reveal: (REST_FUN_KINDS[kind].reveal && clean(item.reveal)) || null }));
+}
+
+// The item for the rest after the Nth set done, so each rest gets the next one and a reload shows the same.
+export function restFunItem(session) {
+  const items = session?.restFun ?? [];
+  const done = (session?.exercises ?? []).flatMap((e) => e.sets).filter((set) => set.done).length;
+  return items.length && done ? items[(done - 1) % items.length] : null;
 }
 
 const feelLabel = (feel) => SET_FEELS.find((f) => f.id === feel).label.toLowerCase();

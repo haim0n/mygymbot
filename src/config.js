@@ -220,6 +220,30 @@ export const REST_NOTE_KINDS = [
   "a word on the set just done that cites its numbers",
   "a short, interesting fact about this exercise or the muscle it trains",
 ];
+// Something to read between sets that isn't training, picked in Goals ("Between sets"). One AI call per workout writes
+// REST_FUN_ITEMS of them; `ask` is what that call asks for, `reveal` the button that shows the answer (none for facts).
+export const REST_FUN_ITEMS = 15;
+export const REST_FUN_KINDS = {
+  Trivia: {
+    ask: (topic) => `trivia questions ${topic ? `about ${topic}` : "on varied subjects"}; text is the question, reveal its short answer`,
+    reveal: "Tap for the answer",
+    topicLabel: "Topic",
+    placeholder: "Any topic",
+  },
+  "Learn a word": {
+    ask: (topic) =>
+      `everyday words or short phrases in ${topic || "Spanish"}, from easy to harder; text is the word (with how to say it in Latin letters when the script isn't Latin), reveal its meaning in English`,
+    reveal: "Tap for the meaning",
+    topicLabel: "Language",
+    placeholder: "Spanish",
+  },
+  "Fact or quote": {
+    ask: (topic) => `surprising facts or short quotes ${topic ? `about ${topic}` : "on varied subjects"}, a quote with the person's name in the text; reveal is null`,
+    reveal: null,
+    topicLabel: "Topic",
+    placeholder: "Any topic",
+  },
+};
 
 // Non-gym activities. Distance units follow the profile's units (kg → metric, lb → imperial).
 export const ACTIVITY_TYPES = [

@@ -229,6 +229,43 @@ test("rest notes: the coach writes once per exercise while resting; Reply contin
   assert.deepEqual(errors, []);
 });
 
+test("between sets: trivia written once per workout; the answer shows on a tap, never on a rest with a coach's note", async (t) => {
+  const items = Array.from({ length: 15 }, (_, i) => ({ text: `Question ${i + 1}?`, reveal: `Answer ${i + 1}` }));
+  const { page, errors, aiRequests } = await openApp(t, {
+    seed: { "gymbot:workouts": [userWorkout], "gymbot:settings": { ...settings(), restFun: { kind: "Trivia", topic: "space" } } },
+    ai: (body) => (body.system.startsWith("Write short items") ? JSON.stringify({ items }) : body.system.includes("rest screen") ? "Brace first." : "OK"),
+  });
+  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: /Start with Up next/ }).tap();
+  const first = section(page, "Workout").locator("ol > li").first();
+  const bar = page.locator("div.fixed.top-0");
+  const asked = () => aiRequests.filter((b) => b.system.startsWith("Write short items"));
+
+  await first.getByRole("button", { name: "Set 1 done" }).tap(); // the first rest is the coach's
+  await bar.getByText("Brace first.").waitFor();
+  assert.equal(await bar.getByText("Question").count(), 0);
+  assert.equal(asked().length, 1);
+  assert.match(asked()[0].messages[0].content, /trivia questions about space/);
+  await page.getByRole("button", { name: "Skip" }).tap();
+
+  await first.getByRole("button", { name: "Set 2 done" }).tap();
+  await bar.getByText("Question 2?").waitFor();
+  assert.equal(await bar.getByText("Answer 2").count(), 0);
+  await bar.getByRole("button", { name: "Tap for the answer" }).tap();
+  await bar.getByText("Answer 2").waitFor();
+  await page.getByRole("button", { name: "Skip" }).tap();
+  await bar.waitFor({ state: "detached" });
+
+  const second = section(page, "Workout").locator("ol > li").nth(1);
+  await second.getByRole("button", { name: "Set 1 done" }).tap(); // the coach's again, until Quiet makes room
+  await bar.getByText("Brace first.").waitFor();
+  await bar.getByRole("button", { name: "Quiet" }).tap();
+  await bar.getByText("Question 3?").waitFor(); // a new rest, a new question, the answer hidden again
+  assert.equal(await bar.getByText("Answer 3").count(), 0);
+  assert.equal(asked().length, 1);
+  assert.deepEqual(errors, []);
+});
+
 test("exercise photos: known names right away, others matched once by the AI and kept; details show start and finish", async (t) => {
   const rare = { id: "rare", date: "2026-10-01", notes: "", exercises: ["Zottman Curl (Dumbbell)", "Made Up Lift"].map((name) => ({ name, sets: [{ weight: 12, reps: 10 }] })) };
   const { page, errors, aiRequests } = await openApp(t, {

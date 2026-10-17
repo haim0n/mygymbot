@@ -457,6 +457,23 @@ test("Rest notes: once per exercise, never when quiet, and the coach hears the s
   assert.ok(app.restNoteRequest(session, "Leg Press", chat).includes("LATEST COACH CHAT (oldest first):\n- coach: How did it feel?\n- athlete: Heavy, my knee aches"));
 });
 
+test("Between sets: one request per workout, checked items, the next one for each set done", () => {
+  assert.equal(app.restFunRequest("Trivia", " space "), `Write ${app.REST_FUN_ITEMS} trivia questions about space; text is the question, reveal its short answer.`);
+  assert.ok(app.restFunRequest("Trivia").includes("on varied subjects"));
+  assert.ok(app.restFunRequest("Learn a word", "").includes("in Spanish"));
+  const answer = { items: [{ text: " Q1 ", reveal: " A1 " }, { text: "" }, { text: 7 }, { text: "Q2", reveal: "" }, null] };
+  assert.deepEqual(app.parseRestFun(answer, "Trivia"), [{ text: "Q1", reveal: "A1" }, { text: "Q2", reveal: null }]);
+  assert.deepEqual(app.parseRestFun(answer, "Fact or quote")[0], { text: "Q1", reveal: null }); // facts have nothing to reveal
+  assert.deepEqual(app.parseRestFun({ items: "no" }, "Trivia"), []);
+  assert.equal(app.parseRestFun({ items: Array(40).fill({ text: "Q" }) }, "Trivia").length, app.REST_FUN_ITEMS);
+  const sets = (done) => [{ sets: Array.from({ length: 4 }, (_, i) => ({ done: i < done })) }];
+  const restFun = [{ text: "Q1" }, { text: "Q2" }];
+  assert.equal(app.restFunItem({ exercises: sets(2), restFun }).text, "Q2");
+  assert.equal(app.restFunItem({ exercises: sets(3), restFun }).text, "Q1"); // round again after the last
+  assert.equal(app.restFunItem({ exercises: sets(0), restFun }), null);
+  assert.equal(app.restFunItem({ exercises: sets(2) }), null);
+});
+
 test("Forecasts: dates, deadlines, and honest refusals", () => {
   const bench = (n, weight) => workout(`b${n}`, daysAgo(n), [ex("Bench Press (Dumbbell)", [[weight, 10]])]);
   const steady = [56, 49, 42, 35, 28, 21, 14, 7].map((n, i) => bench(n, 40 + i * 0.75)); // ~+1 kg est. 1RM a week

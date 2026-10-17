@@ -1,10 +1,10 @@
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { formatClock } from "../dates.js";
-import { REST_NOTE_PROMPT } from "../prompts.js";
-import { askAI } from "../ai.js";
-import { SET_FEEL_SCROLL_DELAY_MS, SET_FEELS, STORAGE_KEYS } from "../config.js";
+import { REST_FUN_PROMPT, REST_NOTE_PROMPT } from "../prompts.js";
+import { askAI, askAIForJson } from "../ai.js";
+import { REST_FUN_KINDS, SET_FEEL_SCROLL_DELAY_MS, SET_FEELS, STORAGE_KEYS } from "../config.js";
 import { usePersistentState } from "../storage.js";
-import { describeNextSet, restNoteRequest, wantsRestNote } from "../workout.js";
+import { describeNextSet, parseRestFun, restFunItem, restFunRequest, restNoteRequest, wantsRestNote } from "../workout.js";
 import { usePresence } from "./primitives.jsx";
 
 export const REST_FINISHED_DISPLAY_MS = 4000;
@@ -106,6 +106,48 @@ export function useRestNote({ rest, session, setSession, context, chat }) {
   return rest && session && !session.coachQuiet && latest?.restStartedAt === rest.startedAt ? latest.text : null; // the session can load after the rest
 }
 
+// Something to read between sets that isn't training, when the athlete picked a kind in Goals. One AI call per workout, at
+// its start, writes all of it into the session, so the first rest has it and a reload doesn't ask again. It waits on the
+// rests that get a coach's note, so the bar shows one thing to read.
+export function useRestFun({ rest, session, setSession, settings }) {
+  const kind = settings.restFun?.kind ?? "Off";
+  const on = Boolean(REST_FUN_KINDS[kind]);
+  const requested = useRef(null);
+  useEffect(() => {
+    if (!on || !session || session.restFun || requested.current === session.startedAt) return;
+    const { startedAt } = session;
+    requested.current = startedAt;
+    askAIForJson(REST_FUN_PROMPT, restFunRequest(kind, settings.restFun.topic))
+      .then((answer) => {
+        const items = parseRestFun(answer, kind);
+        if (items.length) setSession((s) => (s?.startedAt === startedAt ? { ...s, restFun: items } : s));
+      })
+      .catch(() => {}); // a rest without something to read is fine; a reload tries again
+  }, [on, session?.startedAt]);
+
+  const coachRest = rest && session && (wantsRestNote(session, rest.label) || session.coachNotes?.at(-1)?.restStartedAt === rest.startedAt) && !session.coachQuiet;
+  const item = on && rest && !coachRest ? restFunItem(session) : null;
+  return item && { ...item, hint: REST_FUN_KINDS[kind].reveal };
+}
+
+// A rest's reading: the answer shows on a tap, or by itself when the rest is over.
+function RestFun({ item, finished }) {
+  const [revealed, setRevealed] = useState(false);
+  return (
+    <div className="gb-fade mt-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm leading-snug">
+      <p className="text-zinc-100">{item.text}</p>
+      {item.reveal &&
+        (revealed || finished ? (
+          <p className="gb-fade mt-1 font-semibold text-blue-300">{item.reveal}</p>
+        ) : (
+          <button onClick={() => setRevealed(true)} className="gb-tap mt-1 font-semibold text-blue-300">
+            {item.hint}
+          </button>
+        ))}
+    </div>
+  );
+}
+
 export function TimerButton({ children, onClick, label }) {
   return (
     <button onClick={onClick} aria-label={label} className="h-11 min-w-11 rounded-lg bg-zinc-700 px-3 text-sm font-semibold text-white">
@@ -114,9 +156,9 @@ export function TimerButton({ children, onClick, label }) {
   );
 }
 
-// The rest bar: the countdown, what comes next, and the coach's note. It drops in from the top and slides back up when the
-// rest ends. Reports its height, since the page starts below it.
-export function RestTimerBar({ timer, next, unit, note, onReply, onQuiet, onHeight }) {
+// The rest bar: the countdown, what comes next, and the coach's note or something to read. It drops in from the top and
+// slides back up when the rest ends. Reports its height, since the page starts below it.
+export function RestTimerBar({ timer, next, unit, note, fun, onReply, onQuiet, onHeight }) {
   const { rest, remaining, progress, finished, adjust, stop } = timer;
   const { mounted, leaving, onAnimationEnd } = usePresence(Boolean(rest));
   const barRef = useRef(null);
@@ -169,6 +211,7 @@ export function RestTimerBar({ timer, next, unit, note, onReply, onQuiet, onHeig
             <button onClick={onQuiet} className="h-10 shrink-0 rounded-lg px-2 text-sm text-zinc-400">Quiet</button>
           </div>
         )}
+        {fun && <RestFun key={rest.startedAt} item={fun} finished={finished} />}
         <span className="sr-only" aria-live="assertive">
           {finished ? "Rest over. Time for your next set." : ""}
         </span>

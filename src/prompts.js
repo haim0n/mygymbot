@@ -38,6 +38,10 @@ Write the kind of note asked for. Start with the point itself, not praise like "
 If the athlete said something in the chat that matters now (how a set felt, pain, energy, a plan change), follow up on it instead. If RECENT PAIN or an injury touches this exercise, check in about it. Match the coaching style given in the athlete profile. Never guilt or shame.
 ${NAME_RULE}`;
 
+export const REST_FUN_PROMPT = `Write short items for an athlete to read while resting between sets, 1 to 3 minutes each. Respond with JSON only, no prose or backticks.
+Schema: {"items":[{"text":string,"reveal":string|null}]}
+Each text under 20 words, each reveal under 10 words. Plain text, no emojis, no exclamation marks. Nothing about fitness, training, food or the gym: this is a break from it. Vary the subjects, prefer the surprising over the well known, and make every item true.`;
+
 export const WORKOUT_DONE_PROMPT = `You are MyGymBot, the athlete's coach. They just finished the workout below. Write one line for the finish screen: under 25 words, plain text, no emojis, no exclamation marks.
 Name one specific thing from this workout to be proud of (a best, more than last time, a set they rated too easy, simply showing up), then one short pointer for recovery or the next session. Match the coaching style given in the athlete profile. Never guilt or shame.
 ${NAME_RULE}`;

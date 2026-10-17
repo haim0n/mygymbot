@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { APP_VERSION, COACH_STYLES, MEDICAL_NOTICE, DEFAULT_SETTINGS, EXPERIENCE_LEVELS, HEIGHT_UNITS, MUSCLE_LABELS, PLATES, SEXES, TRAINING_FOCUSES, WEEKDAYS } from "../config.js";
+import { APP_VERSION, COACH_STYLES, MEDICAL_NOTICE, DEFAULT_SETTINGS, EXPERIENCE_LEVELS, HEIGHT_UNITS, MUSCLE_LABELS, PLATES, REST_FUN_KINDS, SEXES, TRAINING_FOCUSES, WEEKDAYS } from "../config.js";
 import { exportAllData, sendFeedback } from "../storage.js";
 import { daysBetween, joinWords, today } from "../dates.js";
 import { normalizeName, plateSize, platesPerSide } from "../training.js";
@@ -65,6 +65,8 @@ export function GoalsView({ settings, setSettings, records, workouts }) {
   const updateProfile = (field) => (value) => setSettings((s) => ({ ...s, profile: { ...s.profile, [field]: value } }));
   const removeGoal = (id) => setSettings((s) => ({ ...s, goals: s.goals.filter((g) => g.id !== id) }));
   const trainingDays = profile.trainingDays ?? [];
+  const restFun = { kind: "Off", topic: "", ...settings.restFun };
+  const updateRestFun = (change) => setSettings((s) => ({ ...s, restFun: { kind: "Off", topic: "", ...s.restFun, ...change } }));
 
   // Picking training days also sets sessions per week, so the two never disagree.
   function toggleDay(day) {
@@ -182,6 +184,14 @@ export function GoalsView({ settings, setSettings, records, workouts }) {
           <Field label="Coaching style" className="col-span-2">
             <Select value={profile.coachStyle ?? DEFAULT_SETTINGS.profile.coachStyle} options={Object.keys(COACH_STYLES)} onChange={updateProfile("coachStyle")} />
           </Field>
+          <Field label="Between sets" className={REST_FUN_KINDS[restFun.kind] ? "" : "col-span-2"}>
+            <Select value={restFun.kind} options={["Off", ...Object.keys(REST_FUN_KINDS)]} onChange={(kind) => updateRestFun({ kind })} />
+          </Field>
+          {REST_FUN_KINDS[restFun.kind] && (
+            <Field label={REST_FUN_KINDS[restFun.kind].topicLabel}>
+              <input value={restFun.topic} onChange={(e) => updateRestFun({ topic: e.target.value })} placeholder={REST_FUN_KINDS[restFun.kind].placeholder} className={inputClass} />
+            </Field>
+          )}
           <Field label="Injuries and equipment" className="col-span-2">
             <textarea
               rows={3}
