@@ -14,12 +14,17 @@ GCP_PROJECT = "mygymbot"  # the only GCP project GymBot uses
 GEMINI_LOCATION = "global"
 GEMINI_MODEL = "gemini-3.8-flash"
 MAX_OUTPUT_TOKENS = 4096  # thinking takes roughly 300 to 500 of these on top of the answer
+MAX_INPUT_TOKENS = 20_000  # per call; a coach message is about 6k, a screenshot import of 8 slices about 10k
 THINKING_LEVEL = "low"  # the lowest this model accepts; replies come back between sets
 PLACEHOLDER_REPLY = "(Dev mode: no Google credentials. Run `gcloud auth application-default login` for real coach replies.)"
 
 
 class EmptyReplyError(RuntimeError):
     """Gemini returned no text, for example when a safety filter stopped the answer."""
+
+
+class TooLongError(ValueError):
+    """The question is over ``MAX_INPUT_TOKENS``, so it isn't sent."""
 
 
 @dataclass
@@ -82,9 +87,16 @@ def answer(question: Question) -> Reply:
     client = _client()
     if client is None:
         return Reply(PLACEHOLDER_REPLY)
+    contents = to_gemini_contents(question.messages)
+    # Counting is free; it keeps one call from costing more than the app ever needs.
+    counted = client.models.count_tokens(
+        model=GEMINI_MODEL, contents=contents, config=types.CountTokensConfig(system_instruction=question.system or None)
+    )
+    if (counted.total_tokens or 0) > MAX_INPUT_TOKENS:
+        raise TooLongError(f"{counted.total_tokens} input tokens, over {MAX_INPUT_TOKENS}")
     response = client.models.generate_content(
         model=GEMINI_MODEL,
-        contents=to_gemini_contents(question.messages),
+        contents=contents,
         config=types.GenerateContentConfig(
             system_instruction=question.system or None,
             max_output_tokens=MAX_OUTPUT_TOKENS,

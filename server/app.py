@@ -24,12 +24,14 @@ DEV_USER = "dev"  # the only user without IAP (local dev); data in data/dev.json
 logger = logging.getLogger(__name__)
 STATIC_PATHS = ("/dist/", "/exercises/", "/static/")  # the bundle, the pictures and the install files, replaced in place by each deploy
 AI_CALLS_PER_DAY = 200  # per user: several times a heavy training day, low enough to stop a runaway loop or misuse
+AI_TOKENS_PER_DAY = 300_000  # per user, input and output: about 15 times the busiest real day, at most about $0.15
 MAX_REQUEST_BYTES = 16_000_000  # a screenshot import (up to 8 image slices) is about 3 MB
 FEEDBACK_FILE = "feedback.jsonl"  # every user's feedback, one JSON line each, next to the users' files
 MAX_FEEDBACK_CHARS = 5000
 MAX_ERROR_REPORT_CHARS = 2000  # a stack trace fits; a flood doesn't
 MAX_VERSION_CHARS = 20
 AI_LIMIT_MESSAGE = "You've reached today's limit for the coach. It resets tomorrow."
+AI_TOO_LONG_MESSAGE = "That's too much for the coach at once. Try a shorter message or fewer pictures."
 
 
 @dataclass
@@ -58,6 +60,7 @@ def create_app(stores: Stores, iap_audience: str | None, commit: str | None = No
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
     # ponytail: in memory, so it resets on each deploy; fine with one instance. Store it if the limit must hold exactly.
     ai_calls: Counter[tuple[str, date]] = Counter()
+    ai_tokens: Counter[tuple[str, date]] = Counter()
     ai_calls_lock = threading.Lock()
     feedback_lock = threading.Lock()
     page = (WEB_DIR / "index.html").read_text()
@@ -123,16 +126,21 @@ def create_app(stores: Stores, iap_audience: str | None, commit: str | None = No
         user = request.state.user
         today = (user, date.today())
         with ai_calls_lock:
-            over_limit = ai_calls[today] >= AI_CALLS_PER_DAY
+            over_limit = ai_calls[today] >= AI_CALLS_PER_DAY or ai_tokens[today] >= AI_TOKENS_PER_DAY
             ai_calls[today] += not over_limit
         if over_limit:
             logger.warning("AI limit reached for %s", user)
             return PlainTextResponse(AI_LIMIT_MESSAGE, status_code=429)
         try:
             reply = gemini.answer(question)
+        except gemini.TooLongError as error:
+            logger.warning("AI call refused for %s: %s", user, error)
+            return PlainTextResponse(AI_TOO_LONG_MESSAGE, status_code=413)
         except Exception as error:  # any Gemini failure: the app then shows "the coach didn't respond"
             logger.exception("Gemini request failed")
             return JSONResponse({"error": str(error)}, status_code=502)
+        with ai_calls_lock:
+            ai_tokens[today] += reply.input_tokens + reply.output_tokens
         # One line per call, to measure the cost per user and per prompt.
         logger.info(
             "AI call: user=%s prompt=%r tokens_in=%d tokens_out=%d",

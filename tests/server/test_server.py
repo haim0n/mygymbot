@@ -4,6 +4,8 @@ import base64
 import json
 import time
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from cryptography.hazmat.primitives import serialization
@@ -118,6 +120,30 @@ def test_ask_stops_at_the_daily_limit_and_logs_each_call(
         assert [client.post("/api/ask", json=body).status_code for _ in range(3)] == [200, 200, 429]
     assert client.post("/api/ask", json=body).text == app_module.AI_LIMIT_MESSAGE
     assert "AI call: user=dev prompt='You are GymBot' tokens_in=120 tokens_out=30" in caplog.text
+
+
+def test_ask_stops_at_the_daily_token_budget(data_file: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    client = client_for(data_file)
+    monkeypatch.setattr(app_module, "AI_TOKENS_PER_DAY", 300)
+    monkeypatch.setattr(gemini, "answer", lambda question: gemini.Reply("ok", input_tokens=120, output_tokens=30))
+    body = {"system": "Coach", "messages": [{"role": "user", "content": "hi"}]}
+    assert [client.post("/api/ask", json=body).status_code for _ in range(3)] == [200, 200, 429]
+
+
+def test_ask_refuses_a_question_over_the_input_cap(data_file: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    sent = []
+
+    class Models:
+        def count_tokens(self, **request: Any) -> SimpleNamespace:
+            return SimpleNamespace(total_tokens=gemini.MAX_INPUT_TOKENS + 1)
+
+        def generate_content(self, **request: Any) -> None:
+            sent.append(request)
+
+    monkeypatch.setattr(gemini, "_client", lambda: SimpleNamespace(models=Models()))
+    response = client_for(data_file).post("/api/ask", json={"system": "Coach", "messages": [{"role": "user", "content": "hi"}]})
+    assert (response.status_code, response.text) == (413, app_module.AI_TOO_LONG_MESSAGE)
+    assert sent == []  # never sent to Gemini
 
 
 def test_requests_over_the_size_limit_are_refused(data_file: Path, monkeypatch: pytest.MonkeyPatch) -> None:
