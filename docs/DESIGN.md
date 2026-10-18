@@ -224,7 +224,7 @@ The chat sends the last 12 messages.
 
 | Prompt | Used for | Notes |
 |---|---|---|
-| `COACH_PROMPT` | Coach chat | Includes video-tag rules, food rules, coaching style |
+| `COACH_PROMPT` | Coach chat | Stays on training, food and recovery (anything else gets one line and an offer, also when told to ignore its rules); video-tag rules, food rules, coaching style |
 | `ONBOARDING_PROMPT` | Coach chat, new athletes only | Interview, then profile and plan tags |
 | `LOG_PARSER_PROMPT` | "Describe what you did" | Returns exercises + activities as JSON |
 | `FORM_PROMPT` | Form check | Frames or photos as images |
