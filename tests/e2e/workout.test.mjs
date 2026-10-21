@@ -234,7 +234,7 @@ test("rest notes: the coach writes once per exercise while resting; Reply contin
   assert.deepEqual(errors, []);
 });
 
-test("between sets: trivia written once per workout; the answer shows on a tap, never on a rest with a coach's note", async (t) => {
+test("between sets: trivia, the answer on a tap, Next for another, never on a rest with a coach's note; what was shown is remembered", async (t) => {
   const items = Array.from({ length: 15 }, (_, i) => ({ text: `Question ${i + 1}?`, reveal: `Answer ${i + 1}` }));
   const { page, errors, aiRequests } = await openApp(t, {
     seed: { "gymbot:workouts": [userWorkout], "gymbot:settings": { ...settings(), restFun: { kind: "Trivia", topic: "space" } } },
@@ -254,10 +254,13 @@ test("between sets: trivia written once per workout; the answer shows on a tap, 
   await page.getByRole("button", { name: "Skip" }).tap();
 
   await first.getByRole("button", { name: "Set 2 done" }).tap();
+  await bar.getByText("Question 1?").waitFor();
+  assert.equal(await bar.getByText("Answer 1").count(), 0);
+  await bar.getByRole("button", { name: "Tap for the answer" }).tap();
+  await bar.getByText("Answer 1").waitFor();
+  await bar.getByRole("button", { name: "Next question" }).tap(); // more in the same rest
   await bar.getByText("Question 2?").waitFor();
   assert.equal(await bar.getByText("Answer 2").count(), 0);
-  await bar.getByRole("button", { name: "Tap for the answer" }).tap();
-  await bar.getByText("Answer 2").waitFor();
   await page.getByRole("button", { name: "Skip" }).tap();
   await bar.waitFor({ state: "detached" });
 
@@ -268,6 +271,8 @@ test("between sets: trivia written once per workout; the answer shows on a tap, 
   await bar.getByText("Question 3?").waitFor(); // a new rest, a new question, the answer hidden again
   assert.equal(await bar.getByText("Answer 3").count(), 0);
   assert.equal(asked().length, 1);
+  await settle(page);
+  assert.equal((await stored(page, "gymbot:settings")).restFun.seen.length, 15); // sent along next time, so they don't repeat
   assert.deepEqual(errors, []);
 });
 

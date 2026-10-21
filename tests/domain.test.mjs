@@ -458,7 +458,7 @@ test("Rest notes: once per exercise, never when quiet, and the coach hears the s
   assert.ok(app.restNoteRequest(session, "Leg Press", chat).includes("LATEST COACH CHAT (oldest first):\n- coach: How did it feel?\n- athlete: Heavy, my knee aches"));
 });
 
-test("Between sets: one request per workout, checked items, the next one for each set done", () => {
+test("Between sets: batches that avoid what was shown, checked items, the next one per rest or Next", () => {
   assert.equal(app.restFunRequest("Trivia", " space "), `Write ${app.REST_FUN_ITEMS} trivia questions about space; text is the question, reveal its short answer.`);
   assert.ok(app.restFunRequest("Trivia").includes("on varied subjects"));
   assert.ok(app.restFunRequest("Learn a word", "").includes("in Spanish"));
@@ -467,12 +467,19 @@ test("Between sets: one request per workout, checked items, the next one for eac
   assert.deepEqual(app.parseRestFun(answer, "Fact or quote")[0], { text: "Q1", reveal: null }); // facts have nothing to reveal
   assert.deepEqual(app.parseRestFun({ items: "no" }, "Trivia"), []);
   assert.equal(app.parseRestFun({ items: Array(40).fill({ text: "Q" }) }, "Trivia").length, app.REST_FUN_ITEMS);
-  const sets = (done) => [{ sets: Array.from({ length: 4 }, (_, i) => ({ done: i < done })) }];
-  const restFun = [{ text: "Q1" }, { text: "Q2" }];
-  assert.equal(app.restFunItem({ exercises: sets(2), restFun }).text, "Q2");
-  assert.equal(app.restFunItem({ exercises: sets(3), restFun }).text, "Q1"); // round again after the last
-  assert.equal(app.restFunItem({ exercises: sets(0), restFun }), null);
-  assert.equal(app.restFunItem({ exercises: sets(2) }), null);
+  assert.ok(app.restFunRequest("Trivia", "", ["Q1", "Q2"]).endsWith("Don't repeat or reword any of these, already shown:\n- Q1\n- Q2"));
+  const items = ["Q1", "Q2", "Q3", "Q4", "Q5", "Q6"].map((text) => ({ text, reveal: "A" }));
+  const fresh = { items, index: -1, restStartedAt: null };
+  const first = app.nextReading(fresh, 100);
+  assert.equal(app.readingFor(first, { startedAt: 100 }).text, "Q1");
+  assert.equal(app.readingFor(first, { startedAt: 200 }), null); // a rest it wasn't moved on for shows nothing yet
+  assert.equal(app.readingFor(app.nextReading(first, 100), { startedAt: 100 }).text, "Q2"); // Next in the same rest
+  const last = { ...fresh, index: 5, restStartedAt: 100 };
+  assert.equal(app.nextReading(last, 200), last); // none left: stays
+  assert.equal(app.readingRunsLow(first), false); // 5 unread
+  assert.equal(app.readingRunsLow({ ...fresh, index: 2 }), true); // 3 unread
+  assert.deepEqual(app.rememberSeen(["Q0"], items.slice(0, 2)), ["Q0", "Q1", "Q2"]);
+  assert.equal(app.rememberSeen(Array(app.REST_FUN_SEEN).fill("old"), items).at(-1), "Q6"); // the newest kept
 });
 
 test("Food: totals from grams, a protein target from bodyweight, usual meals, and the AI's draft checked", () => {

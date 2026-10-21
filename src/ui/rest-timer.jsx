@@ -4,7 +4,7 @@ import { REST_FUN_PROMPT, REST_NOTE_PROMPT } from "../prompts.js";
 import { askAI, askAIForJson } from "../ai.js";
 import { REST_FUN_KINDS, SET_FEEL_SCROLL_DELAY_MS, SET_FEELS, STORAGE_KEYS } from "../config.js";
 import { usePersistentState } from "../storage.js";
-import { describeNextSet, parseRestFun, restFunItem, restFunRequest, restNoteRequest, wantsRestNote } from "../workout.js";
+import { describeNextSet, nextReading, parseRestFun, readingFor, readingRunsLow, rememberSeen, restFunRequest, restNoteRequest, wantsRestNote } from "../workout.js";
 import { usePresence } from "./primitives.jsx";
 
 export const REST_FINISHED_DISPLAY_MS = 4000;
@@ -106,44 +106,68 @@ export function useRestNote({ rest, session, setSession, context, chat }) {
   return rest && session && !session.coachQuiet && latest?.restStartedAt === rest.startedAt ? latest.text : null; // the session can load after the rest
 }
 
-// Something to read between sets that isn't training, when the athlete picked a kind in Goals. One AI call per workout, at
-// its start, writes all of it into the session, so the first rest has it and a reload doesn't ask again. It waits on the
-// rests that get a coach's note, so the bar shows one thing to read.
-export function useRestFun({ rest, session, setSession, settings }) {
+// Something to read between sets that isn't training, when the athlete picked a kind in Goals. Batches of items are written
+// into the session (one at the start of a workout, so the first rest has one, and another when few are left unread), and
+// what was shown is remembered in the settings so later workouts don't repeat it. Each rest starts on the next item, and
+// Next moves on within a rest. It waits on the rests that get a coach's note, so the bar shows one thing to read.
+export function useRestFun({ rest, session, setSession, settings, setSettings }) {
   const kind = settings.restFun?.kind ?? "Off";
   const on = Boolean(REST_FUN_KINDS[kind]);
-  const requested = useRef(null);
+  const reading = session?.restReading;
+  const asked = useRef(null); // the batch already asked for, so it's asked once
   useEffect(() => {
-    if (!on || !session || session.restFun || requested.current === session.startedAt) return;
+    if (!on || !session || (reading && !readingRunsLow(reading))) return;
     const { startedAt } = session;
-    requested.current = startedAt;
-    askAIForJson(REST_FUN_PROMPT, restFunRequest(kind, settings.restFun.topic))
+    const batch = `${startedAt}:${reading?.items.length ?? 0}`;
+    if (asked.current === batch) return;
+    asked.current = batch;
+    askAIForJson(REST_FUN_PROMPT, restFunRequest(kind, settings.restFun.topic, settings.restFun.seen))
       .then((answer) => {
         const items = parseRestFun(answer, kind);
-        if (items.length) setSession((s) => (s?.startedAt === startedAt ? { ...s, restFun: items } : s));
+        if (!items.length) return;
+        setSession((s) => {
+          if (s?.startedAt !== startedAt) return s;
+          const current = s.restReading ?? { items: [], index: -1, restStartedAt: null };
+          return { ...s, restReading: { ...current, items: [...current.items, ...items] } };
+        });
+        setSettings((s) => ({ ...s, restFun: { ...s.restFun, seen: rememberSeen(s.restFun?.seen, items) } }));
       })
-      .catch(() => {}); // a rest without something to read is fine; a reload tries again
-  }, [on, session?.startedAt]);
+      .catch(() => {}); // a rest without something to read is fine; the next rest or a reload tries again
+  }, [on, session?.startedAt, reading?.items.length, reading?.index]);
 
-  const coachRest = rest && session && (wantsRestNote(session, rest.label) || session.coachNotes?.at(-1)?.restStartedAt === rest.startedAt) && !session.coachQuiet;
-  const item = on && rest && !coachRest ? restFunItem(session) : null;
-  return item && { ...item, hint: REST_FUN_KINDS[kind].reveal };
+  const coachRest = Boolean(rest && session && !session.coachQuiet && (wantsRestNote(session, rest.label) || session.coachNotes?.at(-1)?.restStartedAt === rest.startedAt));
+  const moveOn = () => setSession((s) => (s?.restReading ? { ...s, restReading: nextReading(s.restReading, rest.startedAt) } : s));
+  useEffect(() => {
+    if (on && rest && !coachRest && reading && reading.restStartedAt !== rest.startedAt) moveOn();
+  }, [on, rest?.startedAt, coachRest, Boolean(reading)]);
+
+  const item = on && !coachRest ? readingFor(reading, rest) : null;
+  if (!item) return null;
+  const { reveal, next } = REST_FUN_KINDS[kind];
+  return { ...item, key: `${rest.startedAt}:${reading.index}`, hint: reveal, nextLabel: next, onNext: reading.index + 1 < reading.items.length ? moveOn : null };
 }
 
-// A rest's reading: the answer shows on a tap, or by itself when the rest is over.
+// A rest's reading: the answer shows on a tap, or by itself when the rest is over; Next brings another one.
 function RestFun({ item, finished }) {
   const [revealed, setRevealed] = useState(false);
   return (
     <div className="gb-fade mt-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm leading-snug">
       <p className="text-zinc-100">{item.text}</p>
-      {item.reveal &&
-        (revealed || finished ? (
-          <p className="gb-fade mt-1 font-semibold text-blue-300">{item.reveal}</p>
-        ) : (
-          <button onClick={() => setRevealed(true)} className="gb-tap mt-1 font-semibold text-blue-300">
-            {item.hint}
+      <div className="mt-1 flex min-h-8 items-center justify-between gap-3">
+        {item.reveal &&
+          (revealed || finished ? (
+            <p className="gb-fade font-semibold text-blue-300">{item.reveal}</p>
+          ) : (
+            <button onClick={() => setRevealed(true)} className="gb-tap font-semibold text-blue-300">
+              {item.hint}
+            </button>
+          ))}
+        {item.onNext && (
+          <button onClick={item.onNext} className="gb-tap ml-auto shrink-0 font-semibold text-zinc-300">
+            {item.nextLabel}
           </button>
-        ))}
+        )}
+      </div>
     </div>
   );
 }
@@ -211,7 +235,7 @@ export function RestTimerBar({ timer, next, unit, note, fun, onReply, onQuiet, o
             <button onClick={onQuiet} className="h-10 shrink-0 rounded-lg px-2 text-sm text-zinc-400">Quiet</button>
           </div>
         )}
-        {fun && <RestFun key={rest.startedAt} item={fun} finished={finished} />}
+        {fun && <RestFun key={fun.key} item={fun} finished={finished} />}
         <span className="sr-only" aria-live="assertive">
           {finished ? "Rest over. Time for your next set." : ""}
         </span>

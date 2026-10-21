@@ -108,7 +108,7 @@ export default function GymBot() {
   const { unit, daysPerWeek } = settings.profile;
   const restNote = useRestNote({ rest: restTimer.rest, session, setSession, context: coachContext, chat });
   const rest = restTimer.rest;
-  const restFun = useRestFun({ rest, session, setSession, settings });
+  const restFun = useRestFun({ rest, session, setSession, settings, setSettings });
   const restExercise = rest && session?.exercises.find((e) => e.id === rest.exerciseId);
   const ratedSet = restExercise?.sets.find((set) => set.id === rest.setId && set.done);
   const [restBarHeight, setRestBarHeight] = useState(112);
