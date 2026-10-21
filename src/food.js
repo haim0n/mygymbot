@@ -1,4 +1,4 @@
-import { MAX_FOOD_GRAMS, MAX_PER_100G, MAX_USUAL_MEALS, PROTEIN_PER_KG, USUAL_MEAL_MIN_COUNT } from "./config.js";
+import { FOOD_HISTORY_DAYS, MAX_FOOD_GRAMS, MAX_PER_100G, MAX_USUAL_MEALS, PROTEIN_PER_KG, USUAL_MEAL_MIN_COUNT } from "./config.js";
 import { parseDate, toDateKey, weekStart } from "./dates.js";
 import { addDays } from "./schedule.js";
 
@@ -84,18 +84,40 @@ export function parseFoodDraft(answer) {
   };
 }
 
-// For the coach: today's protein against the target and the week's average, only once something was logged this week.
-export function foodContext(food, todayKey, target) {
-  const week = dailyProtein(food, todayKey, 7);
-  const logged = week.filter((day) => mealsOn(food, day.date).length);
-  if (!logged.length) return null;
+// For the coach: today's protein against the target and the week's average, then each day that Past days lists, with its meals
+// and whether they worked out, and the protein on workout days against other days, worked out here so the coach only reads it.
+export function foodContext(food, workouts, todayKey, target) {
+  const week = dailyProtein(food, todayKey, 7).filter((day) => mealsOn(food, day.date).length);
+  const days = pastDays(food, todayKey).slice(0, FOOD_HISTORY_DAYS);
+  if (!week.length && !days.length) return null;
   const todays = dayTotals(food, todayKey);
-  const average = Math.round(logged.reduce((total, day) => total + day.protein, 0) / logged.length);
+  const workoutDays = new Set(workouts.map((w) => w.date));
+  const trained = days.filter((date) => workoutDays.has(date));
+  const other = days.filter((date) => !workoutDays.has(date));
+  const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  const protein = (dates) => Math.round(dates.reduce((total, date) => total + dayTotals(food, date).protein, 0) / dates.length);
+  const dayLine = (date) => {
+    const totals = dayTotals(food, date);
+    const meals = mealsOn(food, date).sort((a, b) => a.time.localeCompare(b.time));
+    return [
+      `- ${date}${workoutDays.has(date) ? ", workout day" : ""}: ${Math.round(totals.protein)} g protein, about ${Math.round(totals.kcal)} kcal, `,
+      `${Math.round(totals.carbs)} g carbs, ${Math.round(totals.fat)} g fat; ${meals.map((meal) => `${meal.time} ${meal.name}`).join(", ")}`,
+    ].join("");
+  };
+  const todayLine = week.length
+    ? [
+        `today ${Math.round(todays.protein)} g protein`,
+        target && ` (target ${target.low}-${target.high} g)`,
+        `, about ${Math.round(todays.kcal)} kcal; average ${protein(week.map((day) => day.date))} g protein a day over the ${week.length} logged days this week.`,
+      ]
+        .filter(Boolean)
+        .join("")
+    : "nothing logged in the last 7 days.";
   return [
-    `FOOD (estimated from photos and descriptions, usually on the low side; use it only when they ask about food or recovery): today ${Math.round(todays.protein)} g protein`,
-    target && ` (target ${target.low}-${target.high} g)`,
-    `, about ${Math.round(todays.kcal)} kcal; average ${average} g protein a day over the ${logged.length} logged days this week.`,
+    `FOOD (estimated from photos and descriptions, usually on the low side; use it only when they ask about food or recovery, or what may explain how a workout went): ${todayLine}`,
+    trained.length > 0 && other.length > 0 && `Protein a day on the logged days before today: ${protein(trained)} g over ${plural(trained.length, "workout day")}, ${protein(other)} g over ${plural(other.length, "other day")}.`,
+    days.length > 0 && `Each logged day before today, newest first (protein, kcal, carbs, fat; meals):\n${days.map(dayLine).join("\n")}`,
   ]
     .filter(Boolean)
-    .join("");
+    .join("\n");
 }

@@ -120,7 +120,7 @@ export function buildCoachContext({ profile, goals, routines = [], coachMemory =
     `TODAY: ${todayLine}.`,
     bodyweightLog.length > 1 &&
       `BODYWEIGHT LOG (${u}, oldest first): ${bodyweightLog.slice(-BODYWEIGHT_CONTEXT_ENTRIES).map((e) => `${e.date} ${e.weight}`).join(", ")}`,
-    foodContext(food, today(), proteinTarget(currentBodyweight(bodyweightLog, profile), u)),
+    foodContext(food, workouts, today(), proteinTarget(currentBodyweight(bodyweightLog, profile), u)),
     `GOALS:\n${goalLines.join("\n") || "none set"}`,
     goals.length > 0 && `GOAL FORECASTS (straight line from the last 12 weeks; gains usually slow over time):\n${forecasts.join("\n")}`,
     `BEST LIFTS:\n${records.join("\n") || "none yet"}`,

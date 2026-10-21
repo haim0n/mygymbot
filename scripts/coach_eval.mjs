@@ -1,20 +1,47 @@
 // Real coach replies for fixed scenarios, to judge a prompt change against the rules each scenario lists.
 // Run: node scripts/coach_eval.mjs [NAME ...]  (no names: all). Real Gemini calls billed to mygymbot, about a cent a run.
-// The system prompt is built exactly as the app builds it (COACH_PROMPT + buildCoachContext).
-import { COACH_PROMPT } from "../src/prompts.js";
+// The system prompt is built exactly as the app builds it: COACH_PROMPT, or a scenario's own prompt such as the finish
+// screen's, then buildCoachContext.
+import { COACH_PROMPT, WORKOUT_DONE_PROMPT } from "../src/prompts.js";
+import { finishedWorkoutRequest } from "../src/workout.js";
 import { buildCoachContext } from "../src/coach-context.js";
 import { buildAutopilotPlans } from "../src/autopilot.js";
 import { startServer } from "../tests/e2e/helpers.mjs";
 import { settings, userWorkout, yesterdayWorkout } from "../tests/fixtures.mjs";
 import { today } from "../src/dates.js";
+import { addDays } from "../src/schedule.js";
 
 const workouts = [userWorkout, yesterdayWorkout];
 const knee = settings({ name: "Dana", notes: "Left knee hurts on deep squats", sessionMinutes: "45" });
 const session = { exercises: [{ name: "Bench Press (Dumbbell)", sets: [{ weight: 44, reps: 10, done: true }, { weight: 44, reps: 10 }] }] };
 
-// A low-protein day so far: eggs on toast this morning, 80 kg logged.
-const eggs = { name: "Eggs", grams: 120, per100: { protein: 13, carbs: 1, fat: 10, kcal: 155 } };
-const lowProteinDay = { bodyweight: [{ date: today(), weight: 80 }], food: [{ id: "b", date: today(), time: "08:00", name: "Eggs on toast", items: [eggs] }] };
+// A week of meals before today, with less protein on the 3 workout days (about 90 g) than on the 4 others (about 152 g),
+// and a low-protein day so far today: eggs on toast this morning, 80 kg logged. All dates are relative to today, so the
+// workout days line up with the meals.
+const item = (name, grams, protein, carbs, fat, kcal) => ({ name, grams, per100: { protein, carbs, fat, kcal } });
+const oats = item("Oats with milk", 300, 5, 12, 3, 95);
+const rice = item("Rice", 200, 2.5, 28, 0.3, 130);
+const pasta = item("Pasta", 250, 5.8, 31, 0.9, 158);
+const meal = (daysAgo, time, name, items) => ({ id: `${daysAgo}-${time}`, date: addDays(today(), -daysAgo), time, name, items });
+const restDay = (daysAgo) => [
+  meal(daysAgo, "08:00", "Oats with milk", [oats]),
+  meal(daysAgo, "13:00", "Chicken and rice", [item("Chicken breast", 200, 31, 0, 3.6, 165), rice]),
+  meal(daysAgo, "16:00", "Greek yogurt", [item("Greek yogurt", 250, 10, 4, 0.4, 59)]),
+  meal(daysAgo, "20:00", "Salmon and pasta", [item("Salmon", 150, 20, 0, 13, 208), pasta]),
+];
+const workoutDay = (daysAgo) => [
+  meal(daysAgo, "08:00", "Oats with milk", [oats]),
+  meal(daysAgo, "13:00", "Pasta", [pasta]),
+  meal(daysAgo, "20:00", "Chicken and rice", [item("Chicken breast", 180, 31, 0, 3.6, 165), rice]),
+];
+const foodLog = {
+  workouts: [6, 4, 2].map((daysAgo) => ({ ...yesterdayWorkout, id: `w${daysAgo}`, date: addDays(today(), -daysAgo) })),
+  bodyweight: [{ date: today(), weight: 80 }],
+  food: [
+    ...[7, 6, 5, 4, 3, 2, 1].flatMap((daysAgo) => ([6, 4, 2].includes(daysAgo) ? workoutDay(daysAgo) : restDay(daysAgo))),
+    meal(0, "08:00", "Eggs on toast", [item("Eggs", 120, 13, 1, 10, 155)]),
+  ],
+};
 
 const SCENARIOS = [
   {
@@ -39,8 +66,9 @@ const SCENARIOS = [
     name: "between-sets",
     settings: settings(),
     session,
+    ...foodLog,
     messages: ["That felt heavy"],
-    rules: ["1 to 3 short lines", "Says what to do with the next set"],
+    rules: ["1 to 3 short lines", "Says what to do with the next set", "Does not bring up protein or food"],
   },
   {
     name: "remember",
@@ -87,16 +115,45 @@ const SCENARIOS = [
   {
     name: "food-not-asked",
     settings: settings(),
-    ...lowProteinDay,
+    ...foodLog,
     messages: ["Plan my workout for today"],
     rules: ["Does not bring up protein or food"],
   },
   {
     name: "food-asked",
     settings: settings(),
-    ...lowProteinDay,
+    ...foodLog,
     messages: ["What should I eat tonight?"],
     rules: ["Uses today's logged protein (about 16 g) and the target (128 g)", "Suggests a protein-rich dinner"],
+  },
+  {
+    name: "food-history-asked",
+    settings: settings(),
+    ...foodLog,
+    messages: ["What did I eat yesterday?"],
+    rules: ["Names yesterday's meals from the log: oats with milk, chicken and rice, Greek yogurt, salmon and pasta", "Gives yesterday's protein, about 152 g", "Answers only about yesterday"],
+  },
+  {
+    name: "food-explains-workout",
+    settings: settings(),
+    ...foodLog,
+    messages: ["My last bench session felt heavier than usual, any idea why?"],
+    rules: ["Names the food on workout days (about 90 g protein against about 152 g on other days) as one possible reason, not a certain one"],
+  },
+  {
+    name: "workout-done-food",
+    prompt: WORKOUT_DONE_PROMPT,
+    settings: settings(),
+    ...foodLog,
+    messages: [finishedWorkoutRequest(yesterdayWorkout, 45, [], "kg")],
+    rules: ["One line under 25 words", "Does not bring up protein or food"],
+  },
+  {
+    name: "food-workouts-asked",
+    settings: settings(),
+    ...foodLog,
+    messages: ["Do I eat enough protein on my training days?"],
+    rules: ["Says about 90 g a day on workout days against about 152 g on other days, from the data", "Says the workout days are under the 128 g target", "Gives one concrete change for workout days"],
   },
   {
     name: "onboarding",
@@ -114,7 +171,7 @@ try {
   for (const scenario of chosen) {
     const history = scenario.workouts ?? workouts;
     const plans = buildAutopilotPlans(history, scenario.settings);
-    const system = `${COACH_PROMPT}\n\n${buildCoachContext(scenario.settings, history, plans, {}, scenario.session ?? null, scenario.bodyweight ?? [], scenario.food ?? [])}`;
+    const system = `${scenario.prompt ?? COACH_PROMPT}\n\n${buildCoachContext(scenario.settings, history, plans, {}, scenario.session ?? null, scenario.bodyweight ?? [], scenario.food ?? [])}`;
     // Earlier messages alternate athlete and coach, ending with the athlete's.
     const messages = scenario.messages.map((content, i) => ({ role: (scenario.messages.length - i) % 2 ? "user" : "assistant", content }));
     const response = await fetch(`${server.url}api/ask`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ system, messages }) });

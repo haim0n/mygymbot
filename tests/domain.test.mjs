@@ -507,8 +507,13 @@ test("Food: totals from grams, past days and protein by week, a protein target f
   const usual = app.usualMeals([...log, meal("2026-10-03", "19:00", [{ ...rice, grams: 300 }, chicken])]);
   assert.equal(usual.length, 1);
   assert.equal(usual[0].items[0].grams, 300); // the latest version
-  assert.match(app.foodContext(log, "2026-10-03", { low: 128, high: 176 }), /^FOOD .*today 5 g protein \(target 128-176 g\), about 260 kcal; average 36 g protein a day over the 3 logged days/);
-  assert.equal(app.foodContext([], "2026-10-03", null), null);
+  assert.match(app.foodContext(log, [], "2026-10-03", { low: 128, high: 176 }), /^FOOD .*today 5 g protein \(target 128-176 g\), about 260 kcal; average 36 g protein a day over the 3 logged days/);
+  assert.equal(app.foodContext([], [], "2026-10-03", null), null);
+  const withWorkout = app.foodContext(log, [{ date: "2026-10-02", exercises: [] }], "2026-10-03", null);
+  assert.ok(withWorkout.includes("\n- 2026-10-02, workout day: 52 g protein, about 508 kcal, 56 g carbs, 6 g fat; 13:00 Bowl\n- 2026-10-01: 52 g protein,"));
+  assert.ok(withWorkout.includes("\nProtein a day on the logged days before today: 52 g over 1 workout day, 52 g over 1 other day.\n"));
+  assert.ok(!app.foodContext([meal("2026-10-03", "08:00", [rice])], [], "2026-10-03", null).includes("Each logged day")); // no past day, no log
+  assert.match(app.foodContext([meal("2026-09-01", "08:00", [rice])], [], "2026-10-03", null), /nothing logged in the last 7 days\.\nEach logged day .*\n- 2026-09-01: 5 g protein/);
   const context = (meals) => app.buildCoachContext(settingsWith(), [], [], {}, null, [{ date: "2026-10-01", weight: 80 }], meals);
   assert.ok(context([meal(app.today(), "12:00", [chicken])]).includes("today 47 g protein (target 128-176 g)"));
   assert.ok(!context([]).includes("FOOD")); // nothing logged: no line
