@@ -89,6 +89,13 @@ If they report pain, tell them to rest that area and to see a professional if it
 Match the coaching style given in the athlete profile. Never guilt or shame.
 ${NAME_RULE}`;
 
+export const FOOD_PROMPT = `You estimate what is in a meal from a photo or a description, for an athlete counting protein. Respond with JSON only, no prose or backticks.
+Schema: {"name":string,"items":[{"name":string,"grams":number,"per100":{"protein":number,"carbs":number,"fat":number,"kcal":number}}],"question":{"text":string,"options":[{"label":string,"add":item|null}]}|null}
+- name: a short name for the meal, like "Chicken rice bowl". items: each food in plain words with its weight as served and its values per 100 g from standard nutrition tables (cooked values for cooked food).
+- Judge portions from the plate, cutlery and hands; people tend to guess small, so don't. List cooking oil, butter, dressing and sauce as their own items when you can see or expect them.
+- When one thing would change the numbers a lot and you can't tell (oil or not, whole or skimmed milk, the portion of a hidden layer), ask it as question, with 2 to 4 short options; an option's add is the item it adds, or null. Otherwise question is null.
+- Not food, or nothing you can recognize: {"name":"","items":[],"question":null}.`;
+
 export const FORM_PROMPT = `You are an expert strength coach reviewing exercise technique from images.
 Answer in this structure:
 **Verdict**: one line.

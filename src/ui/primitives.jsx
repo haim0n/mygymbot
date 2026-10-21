@@ -102,7 +102,7 @@ export function PrimaryButton({ children, onClick, busy = false, disabled = fals
 
 // The real <input> covers the whole drop zone (invisible), so a tap lands on it directly.
 // In-app browsers often ignore a <label> forwarding clicks to a display:none input.
-export function FilePicker({ title, hint, accept, busy = false, onFiles }) {
+export function FilePicker({ title, hint, accept, busy = false, onFiles, Icon = Upload }) {
   function handleChange(event) {
     const files = Array.from(event.target.files ?? []);
     event.target.value = ""; // allow picking the same file again
@@ -111,7 +111,7 @@ export function FilePicker({ title, hint, accept, busy = false, onFiles }) {
 
   return (
     <div className="relative flex flex-col items-center gap-1 rounded-xl border-2 border-dashed border-zinc-300 px-6 py-7 text-center">
-      {busy ? <Loader2 className="w-6 h-6 animate-spin text-zinc-500" /> : <Upload className="w-6 h-6 text-zinc-500" />}
+      {busy ? <Loader2 className="w-6 h-6 animate-spin text-zinc-500" /> : <Icon className="w-6 h-6 text-zinc-500" />}
       <span className="font-semibold text-zinc-800">{title}</span>
       {hint && <span className="text-sm text-zinc-500">{hint}</span>}
       <input

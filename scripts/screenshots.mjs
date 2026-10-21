@@ -22,7 +22,7 @@ const tab = (name) => page.getByRole("button", { name, exact: true }).tap();
 
 try {
   await page.goto(server.url);
-  for (const name of ["Coach", "Progress", "Goals"]) {
+  for (const name of ["Coach", "Food", "Progress", "Goals"]) {
     await tab(name);
     await shot(name.toLowerCase());
   }

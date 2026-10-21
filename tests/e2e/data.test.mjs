@@ -18,6 +18,64 @@ test("export: every gymbot key as one JSON object, next to the app version and c
   assert.deepEqual(errors, []);
 });
 
+test("food: a typed meal is drafted by the AI, answered, corrected and saved; protein counts toward the target", async (t) => {
+  const per = (protein, carbs, fat, kcal) => ({ protein, carbs, fat, kcal });
+  const draft = {
+    name: "Chicken rice bowl",
+    items: [{ name: "Chicken breast", grams: 150, per100: per(31, 0, 3.6, 165) }, { name: "Rice", grams: 200, per100: per(2.5, 28, 0.3, 130) }],
+    question: { text: "Cooked in oil?", options: [{ label: "No", add: null }, { label: "A little", add: { name: "Olive oil", grams: 10, per100: per(0, 0, 100, 884) } }] },
+  };
+  const { page, errors, aiRequests } = await openApp(t, {
+    seed: { "gymbot:workouts": [userWorkout], "gymbot:bodyweight": [{ date: "2026-10-01", weight: 80 }] },
+    ai: (body) => (body.system.startsWith("You estimate what is in a meal") ? JSON.stringify(draft) : "OK"),
+  });
+  await page.getByRole("button", { name: "Food", exact: true }).tap();
+  await page.getByText("of 128 g protein today").waitFor(); // 1.6 g per kg of 80 kg
+  await page.getByLabel("What did you eat?").fill("chicken and rice");
+  await page.getByRole("button", { name: "Add", exact: true }).tap();
+  await page.getByText("Cooked in oil?").waitFor();
+  assert.match(aiRequests.at(-1).messages[0].content, /chicken and rice/);
+  await page.getByRole("button", { name: "A little" }).tap();
+  await page.getByText("Olive oil").waitFor();
+  await page.getByLabel("Chicken breast grams").fill("200"); // the photo guessed small
+  await page.getByText("67 g protein").waitFor(); // 62 + 5
+  await page.getByRole("button", { name: "Save meal" }).tap();
+  await section(page, "Today").getByText("Chicken rice bowl").waitFor();
+  await page.getByText("67", { exact: true }).waitFor(); // the day's protein
+  await settle(page);
+  const [meal] = await stored(page, "gymbot:food");
+  assert.equal(meal.date, "2026-10-03");
+  assert.deepEqual(meal.items.map((i) => [i.name, i.grams]), [["Chicken breast", 200], ["Rice", 200], ["Olive oil", 10]]);
+  assert.equal(meal.question, undefined); // the question isn't stored
+
+  await section(page, "Today").getByText("Chicken rice bowl").tap(); // a saved meal opens to edit or delete
+  await page.getByRole("button", { name: "Delete this meal" }).tap();
+  await page.getByRole("button", { name: "Tap again to delete" }).tap();
+  await section(page, "Today").waitFor({ state: "detached" });
+  assert.deepEqual(errors, []);
+});
+
+test("food: a photo goes to the AI as a JPEG; a meal logged 3 times becomes a one-tap button", async (t) => {
+  const egg = { name: "Eggs", grams: 100, per100: { protein: 13, carbs: 1, fat: 10, kcal: 155 } };
+  const breakfast = (date) => ({ id: date, date, time: "08:00", name: "Eggs", items: [egg] });
+  const { page, errors, aiRequests } = await openApp(t, {
+    seed: { "gymbot:food": ["2026-09-30", "2026-10-01", "2026-10-02"].map(breakfast) },
+    ai: (body) => (body.system.startsWith("You estimate what is in a meal") ? JSON.stringify({ name: "Eggs", items: [egg], question: null }) : "OK"),
+  });
+  await page.getByRole("button", { name: "Food", exact: true }).tap();
+  await page.getByRole("button", { name: "Eggs, 13 g" }).tap(); // usual meal: logged now, no AI
+  await section(page, "Today").getByText("Eggs").waitFor();
+  assert.equal(aiRequests.length, 0);
+  await page.getByLabel("Snap a meal").setInputFiles({ name: "plate.png", mimeType: "image/png", buffer: Buffer.from(PNG_1PX, "base64") });
+  await page.getByRole("button", { name: "Save meal" }).waitFor();
+  const [message] = aiRequests.at(-1).messages;
+  assert.equal(message.images.length, 1);
+  assert.ok(Buffer.from(message.images[0], "base64").subarray(0, 2).equals(Buffer.from([0xff, 0xd8])));
+  assert.deepEqual(errors, []);
+});
+
+const PNG_1PX = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
 test("bodyweight: logged in Progress, one entry per day, charted with the change", async (t) => {
   const { page, errors } = await openApp(t, {
     seed: { "gymbot:workouts": [userWorkout], "gymbot:bodyweight": [{ date: "2026-09-20", weight: 82.5 }] },

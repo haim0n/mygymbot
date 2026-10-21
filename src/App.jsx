@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from "react";
-import { MessageCircle, Dumbbell, TrendingUp, Target, Loader2 } from "lucide-react";
+import { MessageCircle, Dumbbell, Utensils, TrendingUp, Target, Loader2 } from "lucide-react";
 import { DEFAULT_SETTINGS, GLOBAL_CSS, STORAGE_KEYS } from "./config.js";
 import { usePersistentState, useSaveProblem } from "./storage.js";
 import { today } from "./dates.js";
-import { exercisesByFrequency, logBodyweight, personalRecords } from "./training.js";
+import { currentBodyweight, exercisesByFrequency, logBodyweight, personalRecords } from "./training.js";
 import { buildAutopilotPlans } from "./autopilot.js";
 import { todayFacts } from "./motivation.js";
 import { feelResult, nextSet, rateSet, saveRoutine } from "./workout.js";
@@ -13,6 +13,7 @@ import { useInjuryAreas, useLearnedMuscles } from "./ui/muscles.jsx";
 import { ExerciseContext, ExerciseSheet, useLearnedPhotos } from "./ui/exercises.jsx";
 import { CoachView } from "./ui/coach.jsx";
 import { LogView } from "./ui/log.jsx";
+import { FoodView } from "./ui/food.jsx";
 import { ProgressView } from "./ui/progress.jsx";
 import { GoalsView } from "./ui/goals.jsx";
 import { RestTimerBar, useRestFun, useRestNote, useRestTimer } from "./ui/rest-timer.jsx";
@@ -20,6 +21,7 @@ import { RestTimerBar, useRestFun, useRestNote, useRestTimer } from "./ui/rest-t
 export const TABS = [
   { id: "coach", label: "Coach", Icon: MessageCircle },
   { id: "log", label: "Log", Icon: Dumbbell },
+  { id: "food", label: "Food", Icon: Utensils },
   { id: "progress", label: "Progress", Icon: TrendingUp },
   { id: "goals", label: "Goals", Icon: Target },
 ];
@@ -27,7 +29,7 @@ export const TABS = [
 export function BottomNav({ tab, onSelect, workoutInProgress }) {
   return (
     <nav className="fixed inset-x-0 bottom-0 h-16 bg-white border-t border-zinc-200">
-      <div className="max-w-md mx-auto h-full grid grid-cols-4">
+      <div className="max-w-md mx-auto h-full grid grid-cols-5">
         {TABS.map(({ id, label, Icon }) => (
           <button
             key={id}
@@ -61,6 +63,7 @@ export default function GymBot() {
   const [formChecks, setFormChecks, formChecksLoaded] = usePersistentState(STORAGE_KEYS.formChecks, []);
   const [session, setSession, sessionLoaded] = usePersistentState(STORAGE_KEYS.session, null); // workout in progress
   const [bodyweightLog, setBodyweightLog, bodyweightLoaded] = usePersistentState(STORAGE_KEYS.bodyweight, []);
+  const [food, setFood, foodLoaded] = usePersistentState(STORAGE_KEYS.food, []);
 
   const records = useMemo(() => personalRecords(workouts), [workouts]);
   const exerciseNames = useMemo(() => exercisesByFrequency(workouts), [workouts]);
@@ -81,7 +84,7 @@ export default function GymBot() {
   const deleteRoutine = (name) => setSettings((s) => ({ ...s, routines: (s.routines ?? []).filter((r) => r.name !== name) }));
 
   const saveProblem = useSaveProblem();
-  const loaded = workoutsLoaded && settingsLoaded && chatLoaded && formChecksLoaded && sessionLoaded && bodyweightLoaded;
+  const loaded = workoutsLoaded && settingsLoaded && chatLoaded && formChecksLoaded && sessionLoaded && bodyweightLoaded && foodLoaded;
   // Exercises in saved plans and the workout in progress count too: a new user's first plan has no history yet.
   const namesInUse = useMemo(
     () => [...new Set([...exerciseNames, ...(settings.routines ?? []).flatMap((r) => r.exercises), ...(session?.exercises ?? []).map((e) => e.name)])],
@@ -96,8 +99,8 @@ export default function GymBot() {
     [learnedMuscles, learnedPhotos, formChecks, settings.profile.notes]
   );
   const coachContext = useMemo(
-    () => buildCoachContext(settings, workouts, plans, learnedMuscles, session, bodyweightLog),
-    [settings, workouts, plans, learnedMuscles, session, bodyweightLog]
+    () => buildCoachContext(settings, workouts, plans, learnedMuscles, session, bodyweightLog, food),
+    [settings, workouts, plans, learnedMuscles, session, bodyweightLog, food]
   );
   const facts = useMemo(() => todayFacts({ workouts, settings, records, plans }), [workouts, settings, records, plans]);
   const coachStyle = settings.profile.coachStyle ?? DEFAULT_SETTINGS.profile.coachStyle;
@@ -160,6 +163,7 @@ export default function GymBot() {
     log: (
       <LogView workouts={workouts} setWorkouts={setWorkouts} session={session} setSession={setSession} settings={settings} coachContext={coachContext} plans={plans} yourExercises={namesInUse} learnedMuscles={learnedMuscles} onRangeChange={setRepRange} onStartRest={restTimer.start} feelPrompt={feelPrompt} onSaveRoutine={storeRoutine} onDeleteRoutine={deleteRoutine} showImport={showImport} setShowImport={setShowImport} bodyweight={bodyweight} unit={unit} />
     ),
+    food: <FoodView food={food} setFood={setFood} bodyweight={currentBodyweight(bodyweightLog, settings.profile)} unit={unit} />,
     progress: <ProgressView workouts={workouts} records={records} exerciseNames={exerciseNames} learnedMuscles={learnedMuscles} unit={unit} daysPerWeek={daysPerWeek} onNavigate={setTab}
         bodyweight={bodyweight} />,
     goals: <GoalsView settings={settings} setSettings={setSettings} records={records} workouts={workouts} />,

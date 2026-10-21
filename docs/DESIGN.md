@@ -84,6 +84,7 @@ Storage keys (all personal scope):
 | `gymbot:rest` | the rest timer: `{ label, duration, startedAt, endsAt, exerciseId?, setId? }`, so a reload keeps counting |
 | `gymbot:chat` | last 60 coach messages `{ role, content }` |
 | `gymbot:form-checks` | last 30 `{ id, date, exercise, feedback }` |
+| `gymbot:food` | meals, oldest first: `{ id, date, time, name, items: [{ name, grams, per100: { protein, carbs, fat, kcal } }] }` (no photos) |
 | `gymbot:daily-note` | `{ key: "date\|style", text }` (one coach note per day) |
 | `gymbot:muscle-map` | coach classifications for exercises the rules don't know |
 | `gymbot:exercise-photos` | the photo the AI matched to each exercise without a same-named one (`null`: none fits) |
@@ -99,7 +100,7 @@ Modules in `src/`, with no import cycles; domain modules import nothing from `sr
 3. **Pure domain logic**: `dates.js`, `training.js`, `autopilot.js`, `motivation.js`, `muscles.js`, `workout.js`, `schedule.js`, `activities.js`, `import.js`, `coach-context.js`. No JSX and nothing from the UI, so the unit tests import them directly.
 4. **UI** (`src/ui/`): primitives, feature components, tabs, rest timer; `App.jsx` (`GymBot`) holds the app state.
 
-App-level state: workouts, settings, chat, form checks, session, rest timer, open details sheet, and the derived values (`records`, `plans`, `coachContext`, Today facts, daily note, learned muscles and photos). `ExerciseContext` gives every thumbnail the learned muscles and photos, the details-sheet opener and what the form check in the sheet needs, without passing them down.
+App-level state: workouts, settings, chat, form checks, food, session, rest timer, open details sheet, and the derived values (`records`, `plans`, `coachContext`, Today facts, daily note, learned muscles and photos). `ExerciseContext` gives every thumbnail the learned muscles and photos, the details-sheet opener and what the form check in the sheet needs, without passing them down.
 
 ## 5. Features and the rules behind them
 
@@ -191,6 +192,15 @@ The latest workout from the last 2 days gets a "How did it go?" card from the ne
   - Tall captures are cut into 900×1300 px tiles with an 80 px overlap, rather than shrunk until the text is unreadable.
   - One request per screenshot, answering in compact `[weight, reps]` pairs.
 
+### Food (`food.js`, the Food tab)
+Protein first: photo estimates run about 35% off and mostly too low (oil and sauces hide), so the AI's answer is a draft to correct, and protein is the number that matters for training.
+- **Adding a meal:** snap or choose a photo, or type it ("2 eggs, toast"); a typed note goes along with a photo. One AI call (`FOOD_PROMPT`, JSON, checked by `parseFoodDraft`) returns a name, the items with grams and their values per 100 g, and at most one question when one thing would change the numbers a lot ("Cooked in oil?"), whose options can add an item.
+- **Correcting:** change grams, remove an item, or add one in words (one more AI call for just that). The totals come from grams and the values per 100 g (`itemTotals`, `mealTotals`), so an edit needs no AI. The photo isn't stored.
+- **Protein target (`proteinTarget`):** 1.6 g per kg of the latest bodyweight a day, with 2.2 as the useful top (`PROTEIN_PER_KG`); without a bodyweight, no target.
+- **Usual meals (`usualMeals`):** the same foods logged 3 times or more become one-tap buttons that log the latest version now, with no AI call.
+- **Tab:** today's protein against the target (with kcal, carbs and fat small), Snap a meal and Type it, usual meals, today's meals (tap one to edit or delete it), and protein over the last 7 days against the target.
+- **Coach:** sees today's protein against the target, the kcal and the average over the logged days of the week, marked as estimates and to be used only for food or recovery questions (`foodContext`; without that, a workout plan ended with a protein reminder), only when something was logged that week. Checked with the `food-asked` and `food-not-asked` scenarios in `scripts/coach_eval.mjs`.
+
 ### Form check
 In each exercise's details sheet, folded until "Check my form" is tapped, with that exercise's past checks under it.
 - **Video:** 6 frames sampled evenly across the set.
@@ -211,6 +221,7 @@ In each exercise's details sheet, folded until "Check my form" is tapped, with t
 ### Coach context (`buildCoachContext`)
 Sent with every coach chat, check-in and daily note:
 - the athlete's profile, schedule, food preferences and workout music
+- what they ate today and this week (protein against the target), when they logged food
 - today's status
 - goals, with forecasts
 - best lifts
@@ -229,6 +240,7 @@ The chat sends the last 12 messages.
 | `ONBOARDING_PROMPT` | Coach chat, new athletes only | Interview, then profile and plan tags |
 | `LOG_PARSER_PROMPT` | "Describe what you did" | Returns exercises + activities as JSON |
 | `FORM_PROMPT` | Form check (exercise details sheet) | Frames or photos as images |
+| `FOOD_PROMPT` | Food tab: a meal from a photo or words | JSON items with grams and values per 100 g, at most one question |
 | `COLUMN_MAPPER_PROMPT` | Unknown CSV layouts | Only header + 5 rows leave the device |
 | `SCREENSHOT_IMPORT_PROMPT` | Screenshot import | Tiles of one screenshot per request |
 | `MUSCLE_CLASSIFIER_PROMPT` | Unknown exercises | Batches of 20, cached |
@@ -245,6 +257,7 @@ All JSON answers go through `askAIForJson`, which reads the outermost `{…}` so
 
 - **Coach:** like a messaging app, the title, the Today card and the input stay in place and only the chat scrolls. The chat opens at the latest message and follows new ones, unless the athlete scrolled back. The Today card is one line (its first fact) until tapped; tapping the input closes it again, to keep room for the keyboard · for a new athlete, the coach's first question instead of quick prompts · quick prompts (incl. "What should I eat today?") above the input.
 - **Log:** Import history (toggle) · Workout done (full screen after Finish) · Session saved (after an activity) · check-in card · coach reply · Workout (Add exercise and Replace open the exercise picker; Save as a plan; a workout left open (going for more than `LEFT_OPEN_HOURS`, 6; one past midnight is not) asks whether to save it as the day it started or train it today) or Start a workout (saved plans, the next one first in line; for a new user, Start an empty workout is the main button) · Log an activity · Up next · Describe what you did · History (folded). During a workout, Log an activity and Describe what you did are hidden: the page is the workout.
+- **Food:** today's protein against the target · Snap a meal, or type it · usual meals · the meal editor (grams, the AI's question, add in words) · today's meals · protein this week.
 - **Progress:** stats · Activities (last 7 days) · muscle heatmap · estimated 1RM chart with trend line · weekly volume · best lifts.
 - **Goals:** goal cards (barbell loaded with plates you've lifted, forecast) · new goal · About you (with the "not medical advice" notice under injuries; units, experience, sessions per week, minutes per session, birth year, sex, height, training days, usual time, food preferences, workout music, coaching style, between sets, main focus, injuries and equipment) · What your coach knows (facts from chats, edit or delete) · Your data (export as text) · Feedback (kept by the server in `feedback.jsonl`)
 - **Everywhere:** rest timer bar (top, with the next set, the coach's note, Reply and Quiet), tab bar with a dot while a workout is in progress, exercise details sheet (with Check my form).
@@ -279,6 +292,7 @@ All JSON answers go through `askAIForJson`, which reads the outermost `{…}` so
 - **No notifications** while the app is closed (it's a web page). Calendar reminders are the workaround.
 - **Unsaved changes live in memory.** A failed save is retried (newest value per key, 1 s doubling to 10 s) and "Not saved yet" shows meanwhile, but closing the app while offline loses what wasn't saved.
 - **Changing kg/lb doesn't convert** past entries.
+- **Food numbers are estimates**, about 35% off from a photo before the grams are corrected; only today and the last 7 days are shown.
 - **Activities can't be edited** (delete and re-log).
 - **Video links weren't verified as still online.** YouTube blocks automated checks. Each is one line in `VIDEO_LIBRARY`.
 - **Forecasts are straight lines** and get optimistic as gains slow.
@@ -286,6 +300,6 @@ All JSON answers go through `askAIForJson`, which reads the outermost `{…}` so
 
 ## 10. Testing
 
-- `npm test`: unit tests for Autopilot, equipment steps, rep-range stability, rest, import, muscle rules, video library, live workout, set feel, exercise search (shorthand, one row per exercise) and replace, forecasts, schedule and check-ins, activities and highlights, and what to read between sets. They import the domain modules directly.
+- `npm test`: unit tests for Autopilot, equipment steps, rep-range stability, rest, import, muscle rules, video library, live workout, set feel, exercise search (shorthand, one row per exercise) and replace, forecasts, schedule and check-ins, activities and highlights, what to read between sets, and food (totals, protein target, usual meals, the AI draft checked, the coach's food line). They import the domain modules directly.
 - `npm run test:server`: pytest for the backend: storage round-trip, daily backup, corrupt-file refusal, access gate, the `/api/ask` request checks, daily AI limits (calls and tokens), the input cap, usage log line and Gemini translation, the request size limit, app error reports, and errors becoming 502 (no network).
-- `npm run test:e2e`: Playwright on a Pixel 5-sized screen with a fixed clock (Sat 3 Oct 2026, 18:00), seeded storage, and a fake AI that records requests. Each test starts the Python server with its own seeded data file. Covers live workout (reorder, check-off, reload during a rest, finish, the finish screen with its weigh-in and continue after a finish by mistake, scroll back to an unfinished exercise, set feel, trivia between sets), the exercise picker (search, add, replace, Android Back), history edit (with Replace), activities, check-in, video-tag resolution, the Today card, form check in the details sheet, export, a failed save being retried, and an app error reported once, and feedback.
+- `npm run test:e2e`: Playwright on a Pixel 5-sized screen with a fixed clock (Sat 3 Oct 2026, 18:00), seeded storage, and a fake AI that records requests. Each test starts the Python server with its own seeded data file. Covers live workout (reorder, check-off, reload during a rest, finish, the finish screen with its weigh-in and continue after a finish by mistake, scroll back to an unfinished exercise, set feel, trivia between sets), the exercise picker (search, add, replace, Android Back), history edit (with Replace), activities, check-in, video-tag resolution, the Today card, food (a typed meal with its question, corrected and saved, then deleted; a photo; a usual meal), form check in the details sheet, export, a failed save being retried, and an app error reported once, and feedback.

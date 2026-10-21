@@ -8,6 +8,7 @@ export const STORAGE_KEYS = {
   settings: "gymbot:settings",
   chat: "gymbot:chat",
   formChecks: "gymbot:form-checks",
+  food: "gymbot:food", // meals: [{ id, date, time, name, items: [{ name, grams, per100: { protein, carbs, fat, kcal } }] }]
   session: "gymbot:session",
   dailyNote: "gymbot:daily-note",
   muscleMap: "gymbot:muscle-map",
@@ -100,6 +101,14 @@ export const CHAT_HISTORY_SIZE = 60; // messages kept on device
 export const BODYWEIGHT_CONTEXT_ENTRIES = 30; // latest bodyweight entries the coach sees
 export const FRAME_COUNT = 6; // frames sampled from a form-check video
 export const FRAME_MAX_SIDE = 768; // px, keeps image uploads small
+
+// Food: protein first. Photo estimates run about 35% off (mostly too low: oil and sauces hide), so the draft is meant to be corrected.
+export const PROTEIN_PER_KG = [1.6, 2.2]; // g per kg of bodyweight a day for strength and muscle; the low end is the target
+export const USUAL_MEAL_MIN_COUNT = 3; // a meal logged this often becomes a one-tap button
+export const MAX_USUAL_MEALS = 6;
+export const FOOD_CHART_DAYS = 7;
+export const MAX_FOOD_GRAMS = 2000; // per item; more is a misread
+export const MAX_PER_100G = { protein: 100, carbs: 100, fat: 100, kcal: 900 }; // nothing has more per 100 g
 
 // Muscles
 export const MUSCLES = ["chest", "shoulders", "biceps", "triceps", "forearms", "core", "traps", "lats", "upperBack", "lowerBack", "glutes", "quads", "hamstrings", "calves"];

@@ -2,6 +2,7 @@ import { BODYWEIGHT_CONTEXT_ENTRIES, COACH_STYLES, DEFAULT_SETTINGS, EXPERIENCE_
 import { ONBOARDING_PROMPT } from "./prompts.js";
 import { daysBetween, formatClock, today } from "./dates.js";
 import { currentBodyweight, personalRecords, sortNewestFirst } from "./training.js";
+import { foodContext, proteinTarget } from "./food.js";
 import { formatRange } from "./autopilot.js";
 import { formatSets, weeklyMuscleSets } from "./muscles.js";
 import { nextRoutine } from "./workout.js";
@@ -70,7 +71,7 @@ export function rememberFacts(facts, reply, date) {
   return updated.slice(-MAX_COACH_FACTS);
 }
 
-export function buildCoachContext({ profile, goals, routines = [], coachMemory = [] }, workouts, plans, learnedMuscles, session, bodyweightLog = []) {
+export function buildCoachContext({ profile, goals, routines = [], coachMemory = [] }, workouts, plans, learnedMuscles, session, bodyweightLog = [], food = []) {
   const u = profile.unit;
   const formatWorkout = formatWorkoutLine;
   const schedule = (profile.trainingDays ?? []).length
@@ -117,6 +118,7 @@ export function buildCoachContext({ profile, goals, routines = [], coachMemory =
     `TODAY: ${todayLine}.`,
     bodyweightLog.length > 1 &&
       `BODYWEIGHT LOG (${u}, oldest first): ${bodyweightLog.slice(-BODYWEIGHT_CONTEXT_ENTRIES).map((e) => `${e.date} ${e.weight}`).join(", ")}`,
+    foodContext(food, today(), proteinTarget(currentBodyweight(bodyweightLog, profile), u)),
     `GOALS:\n${goalLines.join("\n") || "none set"}`,
     goals.length > 0 && `GOAL FORECASTS (straight line from the last 12 weeks; gains usually slow over time):\n${forecasts.join("\n")}`,
     `BEST LIFTS:\n${records.join("\n") || "none yet"}`,

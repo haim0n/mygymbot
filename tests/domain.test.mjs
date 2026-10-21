@@ -16,8 +16,9 @@ import * as importing from "../src/import.js";
 import * as coach_context from "../src/coach-context.js";
 import * as photos from "../src/exercise-photos.js";
 import * as photoMatches from "../src/photo-matches.js";
+import * as food from "../src/food.js";
 
-const app = { ...config, ...dates, ...training, ...autopilot, ...motivation, ...muscles, ...liveWorkout, ...schedule, ...activities, ...importing, ...coach_context, ...photos, ...photoMatches };
+const app = { ...config, ...dates, ...training, ...autopilot, ...motivation, ...muscles, ...liveWorkout, ...schedule, ...activities, ...importing, ...coach_context, ...photos, ...photoMatches, ...food };
 
 const daysAgo = (n) => {
   const d = new Date();
@@ -472,6 +473,39 @@ test("Between sets: one request per workout, checked items, the next one for eac
   assert.equal(app.restFunItem({ exercises: sets(3), restFun }).text, "Q1"); // round again after the last
   assert.equal(app.restFunItem({ exercises: sets(0), restFun }), null);
   assert.equal(app.restFunItem({ exercises: sets(2) }), null);
+});
+
+test("Food: totals from grams, a protein target from bodyweight, usual meals, and the AI's draft checked", () => {
+  const rice = { name: "Rice", grams: 200, per100: { protein: 2.5, carbs: 28, fat: 0.3, kcal: 130 } };
+  const chicken = { name: "Chicken breast", grams: 150, per100: { protein: 31, carbs: 0, fat: 3.6, kcal: 165 } };
+  const meal = (date, time, items) => ({ id: `${date}${time}`, date, time, name: "Bowl", items });
+  assert.deepEqual(app.mealTotals(meal("2026-10-03", "13:00", [rice, chicken])), { protein: 51.5, carbs: 56, fat: 6, kcal: 507.5 });
+  const log = [meal("2026-10-01", "13:00", [rice, chicken]), meal("2026-10-02", "13:00", [chicken, rice]), meal("2026-10-03", "08:00", [rice])];
+  assert.equal(app.dayTotals(log, "2026-10-03").protein, 5);
+  assert.deepEqual(app.dailyProtein(log, "2026-10-03", 4).map((d) => d.protein), [0, 51.5, 51.5, 5]);
+  assert.deepEqual(app.proteinTarget(80, "kg"), { low: 128, high: 176 });
+  assert.deepEqual(app.proteinTarget(176, "lb"), { low: 128, high: 176 });
+  assert.equal(app.proteinTarget(null, "kg"), null);
+  assert.deepEqual(app.usualMeals(log), []); // twice is not usual yet
+  const usual = app.usualMeals([...log, meal("2026-10-03", "19:00", [{ ...rice, grams: 300 }, chicken])]);
+  assert.equal(usual.length, 1);
+  assert.equal(usual[0].items[0].grams, 300); // the latest version
+  assert.match(app.foodContext(log, "2026-10-03", { low: 128, high: 176 }), /^FOOD .*today 5 g protein \(target 128-176 g\), about 260 kcal; average 36 g protein a day over the 3 logged days/);
+  assert.equal(app.foodContext([], "2026-10-03", null), null);
+  const context = (meals) => app.buildCoachContext(settingsWith(), [], [], {}, null, [{ date: "2026-10-01", weight: 80 }], meals);
+  assert.ok(context([meal(app.today(), "12:00", [chicken])]).includes("today 47 g protein (target 128-176 g)"));
+  assert.ok(!context([]).includes("FOOD")); // nothing logged: no line
+
+  const draft = app.parseFoodDraft({
+    name: " Bowl ",
+    items: [chicken, { name: "Rice", grams: -1, per100: rice.per100 }, { name: "", grams: 10, per100: rice.per100 }, { name: "Oil", grams: 5000, per100: { protein: 0, carbs: 0, fat: 100, kcal: 884 } }],
+    question: { text: "Cooked in oil?", options: [{ label: "No", add: null }, { label: "Yes", add: { name: "Olive oil", grams: 10, per100: { protein: 0, carbs: 0, fat: 100, kcal: 884 } } }] },
+  });
+  assert.equal(draft.name, "Bowl");
+  assert.deepEqual(draft.items.map((i) => [i.name, i.grams]), [["Chicken breast", 150], ["Oil", 2000]]); // bad items dropped, grams capped
+  assert.deepEqual(draft.question.options.map((o) => o.add?.name ?? null), [null, "Olive oil"]);
+  assert.equal(app.parseFoodDraft({ items: [chicken], question: { text: "Oil?", options: [{ label: "Yes" }] } }).question, null); // one option is no question
+  assert.deepEqual(app.parseFoodDraft("not json"), { name: "", items: [], question: null });
 });
 
 test("Forecasts: dates, deadlines, and honest refusals", () => {
