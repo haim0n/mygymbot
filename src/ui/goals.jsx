@@ -86,36 +86,6 @@ export function GoalsView({ settings, setSettings, records, workouts }) {
     <div className="space-y-4">
       <ViewTitle>Goals</ViewTitle>
 
-      {goals.length > 0 && (
-        <p className="-mt-2 text-sm text-zinc-500">Forecasts extend your last 12 weeks of progress. Gains usually slow as you get stronger, so treat dates as rough.</p>
-      )}
-      {goals.map((goal) => (
-        <GoalCard
-          key={goal.id}
-          goal={goal}
-          current={records[goal.exercise]?.e1rm ?? 0}
-          forecast={goalForecast(workouts, goal, records[goal.exercise]?.e1rm ?? 0)}
-          unit={profile.unit} onRemove={() => removeGoal(goal.id)} />
-      ))}
-
-      <Panel className="space-y-3">
-        <SectionTitle>New goal</SectionTitle>
-        <Field label="Exercise">
-          <input list="exercise-names" value={draft.exercise} onChange={(e) => setDraft({ ...draft, exercise: e.target.value })} placeholder="Bench Press" className={inputClass} />
-        </Field>
-        <div className="grid grid-cols-2 gap-2">
-          <Field label={`Target 1RM (${profile.unit})`}>
-            <input type="number" inputMode="decimal" value={draft.target} onChange={(e) => setDraft({ ...draft, target: e.target.value })} className={inputClass} />
-          </Field>
-          <Field label="By (optional)">
-            <input type="date" value={draft.deadline} onChange={(e) => setDraft({ ...draft, deadline: e.target.value })} className={inputClass} />
-          </Field>
-        </div>
-        <PrimaryButton onClick={addGoal} disabled={!draft.exercise.trim() || !Number(draft.target)}>
-          Add goal
-        </PrimaryButton>
-      </Panel>
-
       <Panel className="space-y-3">
         <div>
           <SectionTitle>About you</SectionTitle>
@@ -208,6 +178,36 @@ export function GoalsView({ settings, setSettings, records, workouts }) {
             )}
           </Field>
         </div>
+      </Panel>
+
+      {goals.length > 0 && (
+        <p className="-mt-2 text-sm text-zinc-500">Forecasts extend your last 12 weeks of progress. Gains usually slow as you get stronger, so treat dates as rough.</p>
+      )}
+      {goals.map((goal) => (
+        <GoalCard
+          key={goal.id}
+          goal={goal}
+          current={records[goal.exercise]?.e1rm ?? 0}
+          forecast={goalForecast(workouts, goal, records[goal.exercise]?.e1rm ?? 0)}
+          unit={profile.unit} onRemove={() => removeGoal(goal.id)} />
+      ))}
+
+      <Panel className="space-y-3">
+        <SectionTitle>New goal</SectionTitle>
+        <Field label="Exercise">
+          <input list="exercise-names" value={draft.exercise} onChange={(e) => setDraft({ ...draft, exercise: e.target.value })} placeholder="Bench Press" className={inputClass} />
+        </Field>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label={`Target 1RM (${profile.unit})`}>
+            <input type="number" inputMode="decimal" value={draft.target} onChange={(e) => setDraft({ ...draft, target: e.target.value })} className={inputClass} />
+          </Field>
+          <Field label="By (optional)">
+            <input type="date" value={draft.deadline} onChange={(e) => setDraft({ ...draft, deadline: e.target.value })} className={inputClass} />
+          </Field>
+        </div>
+        <PrimaryButton onClick={addGoal} disabled={!draft.exercise.trim() || !Number(draft.target)}>
+          Add goal
+        </PrimaryButton>
       </Panel>
 
       <CoachMemoryPanel settings={settings} setSettings={setSettings} />
