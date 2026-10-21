@@ -1,17 +1,18 @@
-import { useState } from "react";
-import { Camera, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Camera, ChevronDown, ChevronUp, X } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ReferenceLine, ResponsiveContainer, CartesianGrid } from "recharts";
-import { CHART, FOOD_CHART_DAYS } from "../config.js";
+import { CHART, FOOD_CHART_DAYS, FOOD_HISTORY_DAYS, FOOD_HISTORY_WEEKS } from "../config.js";
 import { FOOD_PROMPT } from "../prompts.js";
 import { askAIForJson } from "../ai.js";
 import { imageToFrame } from "../media.js";
-import { parseDate, today } from "../dates.js";
-import { dailyProtein, dayTotals, itemTotals, mealTotals, mealsOn, parseFoodDraft, proteinTarget, usualMeals } from "../food.js";
+import { formatDate, formatShortDate, parseDate, today } from "../dates.js";
+import { dailyProtein, dayTotals, itemTotals, mealTotals, mealsOn, parseFoodDraft, pastDays, proteinTarget, usualMeals, weeklyProtein } from "../food.js";
 import { DeleteButton, ErrorText, FilePicker, Panel, PrimaryButton, SectionTitle, ViewTitle, inputClass } from "./primitives.jsx";
 
 const nowTime = () => new Date().toTimeString().slice(0, 5);
 const grams = (n) => `${Math.round(n)} g`;
 const sortMeals = (meals) => [...meals].sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+const Chevron = ({ up }) => (up ? <ChevronUp className="h-5 w-5 shrink-0" /> : <ChevronDown className="h-5 w-5 shrink-0" />);
 
 // Asks the AI for a meal's items from a photo, a description or both.
 async function draftMeal({ photo, text }) {
@@ -75,6 +76,7 @@ function MealEditor({ meal, onSave, onCancel, onDelete }) {
         <input value={draft.name} onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))} aria-label="Meal name" placeholder="Meal" className={`${inputClass} font-semibold`} />
         {onDelete && <DeleteButton onConfirm={onDelete} label="Delete this meal" />}
       </div>
+      {draft.date !== today() && <p className="text-sm font-semibold text-zinc-700">{formatDate(draft.date)}, {draft.time}</p>}
       <p className="text-sm text-zinc-600">
         <span className="font-semibold text-zinc-900">{grams(totals.protein)} protein</span>, about {Math.round(totals.kcal)} kcal. Check the grams: photos tend to look smaller than they are.
       </p>
@@ -135,25 +137,93 @@ function MealEditor({ meal, onSave, onCancel, onDelete }) {
   );
 }
 
-function ProteinWeek({ food, target }) {
-  const days = dailyProtein(food, today(), FOOD_CHART_DAYS).map((day) => ({
-    day: parseDate(day.date).toLocaleDateString(undefined, { weekday: "short" }),
-    protein: Math.round(day.protein),
-  }));
-  if (days.filter((day) => day.protein > 0).length < 2) return null;
-  const top = Math.ceil(Math.max(target?.low ?? 0, ...days.map((day) => day.protein)) / 50) * 50; // round ticks, and the target line in sight
+// Protein bars against the target line, once two bars have something.
+function ProteinChart({ title, data, target, note }) {
+  if (data.filter((bar) => bar.protein > 0).length < 2) return null;
+  const top = Math.ceil(Math.max(target?.low ?? 0, ...data.map((bar) => bar.protein)) / 50) * 50; // round ticks, and the target line in sight
   return (
     <Panel>
-      <SectionTitle>Protein this week</SectionTitle>
+      <SectionTitle>{title}</SectionTitle>
       <ResponsiveContainer width="100%" height={160}>
-        <BarChart data={days} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+        <BarChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
           <CartesianGrid stroke={CHART.grid} vertical={false} />
-          <XAxis dataKey="day" tick={CHART.tick} tickLine={false} axisLine={false} />
+          <XAxis dataKey="label" tick={CHART.tick} tickLine={false} axisLine={false} />
           <YAxis tick={CHART.tick} tickLine={false} axisLine={false} domain={[0, top]} tickCount={top / 50 + 1} />
           {target && <ReferenceLine y={target.low} stroke={CHART.accent} strokeDasharray="4 4" />}
           <Bar dataKey="protein" name="Protein (g)" fill={CHART.accent} radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
+      {note && <p className="mt-2 text-sm text-zinc-500">{note}</p>}
+    </Panel>
+  );
+}
+
+// A day's meals, oldest first; tap one to edit or delete it.
+function MealList({ meals, onEdit }) {
+  return (
+    <ul className="divide-y divide-zinc-100">
+      {meals.map((meal) => (
+        <li key={meal.id}>
+          <button onClick={() => onEdit(meal)} className="flex min-h-12 w-full items-center gap-3 py-2 text-left">
+            <span className="w-12 shrink-0 text-sm tabular-nums text-zinc-500">{meal.time}</span>
+            <span className="min-w-0 flex-1 truncate font-medium text-zinc-900">{meal.name}</span>
+            <span className="shrink-0 text-sm tabular-nums text-zinc-600">{grams(mealTotals(meal).protein)}</span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// Folded by default, like the workout History: one row per day with a meal. Tap a day for its meals, and a meal to edit it.
+function PastDays({ food, onEdit }) {
+  const [open, setOpen] = useState(false);
+  const [openDay, setOpenDay] = useState(null);
+  const openRow = useRef(null);
+  // A day opened near the bottom would open under the tab bar: bring its meals into sight.
+  useEffect(() => {
+    openRow.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [openDay]);
+  const days = pastDays(food, today());
+  if (!days.length) return null;
+
+  return (
+    <Panel>
+      <h2 className="gb-display text-2xl font-bold text-zinc-900">
+        <button onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex min-h-10 w-full items-center justify-between gap-3">
+          Past days
+          <span className="flex items-center gap-1 text-base font-semibold text-zinc-500">
+            {days.length} {days.length === 1 ? "day" : "days"}
+            <Chevron up={open} />
+          </span>
+        </button>
+      </h2>
+
+      {open && (
+        <ul className="mt-2 divide-y divide-zinc-200">
+          {days.slice(0, FOOD_HISTORY_DAYS).map((date) => {
+            const totals = dayTotals(food, date);
+            const expanded = openDay === date;
+            return (
+              <li key={date} ref={expanded ? openRow : null} className="py-2">
+                <button onClick={() => setOpenDay(expanded ? null : date)} aria-expanded={expanded} className="flex w-full items-center justify-between gap-3 py-1 text-left">
+                  <span>
+                    <span className="font-semibold text-zinc-900">{formatDate(date)}</span>
+                    <span className="block text-sm tabular-nums text-zinc-500">
+                      {grams(totals.protein)} protein, about {Math.round(totals.kcal)} kcal
+                    </span>
+                  </span>
+                  <span className="text-zinc-400">
+                    <Chevron up={expanded} />
+                  </span>
+                </button>
+                {expanded && <MealList meals={sortMeals(mealsOn(food, date))} onEdit={onEdit} />}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {open && days.length > FOOD_HISTORY_DAYS && <p className="mt-2 text-xs text-zinc-500">Showing your {FOOD_HISTORY_DAYS} most recent days.</p>}
     </Panel>
   );
 }
@@ -211,6 +281,12 @@ export function FoodView({ food, setFood, bodyweight, unit }) {
 
   const relog = (meal) => setFood((all) => sortMeals([...all, { ...meal, id: crypto.randomUUID(), date, time: nowTime() }]));
 
+  // The editor opens at the top, out of sight from Past days.
+  function editPast(meal) {
+    setEditing(meal);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   return (
     <div className="space-y-4">
       <ViewTitle>Food</ViewTitle>
@@ -266,21 +342,22 @@ export function FoodView({ food, setFood, bodyweight, unit }) {
       {meals.length > 0 && (
         <Panel>
           <SectionTitle>Today</SectionTitle>
-          <ul className="divide-y divide-zinc-100">
-            {meals.map((meal) => (
-              <li key={meal.id}>
-                <button onClick={() => setEditing(meal)} className="flex min-h-12 w-full items-center gap-3 py-2 text-left">
-                  <span className="w-12 shrink-0 text-sm tabular-nums text-zinc-500">{meal.time}</span>
-                  <span className="min-w-0 flex-1 truncate font-medium text-zinc-900">{meal.name}</span>
-                  <span className="shrink-0 text-sm tabular-nums text-zinc-600">{grams(mealTotals(meal).protein)}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <MealList meals={meals} onEdit={setEditing} />
         </Panel>
       )}
 
-      <ProteinWeek food={food} target={target} />
+      <ProteinChart
+        title="Protein this week"
+        target={target}
+        data={dailyProtein(food, date, FOOD_CHART_DAYS).map((day) => ({ label: parseDate(day.date).toLocaleDateString(undefined, { weekday: "short" }), protein: Math.round(day.protein) }))}
+      />
+      <ProteinChart
+        title="Protein a day, by week"
+        note="Averaged over the days you logged before today."
+        target={target}
+        data={weeklyProtein(food, date, FOOD_HISTORY_WEEKS).map((week) => ({ label: formatShortDate(week.week), protein: week.protein }))}
+      />
+      <PastDays food={food} onEdit={editPast} />
     </div>
   );
 }

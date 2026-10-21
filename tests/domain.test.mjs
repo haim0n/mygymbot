@@ -486,7 +486,7 @@ test("Between sets: batches that avoid what was shown, checked items, the next o
   assert.equal(app.rememberSeen(Array(app.REST_FUN_SEEN).fill("old"), items).at(-1), "Q6"); // the newest kept
 });
 
-test("Food: totals from grams, a protein target from bodyweight, usual meals, and the AI's draft checked", () => {
+test("Food: totals from grams, past days and protein by week, a protein target from bodyweight, usual meals, and the AI's draft checked", () => {
   const rice = { name: "Rice", grams: 200, per100: { protein: 2.5, carbs: 28, fat: 0.3, kcal: 130 } };
   const chicken = { name: "Chicken breast", grams: 150, per100: { protein: 31, carbs: 0, fat: 3.6, kcal: 165 } };
   const meal = (date, time, items) => ({ id: `${date}${time}`, date, time, name: "Bowl", items });
@@ -494,6 +494,12 @@ test("Food: totals from grams, a protein target from bodyweight, usual meals, an
   const log = [meal("2026-10-01", "13:00", [rice, chicken]), meal("2026-10-02", "13:00", [chicken, rice]), meal("2026-10-03", "08:00", [rice])];
   assert.equal(app.dayTotals(log, "2026-10-03").protein, 5);
   assert.deepEqual(app.dailyProtein(log, "2026-10-03", 4).map((d) => d.protein), [0, 51.5, 51.5, 5]);
+  assert.deepEqual(app.pastDays(log, "2026-10-03"), ["2026-10-02", "2026-10-01"]); // newest first, today left out
+  assert.deepEqual(app.weeklyProtein([meal("2026-09-22", "13:00", [chicken]), ...log], "2026-10-03", 3), [
+    { week: "2026-09-14", protein: 0 },
+    { week: "2026-09-21", protein: 47 },
+    { week: "2026-09-28", protein: 52 }, // (51.5 + 51.5) / 2: today's 5 g so far doesn't count
+  ]);
   assert.deepEqual(app.proteinTarget(80, "kg"), { low: 128, high: 176 });
   assert.deepEqual(app.proteinTarget(176, "lb"), { low: 128, high: 176 });
   assert.equal(app.proteinTarget(null, "kg"), null);

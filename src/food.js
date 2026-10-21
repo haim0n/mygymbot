@@ -1,5 +1,6 @@
 import { MAX_FOOD_GRAMS, MAX_PER_100G, MAX_USUAL_MEALS, PROTEIN_PER_KG, USUAL_MEAL_MIN_COUNT } from "./config.js";
-import { parseDate, toDateKey } from "./dates.js";
+import { parseDate, toDateKey, weekStart } from "./dates.js";
+import { addDays } from "./schedule.js";
 
 const NUTRIENTS = ["protein", "carbs", "fat", "kcal"];
 const sum = (list) => Object.fromEntries(NUTRIENTS.map((n) => [n, list.reduce((total, values) => total + values[n], 0)]));
@@ -25,6 +26,21 @@ export function dailyProtein(food, endDate, days) {
     d.setDate(d.getDate() - (days - 1 - i));
     const date = toDateKey(d);
     return { date, protein: dayTotals(food, date).protein };
+  });
+}
+
+// The days before today with a meal logged, newest first.
+export const pastDays = (food, todayKey) => [...new Set(food.map((meal) => meal.date))].filter((date) => date < todayKey).sort().reverse();
+
+// Protein a day in each of the last `weeks` Monday weeks up to todayKey, oldest first: the average over the days before today
+// with a meal, so neither a day left blank nor today's half-logged day pulls the week down. 0 for a week with nothing logged.
+export function weeklyProtein(food, todayKey, weeks) {
+  return Array.from({ length: weeks }, (_, i) => {
+    const week = addDays(weekStart(todayKey), -7 * (weeks - 1 - i));
+    const end = addDays(week, 7);
+    const days = [...new Set(food.filter((meal) => meal.date >= week && meal.date < end && meal.date < todayKey).map((meal) => meal.date))];
+    const protein = days.reduce((total, date) => total + dayTotals(food, date).protein, 0) / (days.length || 1);
+    return { week, protein: Math.round(protein) };
   });
 }
 

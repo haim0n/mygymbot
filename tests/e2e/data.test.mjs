@@ -55,9 +55,10 @@ test("food: a typed meal is drafted by the AI, answered, corrected and saved; pr
   assert.deepEqual(errors, []);
 });
 
+const egg = { name: "Eggs", grams: 100, per100: { protein: 13, carbs: 1, fat: 10, kcal: 155 } };
+const breakfast = (date) => ({ id: date, date, time: "08:00", name: "Eggs", items: [egg] });
+
 test("food: a photo goes to the AI as a JPEG; a meal logged 3 times becomes a one-tap button", async (t) => {
-  const egg = { name: "Eggs", grams: 100, per100: { protein: 13, carbs: 1, fat: 10, kcal: 155 } };
-  const breakfast = (date) => ({ id: date, date, time: "08:00", name: "Eggs", items: [egg] });
   const { page, errors, aiRequests } = await openApp(t, {
     seed: { "gymbot:food": ["2026-09-30", "2026-10-01", "2026-10-02"].map(breakfast), "gymbot:settings": { ...settings(), tourSeen: true } },
     ai: (body) => (body.system.startsWith("You estimate what is in a meal") ? JSON.stringify({ name: "Eggs", items: [egg], question: null }) : "OK"),
@@ -73,6 +74,35 @@ test("food: a photo goes to the AI as a JPEG; a meal logged 3 times becomes a on
   const [message] = aiRequests.at(-1).messages;
   assert.equal(message.images.length, 1);
   assert.ok(Buffer.from(message.images[0], "base64").subarray(0, 2).equals(Buffer.from([0xff, 0xd8])));
+  assert.deepEqual(errors, []);
+});
+
+test("food: past days open by day, and a past meal is corrected", async (t) => {
+  const { page, errors } = await openApp(t, {
+    seed: { "gymbot:food": ["2026-09-22", "2026-09-30", "2026-10-01", "2026-10-02"].map(breakfast), "gymbot:settings": { ...settings(), tourSeen: true } },
+  });
+  await page.getByRole("button", { name: "Food", exact: true }).tap();
+  const past = section(page, /^Past days/);
+  const toggle = past.getByRole("button", { name: /^Past days/ });
+  assert.equal(await toggle.getAttribute("aria-expanded"), "false");
+  assert.match(await toggle.textContent(), /4 days/);
+
+  await toggle.tap();
+  const days = past.getByRole("button", { name: /protein, about/ });
+  await days.first().waitFor();
+  const rows = await days.allTextContents(); // each is the date, then "13 g protein, about 155 kcal"
+  assert.deepEqual(rows.map((row) => row.replace("13 g protein, about 155 kcal", "")), ["Fri, Oct 2", "Thu, Oct 1", "Wed, Sep 30", "Tue, Sep 22"]); // newest first
+
+  await past.getByRole("button", { name: /^Thu, Oct 1/ }).tap();
+  await past.getByRole("button", { name: /Eggs/ }).tap(); // opens the editor at the top
+  await page.getByText("Thu, Oct 1, 08:00").waitFor(); // which day the meal is from, under today's protein
+  await page.getByLabel("Eggs grams").fill("200");
+  await page.getByRole("button", { name: "Save meal" }).tap();
+  await past.getByText("26 g protein, about 310 kcal").waitFor();
+  await settle(page);
+  const saved = (await stored(page, "gymbot:food")).find((meal) => meal.id === "2026-10-01");
+  assert.deepEqual([saved.date, saved.time, saved.items[0].grams], ["2026-10-01", "08:00", 200]); // still that day
+  await section(page, "Protein a day, by week").locator("svg.recharts-surface").waitFor(); // two weeks with meals
   assert.deepEqual(errors, []);
 });
 
