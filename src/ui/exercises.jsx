@@ -11,6 +11,7 @@ import { describeMuscles, musclesFor } from "../muscles.js";
 import { PrimaryButton, inputClass, reducedMotion, useBackToClose } from "./primitives.jsx";
 import { BodyFigure, BodyView, exerciseFills } from "./muscles.jsx";
 import { VideoGuides } from "./videos.jsx";
+import { FormCheck } from "./form-check.jsx";
 import { guideFor, knownPhoto, normalizeName, photoFor, searchExercises } from "../training.js";
 
 // Where each muscle sits on the figure: which view shows it best, and a box (figure units, both sides)
@@ -73,7 +74,7 @@ export function useLearnedPhotos({ enabled, exerciseNames }) {
 }
 
 // Muscle and photo lookups and the details sheet are needed in many places, so they're shared instead of passed down.
-export const ExerciseContext = createContext({ learnedMuscles: {}, learnedPhotos: {}, showDetails: () => {} });
+export const ExerciseContext = createContext({ learnedMuscles: {}, learnedPhotos: {}, showDetails: () => {}, formChecks: [], setFormChecks: () => {}, profileNotes: "" });
 
 // Small tile showing the exercise being done, so the equipment is easy to find; without a photo, zoomed in
 // on the target muscles (red = main, light red = helpers). Tap for details.
@@ -153,7 +154,7 @@ export function BottomSheet({ title, onClose, fullHeight = false, children }) {
 }
 
 export function ExerciseSheet({ name, onClose }) {
-  const { learnedMuscles, learnedPhotos } = useContext(ExerciseContext);
+  const { learnedMuscles, learnedPhotos, profileNotes, formChecks, setFormChecks } = useContext(ExerciseContext);
   const muscles = musclesFor(name, learnedMuscles);
   const photo = photoFor(name, learnedPhotos);
   const guide = guideFor(name);
@@ -207,6 +208,7 @@ export function ExerciseSheet({ name, onClose }) {
           </dl>
 
           {guide && <VideoGuides guide={guide} />}
+          <FormCheck exercise={name} profileNotes={profileNotes} formChecks={formChecks} setFormChecks={setFormChecks} />
 
           <div className="mt-4">
             <PrimaryButton onClick={close}>Done</PrimaryButton>

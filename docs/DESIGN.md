@@ -99,7 +99,7 @@ Modules in `src/`, with no import cycles; domain modules import nothing from `sr
 3. **Pure domain logic**: `dates.js`, `training.js`, `autopilot.js`, `motivation.js`, `muscles.js`, `workout.js`, `schedule.js`, `activities.js`, `import.js`, `coach-context.js`. No JSX and nothing from the UI, so the unit tests import them directly.
 4. **UI** (`src/ui/`): primitives, feature components, tabs, rest timer; `App.jsx` (`GymBot`) holds the app state.
 
-App-level state: workouts, settings, chat, form checks, session, rest timer, open details sheet, and the derived values (`records`, `plans`, `coachContext`, Today facts, daily note, learned muscles and photos). `ExerciseContext` gives every thumbnail the learned muscles and photos and the details-sheet opener without passing them down.
+App-level state: workouts, settings, chat, form checks, session, rest timer, open details sheet, and the derived values (`records`, `plans`, `coachContext`, Today facts, daily note, learned muscles and photos). `ExerciseContext` gives every thumbnail the learned muscles and photos, the details-sheet opener and what the form check in the sheet needs, without passing them down.
 
 ## 5. Features and the rules behind them
 
@@ -192,6 +192,7 @@ The latest workout from the last 2 days gets a "How did it go?" card from the ne
   - One request per screenshot, answering in compact `[weight, reps]` pairs.
 
 ### Form check
+In each exercise's details sheet, folded until "Check my form" is tapped, with that exercise's past checks under it.
 - **Video:** 6 frames sampled evenly across the set.
 - **Photos:** up to 6, each scaled to a maximum side of 768 px.
 - **Feedback:** a structured reply (verdict, what's good, fix first, also watch, safety), with the last 30 checks saved.
@@ -227,7 +228,7 @@ The chat sends the last 12 messages.
 | `COACH_PROMPT` | Coach chat | Stays on training, food and recovery (anything else gets one line and an offer, also when told to ignore its rules); video-tag rules, food rules, coaching style |
 | `ONBOARDING_PROMPT` | Coach chat, new athletes only | Interview, then profile and plan tags |
 | `LOG_PARSER_PROMPT` | "Describe what you did" | Returns exercises + activities as JSON |
-| `FORM_PROMPT` | Form check | Frames or photos as images |
+| `FORM_PROMPT` | Form check (exercise details sheet) | Frames or photos as images |
 | `COLUMN_MAPPER_PROMPT` | Unknown CSV layouts | Only header + 5 rows leave the device |
 | `SCREENSHOT_IMPORT_PROMPT` | Screenshot import | Tiles of one screenshot per request |
 | `MUSCLE_CLASSIFIER_PROMPT` | Unknown exercises | Batches of 20, cached |
@@ -244,10 +245,9 @@ All JSON answers go through `askAIForJson`, which reads the outermost `{…}` so
 
 - **Coach:** like a messaging app, the title, the Today card and the input stay in place and only the chat scrolls. The chat opens at the latest message and follows new ones, unless the athlete scrolled back. The Today card is one line (its first fact) until tapped; tapping the input closes it again, to keep room for the keyboard · for a new athlete, the coach's first question instead of quick prompts · quick prompts (incl. "What should I eat today?") above the input.
 - **Log:** Import history (toggle) · Workout done (full screen after Finish) · Session saved (after an activity) · check-in card · coach reply · Workout (Add exercise and Replace open the exercise picker; Save as a plan; a workout left open (going for more than `LEFT_OPEN_HOURS`, 6; one past midnight is not) asks whether to save it as the day it started or train it today) or Start a workout (saved plans, the next one first in line; for a new user, Start an empty workout is the main button) · Log an activity · Up next · Describe what you did · History (folded). During a workout, Log an activity and Describe what you did are hidden: the page is the workout.
-- **Form:** exercise, focus note, file picker, frames, feedback, past checks.
 - **Progress:** stats · Activities (last 7 days) · muscle heatmap · estimated 1RM chart with trend line · weekly volume · best lifts.
 - **Goals:** goal cards (barbell loaded with plates you've lifted, forecast) · new goal · About you (with the "not medical advice" notice under injuries; units, experience, sessions per week, minutes per session, birth year, sex, height, training days, usual time, food preferences, workout music, coaching style, between sets, main focus, injuries and equipment) · What your coach knows (facts from chats, edit or delete) · Your data (export as text) · Feedback (kept by the server in `feedback.jsonl`)
-- **Everywhere:** rest timer bar (top, with the next set, the coach's note, Reply and Quiet), tab bar with a dot while a workout is in progress, exercise details sheet.
+- **Everywhere:** rest timer bar (top, with the next set, the coach's note, Reply and Quiet), tab bar with a dot while a workout is in progress, exercise details sheet (with Check my form).
 - **Motion:** smooth and short (about 0.2 to 0.3 s), only transform, opacity and grid rows, so it stays smooth on a phone; none with reduced motion. Sheets slide up and back down, the rest bar drops in and slides back up, the set feel row grows open and shrinks closed, and the finish screen fades in and out. When the rest bar comes, goes or grows, the page scrolls by as much, so the set you just ticked stays under your finger; near the top, where there is no room to scroll back, the page eases up with the bar. The finish screen's stats count up as their cards rise. Android's Back closes a sheet or the finish screen instead of leaving the app (`useBackToClose`: each has a history entry while open).
 
 ## 8. Decision log
@@ -288,4 +288,4 @@ All JSON answers go through `askAIForJson`, which reads the outermost `{…}` so
 
 - `npm test`: unit tests for Autopilot, equipment steps, rep-range stability, rest, import, muscle rules, video library, live workout, set feel, exercise search (shorthand, one row per exercise) and replace, forecasts, schedule and check-ins, activities and highlights, and what to read between sets. They import the domain modules directly.
 - `npm run test:server`: pytest for the backend: storage round-trip, daily backup, corrupt-file refusal, access gate, the `/api/ask` request checks, daily AI limits (calls and tokens), the input cap, usage log line and Gemini translation, the request size limit, app error reports, and errors becoming 502 (no network).
-- `npm run test:e2e`: Playwright on a Pixel 5-sized screen with a fixed clock (Sat 3 Oct 2026, 18:00), seeded storage, and a fake AI that records requests. Each test starts the Python server with its own seeded data file. Covers live workout (reorder, check-off, reload during a rest, finish, the finish screen with its weigh-in and continue after a finish by mistake, scroll back to an unfinished exercise, set feel, trivia between sets), the exercise picker (search, add, replace, Android Back), history edit (with Replace), activities, check-in, video-tag resolution, the Today card, export, a failed save being retried, and an app error reported once, and feedback.
+- `npm run test:e2e`: Playwright on a Pixel 5-sized screen with a fixed clock (Sat 3 Oct 2026, 18:00), seeded storage, and a fake AI that records requests. Each test starts the Python server with its own seeded data file. Covers live workout (reorder, check-off, reload during a rest, finish, the finish screen with its weigh-in and continue after a finish by mistake, scroll back to an unfinished exercise, set feel, trivia between sets), the exercise picker (search, add, replace, Android Back), history edit (with Replace), activities, check-in, video-tag resolution, the Today card, form check in the details sheet, export, a failed save being retried, and an app error reported once, and feedback.

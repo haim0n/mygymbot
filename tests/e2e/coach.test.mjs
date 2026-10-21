@@ -189,18 +189,22 @@ test("injuries: the profile note is read into muscles, and Autopilot holds the l
   assert.deepEqual(errors, []);
 });
 
-test("form check: photos go to the AI as base64 JPEG images next to the request", async (t) => {
+test("form check: in the exercise's details sheet; photos go to the AI as base64 JPEG images next to the request", async (t) => {
   const { page, errors, aiRequests } = await openApp(t, {
+    seed: { "gymbot:workouts": [userWorkout] },
     ai: (body) => (body.system.startsWith("You are an expert strength coach") ? "**Verdict**: solid lockout." : "OK"),
   });
-  await page.getByRole("button", { name: "Form", exact: true }).tap();
-  await page.getByPlaceholder("Back Squat").fill("Deadlift");
-  await page.getByLabel("Upload a video or photos").setInputFiles({ name: "lockout.png", mimeType: "image/png", buffer: Buffer.from(PNG_1PX, "base64") });
-  await page.getByAltText("Frame 1").waitFor();
-  await page.getByRole("button", { name: "Check my form" }).tap();
-  await page.getByText("solid lockout.").first().waitFor(); // the feedback, and the same text under Past checks
+  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: "Show details for Bench Press (Dumbbell)" }).first().tap();
+  const sheet = page.getByRole("dialog");
+  await sheet.getByRole("button", { name: "Check my form" }).tap(); // folded until asked for
+  await sheet.getByLabel("Upload a video or photos").setInputFiles({ name: "lockout.png", mimeType: "image/png", buffer: Buffer.from(PNG_1PX, "base64") });
+  await sheet.getByAltText("Frame 1").waitFor();
+  await sheet.getByRole("button", { name: "Check my form" }).tap();
+  await sheet.getByText("solid lockout.").first().waitFor(); // the feedback, and the same text under Past form checks
+  await sheet.getByText("Past form checks").waitFor();
   const [message] = aiRequests.find((b) => b.system.startsWith("You are an expert strength coach")).messages;
-  assert.match(message.content, /^Exercise: Deadlift\./);
+  assert.match(message.content, /^Exercise: Bench Press \(Dumbbell\)\./);
   assert.equal(message.images.length, 1);
   assert.ok(Buffer.from(message.images[0], "base64").subarray(0, 2).equals(Buffer.from([0xff, 0xd8]))); // re-encoded as JPEG
   assert.deepEqual(errors, []);

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from "react";
-import { MessageCircle, Dumbbell, Video, TrendingUp, Target, Loader2 } from "lucide-react";
+import { MessageCircle, Dumbbell, TrendingUp, Target, Loader2 } from "lucide-react";
 import { DEFAULT_SETTINGS, GLOBAL_CSS, STORAGE_KEYS } from "./config.js";
 import { usePersistentState, useSaveProblem } from "./storage.js";
 import { today } from "./dates.js";
@@ -13,7 +13,6 @@ import { useInjuryAreas, useLearnedMuscles } from "./ui/muscles.jsx";
 import { ExerciseContext, ExerciseSheet, useLearnedPhotos } from "./ui/exercises.jsx";
 import { CoachView } from "./ui/coach.jsx";
 import { LogView } from "./ui/log.jsx";
-import { FormCheckView } from "./ui/form-check.jsx";
 import { ProgressView } from "./ui/progress.jsx";
 import { GoalsView } from "./ui/goals.jsx";
 import { RestTimerBar, useRestFun, useRestNote, useRestTimer } from "./ui/rest-timer.jsx";
@@ -21,7 +20,6 @@ import { RestTimerBar, useRestFun, useRestNote, useRestTimer } from "./ui/rest-t
 export const TABS = [
   { id: "coach", label: "Coach", Icon: MessageCircle },
   { id: "log", label: "Log", Icon: Dumbbell },
-  { id: "form", label: "Form", Icon: Video },
   { id: "progress", label: "Progress", Icon: TrendingUp },
   { id: "goals", label: "Goals", Icon: Target },
 ];
@@ -29,7 +27,7 @@ export const TABS = [
 export function BottomNav({ tab, onSelect, workoutInProgress }) {
   return (
     <nav className="fixed inset-x-0 bottom-0 h-16 bg-white border-t border-zinc-200">
-      <div className="max-w-md mx-auto h-full grid grid-cols-5">
+      <div className="max-w-md mx-auto h-full grid grid-cols-4">
         {TABS.map(({ id, label, Icon }) => (
           <button
             key={id}
@@ -93,7 +91,10 @@ export default function GymBot() {
   const learnedPhotos = useLearnedPhotos({ enabled: loaded, exerciseNames: namesInUse });
   useInjuryAreas({ enabled: loaded, settings, setSettings });
   const plans = useMemo(() => buildAutopilotPlans(workouts, settings, learnedMuscles), [workouts, settings, learnedMuscles]);
-  const exerciseContext = useMemo(() => ({ learnedMuscles, learnedPhotos, showDetails: setDetailsFor }), [learnedMuscles, learnedPhotos]);
+  const exerciseContext = useMemo(
+    () => ({ learnedMuscles, learnedPhotos, showDetails: setDetailsFor, formChecks, setFormChecks, profileNotes: settings.profile.notes }),
+    [learnedMuscles, learnedPhotos, formChecks, settings.profile.notes]
+  );
   const coachContext = useMemo(
     () => buildCoachContext(settings, workouts, plans, learnedMuscles, session, bodyweightLog),
     [settings, workouts, plans, learnedMuscles, session, bodyweightLog]
@@ -101,7 +102,7 @@ export default function GymBot() {
   const facts = useMemo(() => todayFacts({ workouts, settings, records, plans }), [workouts, settings, records, plans]);
   const coachStyle = settings.profile.coachStyle ?? DEFAULT_SETTINGS.profile.coachStyle;
   const dailyNote = useDailyNote({ enabled: loaded && workouts.length > 0, facts, context: coachContext, style: coachStyle });
-  const { unit, daysPerWeek, notes } = settings.profile;
+  const { unit, daysPerWeek } = settings.profile;
   const restNote = useRestNote({ rest: restTimer.rest, session, setSession, context: coachContext, chat });
   const rest = restTimer.rest;
   const restFun = useRestFun({ rest, session, setSession, settings });
@@ -159,7 +160,6 @@ export default function GymBot() {
     log: (
       <LogView workouts={workouts} setWorkouts={setWorkouts} session={session} setSession={setSession} settings={settings} coachContext={coachContext} plans={plans} yourExercises={namesInUse} learnedMuscles={learnedMuscles} onRangeChange={setRepRange} onStartRest={restTimer.start} feelPrompt={feelPrompt} onSaveRoutine={storeRoutine} onDeleteRoutine={deleteRoutine} showImport={showImport} setShowImport={setShowImport} bodyweight={bodyweight} unit={unit} />
     ),
-    form: <FormCheckView profileNotes={notes} formChecks={formChecks} setFormChecks={setFormChecks} />,
     progress: <ProgressView workouts={workouts} records={records} exerciseNames={exerciseNames} learnedMuscles={learnedMuscles} unit={unit} daysPerWeek={daysPerWeek} onNavigate={setTab}
         bodyweight={bodyweight} />,
     goals: <GoalsView settings={settings} setSettings={setSettings} records={records} workouts={workouts} />,
