@@ -59,7 +59,7 @@ test("food: a photo goes to the AI as a JPEG; a meal logged 3 times becomes a on
   const egg = { name: "Eggs", grams: 100, per100: { protein: 13, carbs: 1, fat: 10, kcal: 155 } };
   const breakfast = (date) => ({ id: date, date, time: "08:00", name: "Eggs", items: [egg] });
   const { page, errors, aiRequests } = await openApp(t, {
-    seed: { "gymbot:food": ["2026-09-30", "2026-10-01", "2026-10-02"].map(breakfast) },
+    seed: { "gymbot:food": ["2026-09-30", "2026-10-01", "2026-10-02"].map(breakfast), "gymbot:settings": { ...settings(), tourSeen: true } },
     ai: (body) => (body.system.startsWith("You estimate what is in a meal") ? JSON.stringify({ name: "Eggs", items: [egg], question: null }) : "OK"),
   });
   await page.getByRole("button", { name: "Food", exact: true }).tap();

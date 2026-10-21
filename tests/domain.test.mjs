@@ -388,6 +388,10 @@ test("Onboarding: a new athlete is interviewed until a plan is saved or a workou
   assert.equal(app.isNewAthlete(settingsWith(), []), true);
   assert.equal(app.isNewAthlete({ ...settingsWith(), routines: [a] }, []), false);
   assert.equal(app.isNewAthlete(settingsWith(), [userWorkout(daysAgo(3))]), false);
+  assert.equal(app.wantsTour(settingsWith(), []), true); // the first-time tour: a new athlete, once
+  assert.equal(app.wantsTour({ ...settingsWith(), tourSeen: true }, []), false);
+  assert.equal(app.wantsTour({ ...settingsWith(), routines: [a] }, []), false);
+  assert.equal(app.wantsTour(settingsWith(), [userWorkout(daysAgo(3))]), false);
   assert.ok(app.buildCoachContext(settingsWith(), [], [], {}, null).includes("NEW ATHLETE"));
   assert.ok(!app.buildCoachContext({ ...settingsWith(), routines: [a] }, [], [], {}, null).includes("NEW ATHLETE"));
   assert.ok(!app.buildCoachContext(settingsWith(), [], [], {}, app.startSession()).includes("NEW ATHLETE")); // not during their first workout

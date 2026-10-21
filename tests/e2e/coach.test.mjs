@@ -115,6 +115,7 @@ test("onboarding: a new athlete's coach asks first, then the profile and plans i
         ? "Here's your start.\n[profile: experience: Beginner; daysPerWeek: 3; sessionMinutes: 45; focus: General fitness; music: hip hop]\n[plan: A: Goblet Squat, Push-up]\n[plan: B: Romanian Deadlift, Lat Pulldown]"
         : "OK",
   });
+  await page.getByRole("button", { name: "Skip" }).tap(); // the first-time tour
   await page.getByText("A few quick questions first").waitFor();
   assert.equal(await page.getByRole("button", { name: "Clear chat" }).count(), 0);
   assert.equal(await page.getByRole("button", { name: "Analyze my last 4 weeks" }).count(), 0); // no quick prompts about data they don't have
@@ -144,8 +145,39 @@ test("onboarding: a new athlete's coach asks first, then the profile and plans i
   assert.deepEqual(errors, []);
 });
 
+test("first-time tour: once for a new athlete, one card per tab, then the interview; Goals shows it again, Back closes it", async (t) => {
+  const { page, errors } = await openApp(t);
+  const tour = page.getByRole("dialog");
+  const tab = (name) => page.getByRole("navigation").getByRole("button", { name, exact: true });
+  await tour.getByText("1 of 5").waitFor();
+  assert.equal(await tab("Coach").getAttribute("aria-current"), "page");
+  for (const [i, name] of ["Log", "Food", "Progress", "Goals"].entries()) {
+    await tour.getByRole("button", { name: "Next" }).tap();
+    await tour.getByText(`${i + 2} of 5`).waitFor();
+    assert.equal(await tab(name).getAttribute("aria-current"), "page"); // the screen behind is the tab it describes
+  }
+  assert.equal(await tour.getByRole("button", { name: "Skip" }).count(), 0);
+  await tour.getByRole("button", { name: "Get started" }).tap();
+  await tour.waitFor({ state: "detached" });
+  await page.getByText("A few quick questions first").waitFor(); // back on Coach, where the interview starts
+  for (let i = 0; i < 20 && !(await stored(page, "gymbot:settings"))?.tourSeen; i++) await page.waitForTimeout(100);
+  assert.equal((await stored(page, "gymbot:settings")).tourSeen, true);
+
+  await page.reload();
+  await page.getByText("A few quick questions first").waitFor();
+  assert.equal(await tour.count(), 0); // once
+
+  await tab("Goals").tap();
+  await page.getByRole("button", { name: "Show the tour again" }).tap();
+  await tour.getByText("1 of 5").waitFor();
+  await page.goBack(); // Android's Back skips it
+  await tour.waitFor({ state: "detached" });
+  assert.deepEqual(errors, []);
+});
+
 test("onboarding: the coach's first message offers to import history from another app", async (t) => {
   const { page, errors } = await openApp(t);
+  await page.getByRole("button", { name: "Skip" }).tap(); // the first-time tour
   await page.getByText("Already logging workouts in another app").waitFor();
   await page.getByRole("button", { name: "Import history" }).tap();
   await section(page, "Import history").getByText("Export a CSV from Strong, Hevy").waitFor(); // Log, with the import open

@@ -1,13 +1,13 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from "react";
 import { MessageCircle, Dumbbell, Utensils, TrendingUp, Target, Loader2 } from "lucide-react";
-import { DEFAULT_SETTINGS, GLOBAL_CSS, STORAGE_KEYS } from "./config.js";
+import { DEFAULT_SETTINGS, GLOBAL_CSS, STORAGE_KEYS, TOUR_STEPS } from "./config.js";
 import { usePersistentState, useSaveProblem } from "./storage.js";
 import { today } from "./dates.js";
 import { currentBodyweight, exercisesByFrequency, logBodyweight, personalRecords } from "./training.js";
 import { buildAutopilotPlans } from "./autopilot.js";
 import { todayFacts } from "./motivation.js";
 import { feelResult, nextSet, rateSet, saveRoutine } from "./workout.js";
-import { buildCoachContext, isNewAthlete, rememberFacts } from "./coach-context.js";
+import { buildCoachContext, isNewAthlete, rememberFacts, wantsTour } from "./coach-context.js";
 import { useDailyNote } from "./ui/motivation.jsx";
 import { useInjuryAreas, useLearnedMuscles } from "./ui/muscles.jsx";
 import { ExerciseContext, ExerciseSheet, useLearnedPhotos } from "./ui/exercises.jsx";
@@ -16,6 +16,7 @@ import { LogView } from "./ui/log.jsx";
 import { FoodView } from "./ui/food.jsx";
 import { ProgressView } from "./ui/progress.jsx";
 import { GoalsView } from "./ui/goals.jsx";
+import { Tour } from "./ui/tour.jsx";
 import { RestTimerBar, useRestFun, useRestNote, useRestTimer } from "./ui/rest-timer.jsx";
 
 export const TABS = [
@@ -56,6 +57,7 @@ export default function GymBot() {
   const [tab, setTab] = useState("coach");
   const restTimer = useRestTimer();
   const [detailsFor, setDetailsFor] = useState(null); // exercise shown in the details sheet
+  const [tourStep, setTourStep] = useState(null); // the first-time tour's card, or null when it isn't showing
   const [showImport, setShowImport] = useState(false); // Import history open in Log; the coach can open it
   const [workouts, setWorkouts, workoutsLoaded] = usePersistentState(STORAGE_KEYS.workouts, []);
   const [settings, setSettings, settingsLoaded] = usePersistentState(STORAGE_KEYS.settings, DEFAULT_SETTINGS);
@@ -147,6 +149,23 @@ export default function GymBot() {
     document.documentElement.style.scrollPaddingBottom = "64px";
     document.documentElement.style.overflowAnchor = "none"; // the page is kept still by hand (above); the browser's anchoring fought it
   }, [Boolean(rest), restBarHeight]);
+  // A new athlete's first open starts with the tour, on Coach, where the interview waits for them after it.
+  useEffect(() => {
+    if (loaded && wantsTour(settings, workouts)) showTour();
+  }, [loaded]);
+  function showTour() {
+    setTourStep(0);
+    setTab(TOUR_STEPS[0].tab);
+  }
+  function nextTourStep() {
+    setTourStep(tourStep + 1);
+    setTab(TOUR_STEPS[tourStep + 1].tab);
+  }
+  function closeTour() {
+    setTourStep(null);
+    setTab("coach");
+    setSettings((s) => ({ ...s, tourSeen: true }));
+  }
   // Opening the app mid-workout goes straight to it.
   useEffect(() => {
     if (sessionLoaded && session) setTab("log");
@@ -166,7 +185,7 @@ export default function GymBot() {
     food: <FoodView food={food} setFood={setFood} bodyweight={currentBodyweight(bodyweightLog, settings.profile)} unit={unit} />,
     progress: <ProgressView workouts={workouts} records={records} exerciseNames={exerciseNames} learnedMuscles={learnedMuscles} unit={unit} daysPerWeek={daysPerWeek} onNavigate={setTab}
         bodyweight={bodyweight} />,
-    goals: <GoalsView settings={settings} setSettings={setSettings} records={records} workouts={workouts} />,
+    goals: <GoalsView settings={settings} setSettings={setSettings} records={records} workouts={workouts} onShowTour={showTour} />,
   };
 
   return (
@@ -201,6 +220,7 @@ export default function GymBot() {
             )}
             <BottomNav tab={tab} onSelect={setTab} workoutInProgress={Boolean(session)} />
             {detailsFor && <ExerciseSheet name={detailsFor} onClose={() => setDetailsFor(null)} />}
+            {tourStep !== null && <Tour step={tourStep} onNext={nextTourStep} onClose={closeTour} />}
           </>
         ) : (
           <div className="min-h-screen flex items-center justify-center">

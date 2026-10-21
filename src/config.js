@@ -63,6 +63,14 @@ export const SET_FEELS = [
 export const PLATE_LIFTS = /barbell|bench press|squat|deadlift|overhead press|military press|push press|bent over row|pendlay row|clean|snatch|hip thrust/;
 export const NOT_PLATE_LIFTS = /dumbbell|kettlebell|machine|smith|cable|hack|goblet|leg press|pistol|split squat|bodyweight/;
 export const LEFT_OPEN_HOURS = 6; // a workout going longer than this was left open (one past midnight is not)
+// The first-time tour: one card per tab, in the tab bar's order, for a new athlete on the first open (and again from Goals).
+export const TOUR_STEPS = [
+  { tab: "coach", title: "Coach", text: "Your coach. Ask about training, food or recovery; it knows your workouts and plans." },
+  { tab: "log", title: "Log", text: "Start a workout here. Tick each set; the app sets the weights, the rest and what comes next." },
+  { tab: "food", title: "Food", text: "Snap a meal. The app counts the protein toward your daily target." },
+  { tab: "progress", title: "Progress", text: "Your charts: strength over time, weekly volume, muscles worked and bodyweight." },
+  { tab: "goals", title: "Goals", text: "About you and your goals. The more your coach knows, the better it plans." },
+];
 export const SWIPE_AWAY_PX = 80; // a card dragged this far sideways is swiped away; less springs back
 export const SET_FEEL_SCROLL_DELAY_MS = 300; // the set feel row is checked for being in sight once it has grown open (.gb-reveal)
 export const EXERCISE_SEARCH_LIMIT = 50; // rows the exercise picker shows; typing or a muscle finds the rest

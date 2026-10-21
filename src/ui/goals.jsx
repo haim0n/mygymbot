@@ -58,7 +58,7 @@ export function GoalCard({ goal, current, forecast, unit, onRemove }) {
   );
 }
 
-export function GoalsView({ settings, setSettings, records, workouts }) {
+export function GoalsView({ settings, setSettings, records, workouts, onShowTour }) {
   const { profile, goals } = settings;
   const [draft, setDraft] = useState({ exercise: "", target: "", deadline: "" });
 
@@ -214,6 +214,9 @@ export function GoalsView({ settings, setSettings, records, workouts }) {
       <ExportPanel />
       <FeedbackPanel />
       <p className="text-center text-xs text-zinc-400">{MEDICAL_NOTICE}</p>
+      <button onClick={onShowTour} className="gb-tap mx-auto block text-sm font-semibold text-blue-700">
+        Show the tour again
+      </button>
       <p className="text-center text-xs text-zinc-400">MyGymBot {[APP_VERSION, deployedCommit()].filter(Boolean).join(" ")}</p>
     </div>
   );
