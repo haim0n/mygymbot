@@ -273,6 +273,23 @@ test("between sets: trivia, the answer on a tap, Next for another, never on a re
   assert.equal(asked().length, 1);
   await settle(page);
   assert.equal((await stored(page, "gymbot:settings")).restFun.seen.length, 15); // sent along next time, so they don't repeat
+
+  const card = bar.getByRole("group", { name: "Something to read" });
+  const box = await card.boundingBox();
+  const swipe = async (distance) => {
+    await page.mouse.move(box.x + 40, box.y + 10);
+    await page.mouse.down();
+    for (let x = 40; x <= 40 + distance; x += 20) await page.mouse.move(box.x + x, box.y + 12);
+    await page.mouse.up();
+  };
+  await swipe(40); // too short: springs back
+  await page.waitForTimeout(300);
+  assert.equal(await card.count(), 1);
+  await swipe(160); // swiped away for this rest
+  await card.waitFor({ state: "detached" });
+  await page.getByRole("button", { name: "Skip" }).tap();
+  await second.getByRole("button", { name: "Set 2 done" }).tap(); // the next rest has the next one
+  await bar.getByText("Question 4?").waitFor();
   assert.deepEqual(errors, []);
 });
 

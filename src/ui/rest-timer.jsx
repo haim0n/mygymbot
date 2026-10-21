@@ -2,10 +2,10 @@ import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { formatClock } from "../dates.js";
 import { REST_FUN_PROMPT, REST_NOTE_PROMPT } from "../prompts.js";
 import { askAI, askAIForJson } from "../ai.js";
-import { REST_FUN_KINDS, SET_FEEL_SCROLL_DELAY_MS, SET_FEELS, STORAGE_KEYS } from "../config.js";
+import { REST_FUN_KINDS, SET_FEEL_SCROLL_DELAY_MS, SET_FEELS, STORAGE_KEYS, SWIPE_AWAY_PX } from "../config.js";
 import { usePersistentState } from "../storage.js";
 import { describeNextSet, nextReading, parseRestFun, readingFor, readingRunsLow, rememberSeen, restFunRequest, restNoteRequest, wantsRestNote } from "../workout.js";
-import { usePresence } from "./primitives.jsx";
+import { reducedMotion, usePresence } from "./primitives.jsx";
 
 export const REST_FINISHED_DISPLAY_MS = 4000;
 
@@ -147,12 +147,58 @@ export function useRestFun({ rest, session, setSession, settings, setSettings })
   return { ...item, key: `${rest.startedAt}:${reading.index}`, hint: reveal, nextLabel: next, onNext: reading.index + 1 < reading.items.length ? moveOn : null };
 }
 
-// A rest's reading: the answer shows on a tap, or by itself when the rest is over; Next brings another one.
-function RestFun({ item, finished }) {
+// A rest's reading: the answer shows on a tap, or by itself when the rest is over; Next brings another one. Swiping it
+// sideways puts it away for this rest (a screen reader gets a Hide button instead). Only transform and opacity move.
+function RestFun({ item, finished, onHide }) {
   const [revealed, setRevealed] = useState(false);
+  const [dx, setDx] = useState(0);
+  const [away, setAway] = useState(0); // -1 or 1 while it slides out
+  const drag = useRef(null); // { x: where the finger went down, moved: past a tap }
+  const down = (e) => {
+    drag.current = { x: e.clientX, moved: false };
+  };
+  const move = (e) => {
+    if (!drag.current) return;
+    const distance = e.clientX - drag.current.x;
+    if (!drag.current.moved && Math.abs(distance) > 8) {
+      drag.current.moved = true;
+      e.currentTarget.setPointerCapture(e.pointerId); // only now, so a tap still reaches its button
+    }
+    if (drag.current.moved) setDx(distance);
+  };
+  const up = () => {
+    if (!drag.current?.moved) {
+      drag.current = null;
+      return;
+    }
+    if (Math.abs(dx) < SWIPE_AWAY_PX) setDx(0);
+    else if (reducedMotion()) onHide();
+    else setAway(Math.sign(dx));
+    setTimeout(() => (drag.current = null)); // after the click that ends a drag, which mustn't count as a tap
+  };
+  const dragging = drag.current?.moved && !away;
   return (
-    <div className="gb-fade mt-2 rounded-lg bg-zinc-800 px-3 py-2 text-sm leading-snug">
+    <div
+      role="group"
+      aria-label="Something to read"
+      onPointerDown={down}
+      onPointerMove={move}
+      onPointerUp={up}
+      onPointerCancel={up}
+      onClickCapture={(e) => drag.current?.moved && e.stopPropagation()}
+      onTransitionEnd={(e) => away && e.target === e.currentTarget && onHide()}
+      className="gb-fade mt-2 select-none rounded-lg bg-zinc-800 px-3 py-2 text-sm leading-snug"
+      style={{
+        touchAction: "pan-y", // vertical scrolling stays the browser's; sideways is the swipe
+        transform: `translateX(${away ? `${away * 110}%` : `${dx}px`})`,
+        opacity: away ? 0 : 1 - Math.min(Math.abs(dx) / (SWIPE_AWAY_PX * 3), 0.5),
+        transition: dragging ? "none" : "transform 200ms ease-out, opacity 200ms ease-out",
+      }}
+    >
       <p className="text-zinc-100">{item.text}</p>
+      <button onClick={onHide} className="sr-only">
+        Hide
+      </button>
       <div className="mt-1 flex min-h-8 items-center justify-between gap-3">
         {item.reveal &&
           (revealed || finished ? (
@@ -188,6 +234,7 @@ export function RestTimerBar({ timer, next, unit, note, fun, onReply, onQuiet, o
   const barRef = useRef(null);
   const lastView = useRef(null);
   const [noteOpen, setNoteOpen] = useState(false);
+  const [hiddenIn, setHiddenIn] = useState(null); // the rest whose reading was swiped away
   const onHeightRef = useRef(onHeight);
   onHeightRef.current = onHeight;
   // Measured before the first paint, so the page doesn't move twice; the observer follows a note that comes later.
@@ -235,7 +282,7 @@ export function RestTimerBar({ timer, next, unit, note, fun, onReply, onQuiet, o
             <button onClick={onQuiet} className="h-10 shrink-0 rounded-lg px-2 text-sm text-zinc-400">Quiet</button>
           </div>
         )}
-        {fun && <RestFun key={fun.key} item={fun} finished={finished} />}
+        {fun && hiddenIn !== rest.startedAt && <RestFun key={fun.key} item={fun} finished={finished} onHide={() => setHiddenIn(rest.startedAt)} />}
         <span className="sr-only" aria-live="assertive">
           {finished ? "Rest over. Time for your next set." : ""}
         </span>

@@ -63,6 +63,7 @@ export const SET_FEELS = [
 export const PLATE_LIFTS = /barbell|bench press|squat|deadlift|overhead press|military press|push press|bent over row|pendlay row|clean|snatch|hip thrust/;
 export const NOT_PLATE_LIFTS = /dumbbell|kettlebell|machine|smith|cable|hack|goblet|leg press|pistol|split squat|bodyweight/;
 export const LEFT_OPEN_HOURS = 6; // a workout going longer than this was left open (one past midnight is not)
+export const SWIPE_AWAY_PX = 80; // a card dragged this far sideways is swiped away; less springs back
 export const SET_FEEL_SCROLL_DELAY_MS = 300; // the set feel row is checked for being in sight once it has grown open (.gb-reveal)
 export const EXERCISE_SEARCH_LIMIT = 50; // rows the exercise picker shows; typing or a muscle finds the rest
 // Gym shorthand the exercise search understands, as a whole typed word ("db row" finds Dumbbell Row).
