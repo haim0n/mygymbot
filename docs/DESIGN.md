@@ -194,7 +194,7 @@ The latest workout from the last 2 days gets a "How did it go?" card from the ne
 
 ### Food (`food.js`, the Food tab)
 Protein first: photo estimates run about 35% off and mostly too low (oil and sauces hide), so the AI's answer is a draft to correct, and protein is the number that matters for training.
-- **Adding a meal:** snap or choose a photo, or type it ("2 eggs, toast"); a typed note goes along with a photo. One AI call (`FOOD_PROMPT`, JSON, checked by `parseFoodDraft`) returns a name, the items with grams and their values per 100 g, and at most one question when one thing would change the numbers a lot ("Cooked in oil?"), whose options can add an item.
+- **Adding a meal:** Snap a meal opens the camera, Or choose a photo the phone's photos; or type it ("2 eggs, toast"); a typed note goes along with a photo. One AI call (`FOOD_PROMPT`, JSON, checked by `parseFoodDraft`) returns a name, the items with grams and their values per 100 g, and at most one question when one thing would change the numbers a lot ("Cooked in oil?"), whose options can add an item.
 - **Correcting:** change grams, remove an item, or add one in words (one more AI call for just that). The totals come from grams and the values per 100 g (`itemTotals`, `mealTotals`), so an edit needs no AI. The photo isn't stored.
 - **Protein target (`proteinTarget`):** 1.6 g per kg of the latest bodyweight a day, with 2.2 as the useful top (`PROTEIN_PER_KG`); without a bodyweight, no target.
 - **Usual meals (`usualMeals`):** the same foods logged 3 times or more become one-tap buttons that log the latest version now, with no AI call.

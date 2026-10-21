@@ -192,6 +192,12 @@ export function FoodView({ food, setFood, bodyweight, unit }) {
     }
   }
 
+  function choose(event) {
+    const [file] = event.target.files ?? [];
+    event.target.value = ""; // allow choosing the same photo again
+    if (file) snap([file]);
+  }
+
   function save({ question, ...meal }) {
     const items = meal.items.map((item) => ({ ...item, grams: Math.max(0, Number(item.grams) || 0) }));
     setFood((all) => sortMeals([...all.filter((m) => m.id !== meal.id), { ...meal, items, name: meal.name.trim() || "Meal" }]));
@@ -220,7 +226,14 @@ export function FoodView({ food, setFood, bodyweight, unit }) {
         />
       ) : (
         <Panel className="space-y-3">
-          <FilePicker Icon={Camera} accept="image/*" busy={status === "reading"} title={status === "reading" ? "Looking at your meal" : "Snap a meal"} hint="Or choose a photo. You check the grams before saving." onFiles={snap} />
+          <FilePicker Icon={Camera} accept="image/*" capture="environment" busy={status === "reading"} title={status === "reading" ? "Looking at your meal" : "Snap a meal"} hint="You check the grams before saving." onFiles={snap} />
+          {status === "idle" && (
+            // the real input sits over the link: a label forwarding the tap fails in in-app browsers
+            <div className="relative mx-auto flex h-10 w-fit items-center px-3">
+              <span className="text-sm font-semibold text-blue-700">Or choose a photo</span>
+              <input type="file" accept="image/*" onChange={choose} aria-label="Or choose a photo" className="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+            </div>
+          )}
           <div className="flex gap-2">
             <input
               value={text}

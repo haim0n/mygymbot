@@ -66,7 +66,9 @@ test("food: a photo goes to the AI as a JPEG; a meal logged 3 times becomes a on
   await page.getByRole("button", { name: "Eggs, 13 g" }).tap(); // usual meal: logged now, no AI
   await section(page, "Today").getByText("Eggs").waitFor();
   assert.equal(aiRequests.length, 0);
-  await page.getByLabel("Snap a meal").setInputFiles({ name: "plate.png", mimeType: "image/png", buffer: Buffer.from(PNG_1PX, "base64") });
+  assert.equal(await page.getByLabel("Snap a meal").getAttribute("capture"), "environment"); // opens the camera
+  assert.equal(await page.getByLabel("Or choose a photo").getAttribute("capture"), null); // the phone's photos
+  await page.getByLabel("Or choose a photo").setInputFiles({ name: "plate.png", mimeType: "image/png", buffer: Buffer.from(PNG_1PX, "base64") });
   await page.getByRole("button", { name: "Save meal" }).waitFor();
   const [message] = aiRequests.at(-1).messages;
   assert.equal(message.images.length, 1);

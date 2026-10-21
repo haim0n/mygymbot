@@ -102,7 +102,8 @@ export function PrimaryButton({ children, onClick, busy = false, disabled = fals
 
 // The real <input> covers the whole drop zone (invisible), so a tap lands on it directly.
 // In-app browsers often ignore a <label> forwarding clicks to a display:none input.
-export function FilePicker({ title, hint, accept, busy = false, onFiles, Icon = Upload }) {
+// `capture` ("environment"): open the camera straight away. Android's photo picker, which a plain image input gets, has no camera.
+export function FilePicker({ title, hint, accept, capture, busy = false, onFiles, Icon = Upload }) {
   function handleChange(event) {
     const files = Array.from(event.target.files ?? []);
     event.target.value = ""; // allow picking the same file again
@@ -117,7 +118,8 @@ export function FilePicker({ title, hint, accept, busy = false, onFiles, Icon = 
       <input
         type="file"
         accept={accept}
-        multiple
+        capture={capture}
+        multiple={!capture}
         disabled={busy}
         onChange={handleChange}
         aria-label={title}
