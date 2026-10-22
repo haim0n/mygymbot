@@ -17,8 +17,9 @@ import * as coach_context from "../src/coach-context.js";
 import * as photos from "../src/exercise-photos.js";
 import * as photoMatches from "../src/photo-matches.js";
 import * as food from "../src/food.js";
+import * as equipment from "../src/equipment.js";
 
-const app = { ...config, ...dates, ...training, ...autopilot, ...motivation, ...muscles, ...liveWorkout, ...schedule, ...activities, ...importing, ...coach_context, ...photos, ...photoMatches, ...food };
+const app = { ...config, ...dates, ...training, ...autopilot, ...motivation, ...muscles, ...liveWorkout, ...schedule, ...activities, ...importing, ...coach_context, ...photos, ...photoMatches, ...food, ...equipment };
 
 const daysAgo = (n) => {
   const d = new Date();
@@ -116,6 +117,44 @@ test("Coach context: age, sex, height and session length are added only when the
   assert.match(athleteLine({ sex: "Male", birthYear: "1985", height: "180", sessionMinutes: "60" }), new RegExp(`^ATHLETE: Intermediate, male, age ${age}, height 180cm, bodyweight unknownkg, aims for 3 sessions/week, sessions of up to 60 min, focus`));
   assert.match(athleteLine({ unit: "lb", height: "70" }), /^ATHLETE: Intermediate, height 70in, bodyweight/);
   assert.match(athleteLine({ sex: "", birthYear: "", height: "", sessionMinutes: "" }), /^ATHLETE: Intermediate, bodyweight unknownkg, aims for 3 sessions\/week, focus/);
+});
+
+test("Equipment: what an exercise needs, read from the history, for the coach, and from the coach's profile tag", () => {
+  assert.ok(app.canDo("Bench Press", null)); // not chosen yet: everything
+  assert.ok(app.canDo("Bench Press (Dumbbell)", ["dumbbell"]));
+  assert.ok(app.canDo("Push Up", ["dumbbell"])); // bodyweight always
+  assert.ok(!app.canDo("Bench Press", ["dumbbell"]));
+  assert.ok(!app.canDo("Lat Pulldown (Cable)", ["dumbbell", "bench"]));
+  assert.ok(app.canDo("Squat", ["barbell"])); // the big barbell lifts too
+  assert.ok(app.canDo("Pull Up", []) && !app.canDo("Hammer Curl (Dumbbell)", [])); // no equipment: bodyweight only
+
+  const logged = (n, ...names) => ({ date: daysAgo(n), exercises: names.map((name) => ({ name, sets: [] })) });
+  const history = [logged(3, "Hammer Curl (Dumbbell)", "Push Up"), logged(10, "Lat Pulldown (Cable)"), logged(100, "Deadlift")];
+  assert.deepEqual(app.equipmentFromWorkouts(history, app.today()), ["dumbbell", "cable"]); // in item order; the old deadlift is left out
+
+  const profile = { unit: "kg", experience: "Intermediate", daysPerWeek: 3, focus: "Strength" };
+  assert.equal(app.equipmentContext(profile), null);
+  assert.equal(app.equipmentContext({ ...profile, equipment: [] }), "EQUIPMENT: none, so plan bodyweight exercises only.");
+  assert.equal(
+    app.equipmentContext({ ...profile, equipment: ["dumbbell", "bench"], dumbbellMax: "20" }),
+    "EQUIPMENT (what they can train with; plan only exercises these allow, and bodyweight): Dumbbells (up to 20 kg), Bench."
+  );
+  assert.equal(app.equipmentContext({ ...profile, equipment: ["dumbbell"], dumbbellMax: "" }), "EQUIPMENT (what they can train with; plan only exercises these allow, and bodyweight): Dumbbells.");
+  assert.ok(!app.buildCoachContext({ profile, goals: [] }, [], [], {}, null).includes("EQUIPMENT"));
+  assert.ok(app.buildCoachContext({ profile: { ...profile, equipment: ["bench"] }, goals: [] }, [], [], {}, null).includes("EQUIPMENT (what they can train with"));
+
+  assert.deepEqual(app.parseProfileTag("[profile: equipment: Dumbbells, bench, rowing boat]"), { equipment: ["dumbbell", "bench"] }); // labels or ids, unknown left out
+  assert.deepEqual(app.parseProfileTag("[profile: equipment: None.]"), { equipment: [] });
+  for (const none of ["No equipment", "nothing yet", "Bodyweight only"]) assert.deepEqual(app.parseEquipmentList(none), [], none);
+  assert.deepEqual(app.parseEquipmentList("Bodyweight, pull-up bar"), ["pullUpBar"]); // a list, not "none"
+  // Copied from the EQUIPMENT line, joined with "and", or spelled loosely: nothing they have is dropped.
+  assert.deepEqual(app.parseEquipmentList("Dumbbells (up to 20 kg), Bench, Pull-up bar"), ["dumbbell", "bench", "pullUpBar"]);
+  assert.deepEqual(app.parseEquipmentList("Dumbbells, Bench and pull up bar"), ["dumbbell", "bench", "pullUpBar"]);
+  assert.deepEqual(app.parseEquipmentList("Barbell and rack, resistance bands"), ["barbell", "bands"]);
+  assert.equal(app.parseProfileTag("[profile: equipment: a rowing boat]"), null);
+  assert.equal(app.equipmentNames(["pullUpBar", "dumbbell", "rowingBoat"]), "Dumbbells, Pull-up bar"); // list order, unknown ids skipped
+  assert.equal(app.equipmentNames(["dumbbell"], "0", "kg"), "Dumbbells");
+  assert.equal(app.equipmentNames([]), "");
 });
 
 test("Bodyweight: one entry per day, kept in date order; the coach sees the current weight and the log", () => {

@@ -46,6 +46,20 @@ export const EQUIPMENT_STEPS = {
   cable: { kg: 5, lb: 10 },
   bodyweight: { kg: 2.5, lb: 5 }, // added weight on a belt or vest
 };
+// The equipment chips in Goals. `allows` lists the equipment types above that an item makes possible; bodyweight always is.
+export const EQUIPMENT_ITEMS = [
+  { id: "barbell", label: "Barbell and rack", group: "Free weights", allows: ["barbell", "bigBarbell"] },
+  { id: "dumbbell", label: "Dumbbells", group: "Free weights", allows: ["dumbbell"] },
+  { id: "kettlebell", label: "Kettlebells", group: "Free weights", allows: ["kettlebell"] },
+  { id: "bench", label: "Bench", group: "Free weights", allows: [] },
+  { id: "cable", label: "Cable machine", group: "Machines", allows: ["cable"] },
+  { id: "machine", label: "Weight machines", group: "Machines", allows: ["machine"] },
+  { id: "cardio", label: "Cardio machines", group: "Machines", allows: [] },
+  { id: "pullUpBar", label: "Pull-up bar", group: "Bodyweight", allows: [] },
+  { id: "dipBars", label: "Dip bars", group: "Bodyweight", allows: [] },
+  { id: "bands", label: "Resistance bands", group: "Bodyweight", allows: [] },
+];
+export const EQUIPMENT_PRESETS = { "Full gym": EQUIPMENT_ITEMS.map((item) => item.id), "Home gym": ["dumbbell", "bench", "pullUpBar"], "No equipment": [] };
 export const DELOAD_FACTOR = 0.9;
 // Recommended rest between sets: heavier, lower-rep work needs longer recovery.
 export const REST_BY_REP_RANGE = [[6, 180], [10, 120], [15, 90], [Infinity, 60]]; // [range top up to N reps, seconds]
@@ -69,7 +83,7 @@ export const TOUR_STEPS = [
   { tab: "log", title: "Log", text: "Start a workout here. Tick each set; the app sets the weights, the rest and what comes next." },
   { tab: "food", title: "Food", text: "Snap a meal. The app counts the protein toward your daily target." },
   { tab: "progress", title: "Progress", text: "Your charts: strength over time, weekly volume, muscles worked and bodyweight." },
-  { tab: "goals", title: "Goals", text: "About you and your goals. The more your coach knows, the better it plans." },
+  { tab: "goals", title: "Goals", text: "About you, your equipment and your goals. The more your coach knows, the better it plans." },
 ];
 export const SWIPE_AWAY_PX = 80; // a card dragged this far sideways is swiped away; less springs back
 export const SET_FEEL_SCROLL_DELAY_MS = 300; // the set feel row is checked for being in sight once it has grown open (.gb-reveal)
@@ -135,7 +149,7 @@ export const VOLUME_LEVELS = [
   { min: 0.5, color: "#bfdbfe", label: "Under 5 sets" },
 ];
 export const MAX_EXERCISES_PER_CLASSIFICATION = 20; // keeps the coach's JSON answer well inside its length limit
-export const INJURY_READ_DELAY_MS = 2000; // wait until typing in "Injuries and equipment" pauses before asking which muscles it affects
+export const INJURY_READ_DELAY_MS = 2000; // wait until typing in "Injuries and other notes" pauses before asking which muscles it affects
 
 // Exercise name → muscles, checked in order, so specific patterns come first. Unmatched names are classified by the coach.
 export const MUSCLE_RULES = [

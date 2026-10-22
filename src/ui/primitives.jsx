@@ -5,6 +5,7 @@ import { parseRoutineTag } from "../workout.js";
 import { parseMemoryTag, parseProfileTag } from "../coach-context.js";
 import { VideoGuides } from "./videos.jsx";
 import { guideFor } from "../training.js";
+import { equipmentNames } from "../equipment.js";
 
 export const inputClass =
   "w-full rounded-lg bg-white border border-zinc-300 px-3 py-2.5 text-base text-zinc-900 placeholder-zinc-400 focus:outline-none focus:border-blue-700";
@@ -207,7 +208,7 @@ export function RichText({ text, onSaveRoutine, onSaveProfile, onOpenImport }) {
   );
 }
 
-const PROFILE_LABELS = { name: "Name", experience: "Experience", daysPerWeek: "Sessions per week", sessionMinutes: "Minutes per session", focus: "Main focus", notes: "Injuries and equipment", music: "Workout music" };
+const PROFILE_LABELS = { name: "Name", experience: "Experience", daysPerWeek: "Sessions per week", sessionMinutes: "Minutes per session", focus: "Main focus", notes: "Injuries and other notes", equipment: "Equipment", music: "Workout music" };
 
 // What the coach learned in a new athlete's interview, saved to their profile with one tap.
 export function ProfileSuggestion({ profile, onSave }) {
@@ -219,7 +220,7 @@ export function ProfileSuggestion({ profile, onSave }) {
         {Object.entries(profile).map(([field, value]) => (
           <div key={field}>
             <dt className="inline text-zinc-500">{PROFILE_LABELS[field]}: </dt>
-            <dd className="inline">{value}</dd>
+            <dd className="inline">{field === "equipment" ? equipmentNames(value) || "None" : value}</dd>
           </div>
         ))}
       </dl>

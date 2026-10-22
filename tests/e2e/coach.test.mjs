@@ -112,7 +112,7 @@ test("onboarding: a new athlete's coach asks first, then the profile and plans i
   const { page, errors, aiRequests } = await openApp(t, {
     ai: (body) =>
       isCoachChat(body)
-        ? "Here's your start.\n[profile: experience: Beginner; daysPerWeek: 3; sessionMinutes: 45; focus: General fitness; music: hip hop]\n[plan: A: Goblet Squat, Push-up]\n[plan: B: Romanian Deadlift, Lat Pulldown]"
+        ? "Here's your start.\n[profile: experience: Beginner; daysPerWeek: 3; sessionMinutes: 45; focus: General fitness; equipment: Dumbbells, bench; music: hip hop]\n[plan: A: Goblet Squat, Push-up]\n[plan: B: Romanian Deadlift, Lat Pulldown]"
         : "OK",
   });
   await page.getByRole("button", { name: "Skip" }).tap(); // the first-time tour
@@ -134,7 +134,10 @@ test("onboarding: a new athlete's coach asks first, then the profile and plans i
   await settle(page);
 
   const saved = await stored(page, "gymbot:settings");
-  assert.deepEqual([saved.profile.experience, saved.profile.daysPerWeek, saved.profile.sessionMinutes, saved.profile.focus, saved.profile.music], ["Beginner", 3, 45, "General fitness", "hip hop"]);
+  assert.deepEqual(
+    [saved.profile.experience, saved.profile.daysPerWeek, saved.profile.sessionMinutes, saved.profile.focus, saved.profile.equipment, saved.profile.music],
+    ["Beginner", 3, 45, "General fitness", ["dumbbell", "bench"], "hip hop"]
+  );
   assert.deepEqual(saved.routines.map((r) => r.name), ["A", "B"]);
   assert.equal(aiRequests.filter((b) => b.system.includes("motivation note")).length, 0); // no daily note before there's anything to say
 
@@ -218,6 +221,36 @@ test("injuries: the profile note is read into muscles, and Autopilot holds the l
   const bench = page.locator("li", { hasText: "Bench Press (Dumbbell)" }).first();
   await bench.getByText("Hold for pain").waitFor();
   assert.match(await bench.innerText(), /Easy on your shoulders/);
+  assert.deepEqual(errors, []);
+});
+
+test("equipment: picked in Goals by place, by tap or from the logged workouts, and the coach plans with it", async (t) => {
+  const { page, errors, aiRequests } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
+  await page.getByRole("button", { name: "Goals", exact: true }).tap();
+  const panel = section(page, "Equipment");
+  await panel.getByText("Pick where you train").waitFor();
+  const pressed = () => panel.getByRole("button", { pressed: true }).allInnerTexts();
+  assert.deepEqual(await pressed(), []); // not chosen yet
+
+  await panel.getByRole("button", { name: "Home gym" }).tap();
+  assert.deepEqual(await pressed(), ["Dumbbells", "Bench", "Pull-up bar"]);
+  await panel.getByRole("button", { name: "Bench", exact: true }).tap();
+  await panel.getByLabel("Dumbbells up to (kg)").fill("20");
+  await settle(page);
+  const { profile } = await stored(page, "gymbot:settings");
+  assert.deepEqual([profile.equipment, profile.dumbbellMax], [["dumbbell", "pullUpBar"], "20"]);
+
+  await panel.getByRole("button", { name: "From my workouts" }).tap(); // the Sep 23 workout
+  assert.deepEqual(await pressed(), ["Dumbbells", "Kettlebells", "Cable machine", "Weight machines"]);
+  await panel.getByRole("button", { name: "No equipment" }).tap();
+  assert.deepEqual(await pressed(), []);
+  assert.equal(await panel.getByLabel("Dumbbells up to (kg)").count(), 0);
+
+  await page.getByRole("button", { name: "Coach", exact: true }).tap();
+  await page.getByPlaceholder("Message your coach").fill("Plan my next workout");
+  await page.getByRole("button", { name: "Send" }).tap();
+  await page.getByText("OK").waitFor();
+  assert.ok(aiRequests.find(isCoachChat).system.includes("EQUIPMENT: none, so plan bodyweight exercises only."));
   assert.deepEqual(errors, []);
 });
 

@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { APP_VERSION, COACH_STYLES, MEDICAL_NOTICE, DEFAULT_SETTINGS, EXPERIENCE_LEVELS, HEIGHT_UNITS, MUSCLE_LABELS, PLATES, REST_FUN_KINDS, SEXES, TRAINING_FOCUSES, WEEKDAYS } from "../config.js";
+import { APP_VERSION, COACH_STYLES, MEDICAL_NOTICE, DEFAULT_SETTINGS, EQUIPMENT_ITEMS, EQUIPMENT_PRESETS, EXPERIENCE_LEVELS, HEIGHT_UNITS, MUSCLE_LABELS, PLATES, REST_FUN_KINDS, SEXES, TRAINING_FOCUSES, WEEKDAYS } from "../config.js";
 import { exportAllData, sendFeedback } from "../storage.js";
 import { daysBetween, joinWords, today } from "../dates.js";
 import { normalizeName, plateSize, platesPerSide } from "../training.js";
 import { injuredMuscles } from "../autopilot.js";
 import { forecastText, goalForecast } from "../schedule.js";
+import { equipmentFromWorkouts } from "../equipment.js";
 import { DeleteButton, ErrorText, Field, Panel, PrimaryButton, SectionTitle, Select, ViewTitle, inputClass } from "./primitives.jsx";
 
 const NOT_SAID = "Prefer not to say"; // stored as ""
@@ -162,12 +163,12 @@ export function GoalsView({ settings, setSettings, records, workouts, onShowTour
               <input value={restFun.topic} onChange={(e) => updateRestFun({ topic: e.target.value })} placeholder={REST_FUN_KINDS[restFun.kind].placeholder} className={inputClass} />
             </Field>
           )}
-          <Field label="Injuries and equipment" className="col-span-2">
+          <Field label="Injuries and other notes" className="col-span-2">
             <textarea
               rows={3}
               value={profile.notes}
               onChange={(e) => updateProfile("notes")(e.target.value)}
-              placeholder="Home gym with a rack and dumbbells up to 30 kg. Left shoulder gets cranky on overhead work."
+              placeholder="Left shoulder gets cranky on overhead work."
               className={inputClass}
             />
             <p className="mt-1 text-sm text-zinc-500">{MEDICAL_NOTICE}</p>
@@ -179,6 +180,8 @@ export function GoalsView({ settings, setSettings, records, workouts, onShowTour
           </Field>
         </div>
       </Panel>
+
+      <EquipmentPanel profile={profile} setSettings={setSettings} workouts={workouts} />
 
       {goals.length > 0 && (
         <p className="-mt-2 text-sm text-zinc-500">Forecasts extend your last 12 weeks of progress. Gains usually slow as you get stronger, so treat dates as rough.</p>
@@ -219,6 +222,56 @@ export function GoalsView({ settings, setSettings, records, workouts, onShowTour
       </button>
       <p className="text-center text-xs text-zinc-400">MyGymBot {[APP_VERSION, deployedCommit()].filter(Boolean).join(" ")}</p>
     </div>
+  );
+}
+
+// What they can train with, saved on every tap. Unset (null) until they pick something; "No equipment" is an empty list.
+function EquipmentPanel({ profile, setSettings, workouts }) {
+  const equipment = profile.equipment ?? null;
+  const fromWorkouts = equipmentFromWorkouts(workouts, today());
+  const places = fromWorkouts.length ? { ...EQUIPMENT_PRESETS, "From my workouts": fromWorkouts } : EQUIPMENT_PRESETS;
+  const groups = [...new Set(EQUIPMENT_ITEMS.map((item) => item.group))];
+  const change = (fields) => setSettings((s) => ({ ...s, profile: { ...s.profile, ...fields } }));
+  const toggle = (id) => change({ equipment: equipment?.includes(id) ? equipment.filter((other) => other !== id) : [...(equipment ?? []), id] });
+  const pill = "h-10 rounded-full border px-3 text-sm font-semibold";
+
+  return (
+    <Panel className="space-y-3">
+      <div>
+        <SectionTitle>Equipment</SectionTitle>
+        <p className="-mt-1 text-sm text-zinc-500">{equipment ? "Your coach plans with what you have." : "Pick where you train, or tap what you have. Your coach plans with it."}</p>
+      </div>
+      <div>
+        <span className="mb-1 block text-sm text-zinc-500">Where do you train?</span>
+        <div className="flex flex-wrap gap-2">
+          {Object.entries(places).map(([place, ids]) => (
+            <button key={place} onClick={() => change({ equipment: ids })} className={`${pill} border-blue-700 text-blue-700 active:bg-blue-50`}>
+              {place}
+            </button>
+          ))}
+        </div>
+      </div>
+      {groups.map((group) => (
+        <div key={group} role="group" aria-label={group}>
+          <span className="mb-1 block text-sm text-zinc-500">{group}</span>
+          <div className="flex flex-wrap gap-2">
+            {EQUIPMENT_ITEMS.filter((item) => item.group === group).map((item) => {
+              const on = equipment?.includes(item.id) ?? false;
+              return (
+                <button key={item.id} onClick={() => toggle(item.id)} aria-pressed={on} className={`${pill} ${on ? "border-blue-700 bg-blue-700 text-white" : "border-zinc-300 text-zinc-600"}`}>
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      {equipment?.includes("dumbbell") && (
+        <Field label={`Dumbbells up to (${profile.unit})`}>
+          <input type="number" inputMode="decimal" min="1" value={profile.dumbbellMax ?? ""} onChange={(e) => change({ dumbbellMax: e.target.value })} placeholder="Optional" className={inputClass} />
+        </Field>
+      )}
+    </Panel>
   );
 }
 

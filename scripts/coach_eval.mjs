@@ -13,6 +13,8 @@ import { addDays } from "../src/schedule.js";
 
 const workouts = [userWorkout, yesterdayWorkout];
 const knee = settings({ name: "Dana", notes: "Left knee hurts on deep squats", sessionMinutes: "45" });
+// A home gym with light dumbbells, while the history still has cable and machine work from a gym.
+const homeGym = settings({ equipment: ["dumbbell", "bench"], dumbbellMax: "20" });
 const session = { exercises: [{ name: "Bench Press (Dumbbell)", sets: [{ weight: 44, reps: 10, done: true }, { weight: 44, reps: 10 }] }] };
 
 // A week of meals before today, with less protein on the 3 workout days (about 90 g) than on the 4 others (about 152 g),
@@ -73,8 +75,13 @@ const SCENARIOS = [
   {
     name: "remember",
     settings: settings(),
-    messages: ["I moved, I only have dumbbells at home now"],
-    rules: ["Has a [remember: ...] line about training at home with dumbbells only", "Adapts the advice to dumbbells"],
+    messages: ["I moved, I only have dumbbells at home now, and I'm training for a 10k in March"],
+    rules: [
+      "Has a [remember: ...] line about the 10k in March",
+      "Writes [profile: equipment: Dumbbells] on its own line",
+      "No [remember: ...] line that restates the equipment",
+      "Adapts the advice to dumbbells",
+    ],
   },
   {
     name: "food",
@@ -154,6 +161,71 @@ const SCENARIOS = [
     ...foodLog,
     messages: ["Do I eat enough protein on my training days?"],
     rules: ["Says about 90 g a day on workout days against about 152 g on other days, from the data", "Says the workout days are under the 128 g target", "Gives one concrete change for workout days"],
+  },
+  {
+    name: "equipment-plan",
+    settings: homeGym,
+    messages: ["Plan me a back workout for today"],
+    rules: ["Uses only dumbbell and bodyweight exercises: no cable, machine or barbell", "Dumbbell weights are 20 kg or less", "Does not suggest equipment to add"],
+  },
+  {
+    name: "equipment-none-plan",
+    settings: settings({ equipment: [] }),
+    messages: ["Plan my workout for today"],
+    rules: ["Uses only bodyweight exercises", "Suggests at most one item to add"],
+  },
+  {
+    name: "equipment-none-later",
+    settings: settings({ equipment: [] }),
+    messages: [
+      "Plan my workout for today",
+      "Today, 3 rounds: push-ups, squats, lunges and a plank. A pull-up bar would let you train your back too.",
+      "How many push-ups per set?",
+    ],
+    rules: ["Answers the push-up question", "Does not suggest equipment again"],
+  },
+  {
+    name: "equipment-unset-changed",
+    settings: settings(),
+    messages: ["I bought a pull-up bar for home"],
+    rules: ["Writes no [profile: equipment: ...] tag"],
+  },
+  {
+    name: "equipment-not-asked",
+    settings: homeGym,
+    messages: ["How was my bench last week?"],
+    rules: ["Answers with dates, weights and reps from the data", "Does not suggest getting new equipment"],
+  },
+  {
+    name: "equipment-add-asked",
+    settings: homeGym,
+    messages: ["What one thing should I get for my home gym?"],
+    rules: ["Suggests 1 item they don't have yet (not dumbbells or a bench)", "Writes no [profile: ...] tag"],
+  },
+  {
+    name: "equipment-changed",
+    settings: homeGym,
+    messages: ["I just got a pull-up bar"],
+    rules: ["Writes [profile: equipment: ...] on its own line, listing Dumbbells, Bench and Pull-up bar", "Writes no [remember: ...] tag about the equipment"],
+  },
+  {
+    name: "onboarding-equipment",
+    settings: settings(),
+    workouts: [],
+    messages: [
+      "I want to get stronger",
+      "Great goal. How much gym experience do you have?",
+      "None, I'm a beginner",
+      "How many days a week can you train, and for how long?",
+      "3 days, 45 minutes",
+      "Any injuries or pain I should know about?",
+      "No",
+      "What equipment do you have?",
+      "Just dumbbells and a bench at home",
+      "What music do you like to train to?",
+      "Rock",
+    ],
+    rules: ["Writes a [profile: ...] tag with equipment: Dumbbells, Bench", "Plans use only dumbbell and bodyweight exercises"],
   },
   {
     name: "onboarding",

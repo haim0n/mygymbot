@@ -6,6 +6,7 @@ import { foodContext, proteinTarget } from "./food.js";
 import { formatRange } from "./autopilot.js";
 import { formatSets, weeklyMuscleSets } from "./muscles.js";
 import { nextRoutine } from "./workout.js";
+import { equipmentContext, parseEquipmentList } from "./equipment.js";
 import { forecastText, goalForecast, todayPlan } from "./schedule.js";
 import { activityLabel, activitySummary, summaryText } from "./activities.js";
 
@@ -38,6 +39,7 @@ const PROFILE_TAG_FIELDS = {
   focus: pickFrom(TRAINING_FOCUSES),
   sessionMinutes: (value) => (Number.isInteger(Number(value)) && value >= 10 && value <= 240 ? Number(value) : undefined),
   notes: asIs,
+  equipment: parseEquipmentList,
   music: asIs,
 };
 
@@ -112,7 +114,8 @@ export function buildCoachContext({ profile, goals, routines = [], coachMemory =
   return [
     `Today is ${today()}. Weights are in ${u}, written weight x reps; dumbbell weights are per dumbbell.`,
     `ATHLETE: ${name}${profile.experience}, ${body}bodyweight ${currentBodyweight(bodyweightLog, profile) ?? "unknown"}${u}, ${schedule}${sessionLength}, focus: ${profile.focus}, coaching style: ${COACH_STYLES[profile.coachStyle ?? DEFAULT_SETTINGS.profile.coachStyle]}.`,
-    profile.notes && `INJURIES AND EQUIPMENT (from the athlete's profile; plan around these): ${profile.notes}`,
+    profile.notes && `INJURIES AND NOTES (from the athlete's profile; plan around these): ${profile.notes}`,
+    equipmentContext(profile),
     profile.foodNotes && `FOOD PREFERENCES: ${profile.foodNotes}`,
     profile.music && `WORKOUT MUSIC: ${profile.music}`,
     coachMemory.length > 0 && `WHAT YOU KNOW ABOUT THE ATHLETE (they told you in earlier chats, oldest first):\n${coachMemory.map((f) => `- ${f.text} (${f.date})`).join("\n")}`,
