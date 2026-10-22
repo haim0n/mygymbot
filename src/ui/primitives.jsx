@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Trash2, Loader2, Upload } from "lucide-react";
-import { IMPORT_MARKER, VIDEO_MARKER } from "../config.js";
+import { EQUIPMENT_MARKER, IMPORT_MARKER, VIDEO_MARKER } from "../config.js";
 import { parseRoutineTag } from "../workout.js";
 import { parseMemoryTag, parseProfileTag } from "../coach-context.js";
 import { VideoGuides } from "./videos.jsx";
@@ -168,8 +168,8 @@ export function renderBold(text) {
   );
 }
 
-// Minimal markdown: headings, "- " bullets and **bold**, plus the coach's video, plan, profile, import and remember tags.
-export function RichText({ text, onSaveRoutine, onSaveProfile, onOpenImport }) {
+// Minimal markdown: headings, "- " bullets and **bold**, plus the coach's video, plan, profile, import, equipment and remember tags.
+export function RichText({ text, onSaveRoutine, onSaveProfile, onOpenImport, onOpenEquipment }) {
   const lines = text.split("\n").filter((line) => line.trim());
   return (
     <div className="space-y-1.5 leading-relaxed">
@@ -186,6 +186,12 @@ export function RichText({ text, onSaveRoutine, onSaveProfile, onOpenImport }) {
           return onOpenImport ? (
             <button key={i} onClick={onOpenImport} className="inline-flex items-center rounded-full border border-blue-700 px-3 h-10 text-sm font-semibold text-blue-700">
               Import history
+            </button>
+          ) : null;
+        if (EQUIPMENT_MARKER.test(line))
+          return onOpenEquipment ? (
+            <button key={i} onClick={onOpenEquipment} className="inline-flex items-center rounded-full border border-blue-700 px-3 h-10 text-sm font-semibold text-blue-700">
+              Pick your equipment
             </button>
           ) : null;
         const profile = parseProfileTag(line);

@@ -140,7 +140,7 @@ test("Equipment: what an exercise needs, read from the history, for the coach, a
     "EQUIPMENT (what they can train with; plan only exercises these allow, and bodyweight): Dumbbells (up to 20 kg), Bench."
   );
   assert.equal(app.equipmentContext({ ...profile, equipment: ["dumbbell"], dumbbellMax: "" }), "EQUIPMENT (what they can train with; plan only exercises these allow, and bodyweight): Dumbbells.");
-  assert.ok(!app.buildCoachContext({ profile, goals: [] }, [], [], {}, null).includes("EQUIPMENT"));
+  assert.doesNotMatch(app.buildCoachContext({ profile, goals: [] }, [], [], {}, null), /^EQUIPMENT/m); // the line, not the onboarding's mention
   assert.ok(app.buildCoachContext({ profile: { ...profile, equipment: ["bench"] }, goals: [] }, [], [], {}, null).includes("EQUIPMENT (what they can train with"));
 
   assert.deepEqual(app.parseProfileTag("[profile: equipment: Dumbbells, bench, rowing boat]"), { equipment: ["dumbbell", "bench"] }); // labels or ids, unknown left out

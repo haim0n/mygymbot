@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Camera } from "lucide-react";
 import { APP_VERSION, COACH_STYLES, MEDICAL_NOTICE, DEFAULT_SETTINGS, EQUIPMENT_ITEMS, EQUIPMENT_PRESETS, EXPERIENCE_LEVELS, HEIGHT_UNITS, MAX_EQUIPMENT_PHOTOS, MUSCLE_LABELS, PLATES, REST_FUN_KINDS, SEXES, TRAINING_FOCUSES, WEEKDAYS } from "../config.js";
 import { exportAllData, sendFeedback } from "../storage.js";
@@ -63,7 +63,7 @@ export function GoalCard({ goal, current, forecast, unit, onRemove }) {
   );
 }
 
-export function GoalsView({ settings, setSettings, records, workouts, onShowTour }) {
+export function GoalsView({ settings, setSettings, records, workouts, onShowTour, showEquipment, onEquipmentShown }) {
   const { profile, goals } = settings;
   const [draft, setDraft] = useState({ exercise: "", target: "", deadline: "" });
 
@@ -185,7 +185,7 @@ export function GoalsView({ settings, setSettings, records, workouts, onShowTour
         </div>
       </Panel>
 
-      <EquipmentPanel profile={profile} setSettings={setSettings} workouts={workouts} />
+      <EquipmentPanel profile={profile} setSettings={setSettings} workouts={workouts} show={showEquipment} onShown={onEquipmentShown} />
 
       {goals.length > 0 && (
         <p className="-mt-2 text-sm text-zinc-500">Forecasts extend your last 12 weeks of progress. Gains usually slow as you get stronger, so treat dates as rough.</p>
@@ -230,7 +230,7 @@ export function GoalsView({ settings, setSettings, records, workouts, onShowTour
 }
 
 // What they can train with, saved on every tap. Unset (null) until they pick something; "No equipment" is an empty list.
-function EquipmentPanel({ profile, setSettings, workouts }) {
+function EquipmentPanel({ profile, setSettings, workouts, show, onShown }) {
   const equipment = profile.equipment ?? null;
   const fromWorkouts = equipmentFromWorkouts(workouts, today());
   const places = fromWorkouts.length ? { ...EQUIPMENT_PRESETS, "From my workouts": fromWorkouts } : EQUIPMENT_PRESETS;
@@ -241,6 +241,14 @@ function EquipmentPanel({ profile, setSettings, workouts }) {
   const [busy, setBusy] = useState(false);
   const [found, setFound] = useState(null); // what the last photos showed
   const [error, setError] = useState("");
+  const title = useRef(null);
+
+  // Opened from the coach's button: bring the panel into sight, once.
+  useEffect(() => {
+    if (!show) return;
+    title.current.scrollIntoView({ block: "start" });
+    onShown();
+  }, [show]);
 
   // What the AI sees is added to the list, never taken off it: a photo shows one corner of a gym.
   async function snap(files) {
@@ -277,7 +285,7 @@ function EquipmentPanel({ profile, setSettings, workouts }) {
 
   return (
     <Panel className="space-y-3">
-      <div>
+      <div ref={title}>
         <SectionTitle>Equipment</SectionTitle>
         <p className="-mt-1 text-sm text-zinc-500">{equipment ? "Your coach plans with what you have." : "Pick where you train, or tap what you have. Your coach plans with it."}</p>
       </div>

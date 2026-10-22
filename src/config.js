@@ -187,6 +187,7 @@ export const MUSCLE_RULES = [
 export const VIDEO_MARKER = /^\s*\[video:\s*(.+?)\]\s*$/i; // the coach writes [video: Exercise Name] on its own line
 export const ROUTINE_MARKER = /^\s*\[plan:\s*([^:\]]+?)\s*:\s*(.+?)\]\s*$/i; // the coach writes [plan: Name: Exercise, Exercise, ...] on its own line
 export const IMPORT_MARKER = /^\s*\[import\]\s*$/i; // the coach writes [import] on its own line for a button that opens Import history
+export const EQUIPMENT_MARKER = /^\s*\[equipment\]\s*$/i; // the same for a button that opens Goals, Equipment, in the onboarding chat
 export const MEMORY_MARKER = /^\s*\[remember:\s*(.+?)\]\s*$/i; // the coach writes [remember: fact] or [remember: fact | replaces: old fact] on its own line
 export const PROFILE_MARKER = /^\s*\[profile:\s*(.+?)\]\s*$/i; // a new athlete's interview ends with [profile: field: value; field: value; ...]
 export const VIDEO_LIBRARY = [

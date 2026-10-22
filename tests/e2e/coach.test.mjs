@@ -224,6 +224,19 @@ test("injuries: the profile note is read into muscles, and Autopilot holds the l
   assert.deepEqual(errors, []);
 });
 
+test("onboarding: the coach's Pick your equipment button opens Goals with Equipment in sight", async (t) => {
+  const { page, errors } = await openApp(t, { ai: (body) => (isCoachChat(body) ? "What equipment can you use?\n[equipment]" : "OK") });
+  await page.getByRole("button", { name: "Skip" }).tap(); // the first-time tour
+  await page.getByPlaceholder("Message your coach").fill("No injuries");
+  await page.getByRole("button", { name: "Send" }).tap();
+  await page.getByRole("button", { name: "Pick your equipment" }).tap();
+  const heading = section(page, "Equipment").getByRole("heading", { name: "Equipment" });
+  await heading.waitFor();
+  const { y } = await heading.boundingBox(); // About you is above it, so without the scroll it starts below the screen
+  assert.ok(y >= 0 && y < page.viewportSize().height / 2, `Equipment starts at ${y}`);
+  assert.deepEqual(errors, []);
+});
+
 test("equipment: picked in Goals by place, by tap or from the logged workouts, and the coach plans with it", async (t) => {
   const { page, errors, aiRequests } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
   await page.getByRole("button", { name: "Goals", exact: true }).tap();

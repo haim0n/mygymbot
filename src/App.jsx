@@ -83,6 +83,11 @@ export default function GymBot() {
     setShowImport(true);
     setTab("log");
   };
+  const [showEquipment, setShowEquipment] = useState(false); // Goals scrolls to Equipment once, when the coach's button opened it
+  const openEquipment = () => {
+    setShowEquipment(true);
+    setTab("goals");
+  };
   const deleteRoutine = (name) => setSettings((s) => ({ ...s, routines: (s.routines ?? []).filter((r) => r.name !== name) }));
 
   const saveProblem = useSaveProblem();
@@ -178,14 +183,14 @@ export default function GymBot() {
 
   const bodyweight = { log: bodyweightLog, profile: settings.profile, onLog: (weight) => setBodyweightLog((log) => logBodyweight(log, today(), weight)) };
   const views = {
-    coach: <CoachView chat={chat} setChat={setChat} context={coachContext} briefing={{ facts, note: dailyNote }} newAthlete={isNewAthlete(settings, workouts)} onNavigate={setTab} onSaveRoutine={storeRoutine} onSaveProfile={storeProfile} onOpenImport={openImport} onRemember={remember} />,
+    coach: <CoachView chat={chat} setChat={setChat} context={coachContext} briefing={{ facts, note: dailyNote }} newAthlete={isNewAthlete(settings, workouts)} onNavigate={setTab} onSaveRoutine={storeRoutine} onSaveProfile={storeProfile} onOpenImport={openImport} onOpenEquipment={openEquipment} onRemember={remember} />,
     log: (
       <LogView workouts={workouts} setWorkouts={setWorkouts} session={session} setSession={setSession} settings={settings} coachContext={coachContext} plans={plans} yourExercises={namesInUse} learnedMuscles={learnedMuscles} onRangeChange={setRepRange} onStartRest={restTimer.start} feelPrompt={feelPrompt} onSaveRoutine={storeRoutine} onDeleteRoutine={deleteRoutine} showImport={showImport} setShowImport={setShowImport} bodyweight={bodyweight} unit={unit} />
     ),
     food: <FoodView food={food} setFood={setFood} bodyweight={currentBodyweight(bodyweightLog, settings.profile)} unit={unit} />,
     progress: <ProgressView workouts={workouts} records={records} exerciseNames={exerciseNames} learnedMuscles={learnedMuscles} unit={unit} daysPerWeek={daysPerWeek} onNavigate={setTab}
         bodyweight={bodyweight} />,
-    goals: <GoalsView settings={settings} setSettings={setSettings} records={records} workouts={workouts} onShowTour={showTour} />,
+    goals: <GoalsView settings={settings} setSettings={setSettings} records={records} workouts={workouts} onShowTour={showTour} showEquipment={showEquipment} onEquipmentShown={() => setShowEquipment(false)} />,
   };
 
   return (

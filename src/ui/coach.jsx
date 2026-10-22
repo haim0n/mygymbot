@@ -6,7 +6,7 @@ import { askAI, recentTurns } from "../ai.js";
 import { ErrorText, RichText, ViewTitle, inputClass, useArmed } from "./primitives.jsx";
 import { TodayCard } from "./motivation.jsx";
 
-export function CoachView({ chat, setChat, context, briefing, newAthlete, onNavigate, onSaveRoutine, onSaveProfile, onOpenImport, onRemember }) {
+export function CoachView({ chat, setChat, context, briefing, newAthlete, onNavigate, onSaveRoutine, onSaveProfile, onOpenImport, onOpenEquipment, onRemember }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -81,7 +81,7 @@ export function CoachView({ chat, setChat, context, briefing, newAthlete, onNavi
               </div>
             ) : (
               <div key={i} className="rounded-2xl rounded-bl-md bg-white px-4 py-3 text-zinc-700">
-                <RichText text={message.content} onSaveRoutine={onSaveRoutine} onSaveProfile={onSaveProfile} onOpenImport={onOpenImport} />
+                <RichText text={message.content} onSaveRoutine={onSaveRoutine} onSaveProfile={onSaveProfile} onOpenImport={onOpenImport} onOpenEquipment={onOpenEquipment} />
               </div>
             )
           )}
