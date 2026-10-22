@@ -138,6 +138,22 @@ test("left open: hours later the workout asks to be saved as that day or trained
   assert.deepEqual(errors, []);
 });
 
+test("exercise picker: with their equipment set, the exercises it allows, then all of them on a tap", async (t) => {
+  const { page, errors } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout], "gymbot:settings": settings({ equipment: ["dumbbell"] }) } });
+  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: "Start an empty workout" }).tap();
+  await section(page, "Workout").getByRole("button", { name: "Add exercise" }).tap();
+  const picker = page.getByRole("dialog", { name: "Add an exercise" });
+  await picker.getByLabel("Search exercises").fill("bench");
+  await picker.getByText("Bench Press (Dumbbell)", { exact: true }).waitFor();
+  assert.equal(await picker.getByText("Bench Press", { exact: true }).count(), 0); // a barbell
+  await picker.getByRole("button", { name: "Show exercises for other equipment" }).tap();
+  await picker.getByText("Bench Press", { exact: true }).tap();
+  await picker.waitFor({ state: "detached" });
+  await section(page, "Workout").getByText("Bench Press", { exact: true }).waitFor();
+  assert.deepEqual(errors, []);
+});
+
 test("exercise picker: find an exercise by name, add it, then replace it with one for the same muscle", async (t) => {
   const { page, errors } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
   await page.getByRole("button", { name: /^Log/ }).tap();

@@ -345,6 +345,11 @@ test("Exercise picker: finds yours first, then common names, then the library; r
   assert.equal(app.searchExercises("", ["Landmine Press"], { muscle: "chest", learnedMuscles: { "Landmine Press": { primary: ["chest"], secondary: [] } } })[0], "Landmine Press");
   assert.equal(found("", { muscle: "chest" })[0], "Bench Press (Dumbbell)");
   assert.equal(found("").length, app.EXERCISE_SEARCH_LIMIT);
+  // Their equipment, left out before the limit, so a muscle still fills the list.
+  const allowed = (name) => app.canDo(name, ["dumbbell"]);
+  assert.ok(found("bench", { allowed }).includes("Bench Press (Dumbbell)") && !found("bench", { allowed }).includes("Bench Press"));
+  const chest = found("", { muscle: "chest", allowed });
+  assert.ok(chest.every(allowed) && chest.length > found("", { muscle: "chest" }).filter(allowed).length);
   // Gym shorthand, as a whole word only.
   assert.ok(found("rdl").includes("Romanian Deadlift (Dumbbell)") && found("ohp")[0] === "Overhead Press");
   assert.ok(found("db row").every((name) => /dumbbell/i.test(name) && /row/i.test(name)) && found("db row").length > 0);

@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, createContext, useContext } from "react";
 import { X, Info, Plus, Search } from "lucide-react";
-import { MAX_EXERCISES_PER_CLASSIFICATION, MUSCLES, MUSCLE_COLORS, MUSCLE_LABELS, STORAGE_KEYS } from "../config.js";
+import { EQUIPMENT_ITEMS, MAX_EXERCISES_PER_CLASSIFICATION, MUSCLES, MUSCLE_COLORS, MUSCLE_LABELS, STORAGE_KEYS } from "../config.js";
 import { EXERCISE_PHOTO_PROMPT } from "../prompts.js";
 import { usePersistentState } from "../storage.js";
 import { askAIForJson } from "../ai.js";
 import { EXERCISE_PHOTOS } from "../exercise-photos.js";
 import { joinWords } from "../dates.js";
 import { equipmentOf } from "../autopilot.js";
+import { canDo } from "../equipment.js";
 import { describeMuscles, musclesFor } from "../muscles.js";
 import { PrimaryButton, inputClass, reducedMotion, useBackToClose } from "./primitives.jsx";
 import { BodyFigure, BodyView, exerciseFills } from "./muscles.jsx";
@@ -74,7 +75,7 @@ export function useLearnedPhotos({ enabled, exerciseNames }) {
 }
 
 // Muscle and photo lookups and the details sheet are needed in many places, so they're shared instead of passed down.
-export const ExerciseContext = createContext({ learnedMuscles: {}, learnedPhotos: {}, showDetails: () => {}, formChecks: [], setFormChecks: () => {}, profileNotes: "" });
+export const ExerciseContext = createContext({ learnedMuscles: {}, learnedPhotos: {}, showDetails: () => {}, formChecks: [], setFormChecks: () => {}, profileNotes: "", equipment: null });
 
 // Small tile showing the exercise being done, so the equipment is easy to find; without a photo, zoomed in
 // on the target muscles (red = main, light red = helpers). Tap for details.
@@ -222,12 +223,15 @@ export function ExerciseSheet({ name, onClose }) {
 // Find an exercise by name or by muscle, to add it or to swap one for it. `onPick` changes the workout; the sheet closes itself. Replacing starts on the old exercise's main muscle,
 // so the alternatives show without typing.
 export function ExercisePicker({ yourNames, replacing, onPick, onClose }) {
-  const { learnedMuscles } = useContext(ExerciseContext);
+  const { learnedMuscles, equipment } = useContext(ExerciseContext);
   const [query, setQuery] = useState("");
+  const [showAll, setShowAll] = useState(false); // exercises for equipment they don't have, too
+  const filtered = equipment && !showAll && EQUIPMENT_ITEMS.some((item) => item.allows.length && !equipment.includes(item.id)); // a full gym leaves nothing out
   const [muscle, setMuscle] = useState(() => (replacing && musclesFor(replacing, learnedMuscles)?.primary[0]) || null);
   const [muscleTapped, setMuscleTapped] = useState(false);
   const selectedChip = useRef(null);
-  const names = searchExercises(query, yourNames, { muscle, learnedMuscles }).filter((name) => name !== replacing);
+  const allowed = filtered ? (name) => canDo(name, equipment) : undefined;
+  const names = searchExercises(query, yourNames, { muscle, learnedMuscles, allowed }).filter((name) => name !== replacing);
   const typed = normalizeName(query);
   const chip = "shrink-0 rounded-full px-3 py-2.5 text-sm font-semibold";
 
@@ -307,6 +311,13 @@ export function ExercisePicker({ yourNames, replacing, onPick, onClose }) {
                 </li>
               );
             })}
+            {filtered && (
+              <li>
+                <button onClick={() => setShowAll(true)} className="w-full py-3 text-left text-sm font-semibold text-blue-700 active:bg-zinc-50">
+                  Show exercises for other equipment
+                </button>
+              </li>
+            )}
             {typed && !names.length && (
               <li>
                 <button onClick={() => pick(typed, close)} className="flex w-full items-center gap-3 py-3 text-left font-semibold text-blue-700 active:bg-zinc-50">

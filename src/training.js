@@ -44,8 +44,9 @@ const searchWords = (text) =>
 // Exercises for the picker, yours first (most done first), then common names, then the library. Each typed word must start a
 // word of the name ("chin" finds Chin Up, not Machine; "pullup" finds Pull Up); gym shorthand ("db", "rdl") is spelled out.
 // A muscle keeps the exercises that work it most, those that work it first ahead. The library comes in only when you search,
-// as it is long, and skips the photos a name above already shows.
-export function searchExercises(query, yourNames, { muscle = null, learnedMuscles = {} } = {}) {
+// as it is long, and skips the photos a name above already shows. `allowed` leaves out what their equipment can't do,
+// before the limit, so a muscle still fills the list.
+export function searchExercises(query, yourNames, { muscle = null, learnedMuscles = {}, allowed = () => true } = {}) {
   const words = searchWords(query);
   const candidates = [...yourNames, ...COMMON_NAMES, ...(words.length || muscle ? LIBRARY_NAMES : [])];
   const libraryStart = yourNames.length + COMMON_NAMES.length;
@@ -54,7 +55,7 @@ export function searchExercises(query, yourNames, { muscle = null, learnedMuscle
   const found = candidates.filter((name, index) => {
     const nameWords = searchWords(name);
     const startsAWord = (word) => nameWords.some((_, i) => nameWords.slice(i).join("").startsWith(word));
-    if (!words.every(startsAWord) || (muscle && !musclesFor(name, learnedMuscles)?.primary.includes(muscle))) return false;
+    if (!allowed(name) || !words.every(startsAWord) || (muscle && !musclesFor(name, learnedMuscles)?.primary.includes(muscle))) return false;
     const key = sameExerciseKey(name);
     const photo = knownPhoto(name);
     if (seen.has(key) || (index >= libraryStart && shownPhotos.has(photo))) return false;

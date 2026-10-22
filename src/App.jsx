@@ -97,8 +97,8 @@ export default function GymBot() {
   useInjuryAreas({ enabled: loaded, settings, setSettings });
   const plans = useMemo(() => buildAutopilotPlans(workouts, settings, learnedMuscles), [workouts, settings, learnedMuscles]);
   const exerciseContext = useMemo(
-    () => ({ learnedMuscles, learnedPhotos, showDetails: setDetailsFor, formChecks, setFormChecks, profileNotes: settings.profile.notes }),
-    [learnedMuscles, learnedPhotos, formChecks, settings.profile.notes]
+    () => ({ learnedMuscles, learnedPhotos, showDetails: setDetailsFor, formChecks, setFormChecks, profileNotes: settings.profile.notes, equipment: settings.profile.equipment ?? null }),
+    [learnedMuscles, learnedPhotos, formChecks, settings.profile.notes, settings.profile.equipment]
   );
   const coachContext = useMemo(
     () => buildCoachContext(settings, workouts, plans, learnedMuscles, session, bodyweightLog, food),
