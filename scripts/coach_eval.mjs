@@ -50,7 +50,7 @@ const SCENARIOS = [
     name: "injury-plan",
     settings: knee,
     messages: ["What should I do today?"],
-    rules: ["Lightens, swaps or skips exercises that load the left knee", "Asks how the knee feels at most once", "Fits about 45 minutes"],
+    rules: ["Lightens, swaps or skips exercises that load the left knee", "Asks how the knee feels at most once", "Fits about 45 minutes", "Every [plan:] exercise that isn't a barbell lift names its equipment, e.g. (Dumbbell) or (Bodyweight)"],
   },
   {
     name: "injury-known",
@@ -166,13 +166,13 @@ const SCENARIOS = [
     name: "equipment-plan",
     settings: homeGym,
     messages: ["Plan me a back workout for today"],
-    rules: ["Uses only dumbbell and bodyweight exercises: no cable, machine or barbell", "Dumbbell weights are 20 kg or less", "Does not suggest equipment to add"],
+    rules: ["Uses only dumbbell and bodyweight exercises: no cable, machine or barbell", "Dumbbell weights are 20 kg or less", "Does not suggest equipment to add", "Every [plan:] exercise that isn't a barbell lift names its equipment, e.g. (Dumbbell) or (Bodyweight)"],
   },
   {
     name: "equipment-none-plan",
     settings: settings({ equipment: [] }),
     messages: ["Plan my workout for today"],
-    rules: ["Uses only bodyweight exercises", "Suggests at most one item to add"],
+    rules: ["Uses only bodyweight exercises", "Suggests at most one item to add", "Every [plan:] exercise that isn't a barbell lift names its equipment, e.g. (Dumbbell) or (Bodyweight)"],
   },
   {
     name: "equipment-none-later",
@@ -225,7 +225,7 @@ const SCENARIOS = [
       "What music do you like to train to?",
       "Rock",
     ],
-    rules: ["Writes a [profile: ...] tag with equipment: Dumbbells, Bench", "Plans use only dumbbell and bodyweight exercises", "No [equipment] button"],
+    rules: ["Writes a [profile: ...] tag with equipment: Dumbbells, Bench", "Plans use only dumbbell and bodyweight exercises", "No [equipment] button", "Every [plan:] exercise that isn't a barbell lift names its equipment, e.g. (Dumbbell) or (Bodyweight)"],
   },
   {
     name: "onboarding-equipment-ask",
