@@ -254,6 +254,34 @@ test("equipment: picked in Goals by place, by tap or from the logged workouts, a
   assert.deepEqual(errors, []);
 });
 
+test("equipment from photos: what the AI sees is ticked, added to the list, and nothing found leaves it as it was", async (t) => {
+  let answer = '{"items":["cable","kettlebell","rowing boat"],"dumbbellMax":null}';
+  const { page, errors, aiRequests } = await openApp(t, { ai: (body) => (body.system.startsWith("You list the training equipment") ? answer : "OK") });
+  await page.getByRole("button", { name: "Skip" }).tap(); // the first-time tour
+  await page.getByRole("button", { name: "Goals", exact: true }).tap();
+  const panel = section(page, "Equipment");
+  const photo = (name) => ({ name, mimeType: "image/png", buffer: Buffer.from(PNG_1PX, "base64") });
+
+  answer = '{"items":[],"dumbbellMax":null}';
+  await panel.getByLabel("Or choose photos").setInputFiles([photo("wall.png")]);
+  await panel.getByText("Nothing found in the photo.").waitFor(); // one photo
+  await settle(page);
+  assert.equal((await stored(page, "gymbot:settings")).profile.equipment, undefined); // still not chosen
+
+  answer = '{"items":["cable","kettlebell","rowing boat"],"dumbbellMax":null}';
+  await panel.getByRole("button", { name: "Home gym" }).tap();
+  await panel.getByLabel("Or choose photos").setInputFiles([photo("rack.png"), photo("cables.png")]);
+  await panel.getByText("Found: Kettlebells, Cable machine.").waitFor();
+  const pressed = await panel.getByRole("button", { pressed: true }).allInnerTexts();
+  assert.deepEqual(pressed, ["Dumbbells", "Kettlebells", "Bench", "Cable machine", "Pull-up bar"]);
+  const sent = aiRequests.filter((b) => b.system.startsWith("You list the training equipment")).at(-1);
+  assert.equal(sent.messages[0].content, "2 photos of their equipment. Weights in kg.");
+  assert.equal(sent.messages[0].images.length, 2);
+  await settle(page);
+  assert.deepEqual((await stored(page, "gymbot:settings")).profile.equipment, ["dumbbell", "bench", "pullUpBar", "kettlebell", "cable"]);
+  assert.deepEqual(errors, []);
+});
+
 test("form check: in the exercise's details sheet; photos go to the AI as base64 JPEG images next to the request", async (t) => {
   const { page, errors, aiRequests } = await openApp(t, {
     seed: { "gymbot:workouts": [userWorkout] },

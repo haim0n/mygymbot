@@ -1,12 +1,16 @@
 import { useState } from "react";
-import { APP_VERSION, COACH_STYLES, MEDICAL_NOTICE, DEFAULT_SETTINGS, EQUIPMENT_ITEMS, EQUIPMENT_PRESETS, EXPERIENCE_LEVELS, HEIGHT_UNITS, MUSCLE_LABELS, PLATES, REST_FUN_KINDS, SEXES, TRAINING_FOCUSES, WEEKDAYS } from "../config.js";
+import { Camera } from "lucide-react";
+import { APP_VERSION, COACH_STYLES, MEDICAL_NOTICE, DEFAULT_SETTINGS, EQUIPMENT_ITEMS, EQUIPMENT_PRESETS, EXPERIENCE_LEVELS, HEIGHT_UNITS, MAX_EQUIPMENT_PHOTOS, MUSCLE_LABELS, PLATES, REST_FUN_KINDS, SEXES, TRAINING_FOCUSES, WEEKDAYS } from "../config.js";
 import { exportAllData, sendFeedback } from "../storage.js";
+import { EQUIPMENT_PROMPT } from "../prompts.js";
+import { askAIForJson } from "../ai.js";
+import { imageToFrame } from "../media.js";
 import { daysBetween, joinWords, today } from "../dates.js";
 import { normalizeName, plateSize, platesPerSide } from "../training.js";
 import { injuredMuscles } from "../autopilot.js";
 import { forecastText, goalForecast } from "../schedule.js";
-import { equipmentFromWorkouts } from "../equipment.js";
-import { DeleteButton, ErrorText, Field, Panel, PrimaryButton, SectionTitle, Select, ViewTitle, inputClass } from "./primitives.jsx";
+import { equipmentFromWorkouts, equipmentNames, parseEquipmentDraft } from "../equipment.js";
+import { DeleteButton, ErrorText, Field, FilePicker, Panel, PrimaryButton, SectionTitle, Select, ViewTitle, inputClass } from "./primitives.jsx";
 
 const NOT_SAID = "Prefer not to say"; // stored as ""
 
@@ -234,6 +238,42 @@ function EquipmentPanel({ profile, setSettings, workouts }) {
   const change = (fields) => setSettings((s) => ({ ...s, profile: { ...s.profile, ...fields } }));
   const toggle = (id) => change({ equipment: equipment?.includes(id) ? equipment.filter((other) => other !== id) : [...(equipment ?? []), id] });
   const pill = "h-10 rounded-full border px-3 text-sm font-semibold";
+  const [busy, setBusy] = useState(false);
+  const [found, setFound] = useState(null); // what the last photos showed
+  const [error, setError] = useState("");
+
+  // What the AI sees is added to the list, never taken off it: a photo shows one corner of a gym.
+  async function snap(files) {
+    setBusy(true);
+    setFound(null);
+    setError("");
+    try {
+      const photos = await Promise.all(files.slice(0, MAX_EQUIPMENT_PHOTOS).map(imageToFrame));
+      const content = `${photos.length === 1 ? "A photo" : `${photos.length} photos`} of their equipment. Weights in ${profile.unit}.`;
+      const draft = parseEquipmentDraft(await askAIForJson(EQUIPMENT_PROMPT, content, photos));
+      setFound({ ...draft, photos: photos.length });
+      if (!draft.items.length) return; // an unset list stays unset
+      const had = (s) => s.profile.equipment ?? [];
+      setSettings((s) => ({
+        ...s,
+        profile: {
+          ...s.profile,
+          equipment: [...had(s), ...draft.items.filter((id) => !had(s).includes(id))],
+          ...(draft.dumbbellMax && { dumbbellMax: draft.dumbbellMax }),
+        },
+      }));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function choose(event) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = ""; // allow choosing the same photos again
+    if (files.length) snap(files);
+  }
 
   return (
     <Panel className="space-y-3">
@@ -251,6 +291,20 @@ function EquipmentPanel({ profile, setSettings, workouts }) {
           ))}
         </div>
       </div>
+      <FilePicker Icon={Camera} accept="image/*" capture="environment" busy={busy} title={busy ? "Looking at your equipment" : "Snap your equipment"} hint="What the coach sees is ticked below." onFiles={snap} />
+      {!busy && (
+        // the real input sits over the link: a label forwarding the tap fails in in-app browsers
+        <div className="relative mx-auto flex h-10 w-fit items-center px-3">
+          <span className="text-sm font-semibold text-blue-700">Or choose photos</span>
+          <input type="file" accept="image/*" multiple onChange={choose} aria-label="Or choose photos" className="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+        </div>
+      )}
+      {found && (
+        <p className="text-sm text-zinc-600">
+          {found.items.length ? `Found: ${equipmentNames(found.items, found.dumbbellMax, profile.unit)}.` : `Nothing found in the ${found.photos === 1 ? "photo" : "photos"}. Try another angle, or tap what you have.`}
+        </p>
+      )}
+      <ErrorText message={error} />
       {groups.map((group) => (
         <div key={group} role="group" aria-label={group}>
           <span className="mb-1 block text-sm text-zinc-500">{group}</span>

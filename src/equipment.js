@@ -1,4 +1,4 @@
-import { EQUIPMENT_ITEMS, PLAN_LOOKBACK_DAYS } from "./config.js";
+import { EQUIPMENT_ITEMS, MAX_DUMBBELL_WEIGHT, PLAN_LOOKBACK_DAYS } from "./config.js";
 import { daysBetween } from "./dates.js";
 import { equipmentOf } from "./autopilot.js";
 
@@ -33,6 +33,16 @@ export function parseEquipmentList(value) {
   const words = value.replace(/\([^)]*\)/g, "").split(/,|\band\b/).map(key); // "Barbell and rack" splits too, and its id still matches
   const ids = EQUIPMENT_ITEMS.filter((item) => words.includes(key(item.label)) || words.includes(key(item.id))).map((item) => item.id);
   return ids.length ? ids : undefined;
+}
+
+// The AI's reading of equipment photos, checked: known ids once each, in list order, and the heaviest dumbbell only when it can be real.
+export function parseEquipmentDraft(answer) {
+  const seen = Array.isArray(answer?.items) ? answer.items : [];
+  const max = answer?.dumbbellMax;
+  return {
+    items: EQUIPMENT_ITEMS.map((item) => item.id).filter((id) => seen.includes(id)),
+    dumbbellMax: typeof max === "number" && max >= 1 && max <= MAX_DUMBBELL_WEIGHT ? max : null,
+  };
 }
 
 // "Dumbbells (up to 20 kg), Bench", in list order; "" for no equipment. An unknown id is skipped, so stored data can't break the coach.

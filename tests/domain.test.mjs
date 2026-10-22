@@ -155,6 +155,12 @@ test("Equipment: what an exercise needs, read from the history, for the coach, a
   assert.equal(app.equipmentNames(["pullUpBar", "dumbbell", "rowingBoat"]), "Dumbbells, Pull-up bar"); // list order, unknown ids skipped
   assert.equal(app.equipmentNames(["dumbbell"], "0", "kg"), "Dumbbells");
   assert.equal(app.equipmentNames([]), "");
+
+  // Photos: known ids once each, in list order, and a dumbbell weight only when it can be real.
+  assert.deepEqual(app.parseEquipmentDraft({ items: ["bench", "rowing boat", "dumbbell", "bench"], dumbbellMax: 30 }), { items: ["dumbbell", "bench"], dumbbellMax: 30 });
+  assert.deepEqual(app.parseEquipmentDraft({ items: ["cable"], dumbbellMax: 500 }), { items: ["cable"], dumbbellMax: null });
+  assert.deepEqual(app.parseEquipmentDraft({ items: "dumbbell", dumbbellMax: "30" }), { items: [], dumbbellMax: null });
+  assert.deepEqual(app.parseEquipmentDraft(null), { items: [], dumbbellMax: null });
 });
 
 test("Bodyweight: one entry per day, kept in date order; the coach sees the current weight and the log", () => {

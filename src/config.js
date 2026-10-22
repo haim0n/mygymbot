@@ -60,6 +60,8 @@ export const EQUIPMENT_ITEMS = [
   { id: "bands", label: "Resistance bands", group: "Bodyweight", allows: [] },
 ];
 export const EQUIPMENT_PRESETS = { "Full gym": EQUIPMENT_ITEMS.map((item) => item.id), "Home gym": ["dumbbell", "bench", "pullUpBar"], "No equipment": [] };
+export const MAX_EQUIPMENT_PHOTOS = 6; // photos read in one AI call, about 7k tokens
+export const MAX_DUMBBELL_WEIGHT = 200; // kg or lb; a heavier dumbbell read from a photo is a misreading
 export const DELOAD_FACTOR = 0.9;
 // Recommended rest between sets: heavier, lower-rep work needs longer recovery.
 export const REST_BY_REP_RANGE = [[6, 180], [10, 120], [15, 90], [Infinity, 60]]; // [range top up to N reps, seconds]

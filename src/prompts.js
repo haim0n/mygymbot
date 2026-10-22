@@ -74,6 +74,12 @@ Respond with compact single-line JSON only, no prose or backticks: {"<exercise n
 Use the exercise names exactly as given and photo ids exactly as listed. Use null when no photo shows the same movement on the same kind of equipment (barbell, dumbbell, kettlebell, cable, machine, bodyweight).
 PHOTOS: ${EXERCISE_PHOTOS.join(", ")}`;
 
+export const EQUIPMENT_PROMPT = `You list the training equipment you can see in photos of an athlete's gym or home, so their coach plans with what they have. Respond with JSON only, no prose or backticks.
+Schema: {"items":[id,...],"dumbbellMax":number|null}
+- items: the equipment you can see, using only these ids: ${EQUIPMENT_ITEMS.map((item) => `${item.id} (${item.label})`).join(", ")}. A squat rack or a loaded barbell is barbell; a leg press, chest press or other weight machine is machine; a treadmill, bike or rower is cardio.
+- dumbbellMax: the heaviest dumbbell whose weight you can read, in the unit given, or null.
+- Nothing from the list, or not equipment: {"items":[],"dumbbellMax":null}.`;
+
 export const INJURY_AREAS_PROMPT = `Below is an athlete's note from their profile, mostly about injuries. Which muscles does a current injury or pain affect?
 Respond with compact single-line JSON only, no prose or backticks: {"muscles":[muscle,...]}
 Use only these muscle ids: ${MUSCLES.join(", ")}.
