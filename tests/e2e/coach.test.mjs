@@ -8,7 +8,7 @@ test("check-in: asks about the latest workout, sends, saves, then goes away", as
     seed: { "gymbot:workouts": [userWorkout, yesterdayWorkout] },
     ai: (body) => (body.system.includes("checking in after a workout") ? "Good session. Rest the knee." : "OK"),
   });
-  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: /^Workout/ }).tap();
   const card = section(page, "How did it go?");
   assert.match(await card.innerText(), /yesterday's workout/); // asked the day after, not right after the finish screen
   assert.ok(await card.getByRole("button", { name: "Send to coach" }).isDisabled());
@@ -154,7 +154,7 @@ test("first-time tour: once for a new athlete, one card per tab, then the interv
   const tab = (name) => page.getByRole("navigation").getByRole("button", { name, exact: true });
   await tour.getByText("1 of 5").waitFor();
   assert.equal(await tab("Coach").getAttribute("aria-current"), "page");
-  for (const [i, name] of ["Log", "Food", "Progress", "Profile"].entries()) {
+  for (const [i, name] of ["Workout", "Food", "Progress", "Profile"].entries()) {
     await tour.getByRole("button", { name: "Next" }).tap();
     await tour.getByText(`${i + 2} of 5`).waitFor();
     assert.equal(await tab(name).getAttribute("aria-current"), "page"); // the screen behind is the tab it describes
@@ -183,7 +183,7 @@ test("onboarding: the coach's first message offers to import history from anothe
   await page.getByRole("button", { name: "Skip" }).tap(); // the first-time tour
   await page.getByText("Already logging workouts in another app").waitFor();
   await page.getByRole("button", { name: "Import history" }).tap();
-  await section(page, "Import history").getByText("Export a CSV from Strong, Hevy").waitFor(); // Log, with the import open
+  await section(page, "Import history").getByText("Export a CSV from Strong, Hevy").waitFor(); // Workout, with the import open
   assert.equal(await page.getByRole("button", { name: "Close import" }).count(), 1);
   assert.deepEqual(errors, []);
 });
@@ -217,7 +217,7 @@ test("injuries: the profile note is read into muscles, and Autopilot holds the l
   await settle(page);
   assert.deepEqual((await stored(page, "gymbot:settings")).injuryAreas, { notes: "Left shoulder sore since last week", muscles: ["shoulders"] });
 
-  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: /^Workout/ }).tap();
   const bench = page.locator("li", { hasText: "Bench Press (Dumbbell)" }).first();
   await bench.getByText("Hold for pain").waitFor();
   assert.match(await bench.innerText(), /Easy on your shoulders/);
@@ -300,7 +300,7 @@ test("form check: in the exercise's details sheet; photos go to the AI as base64
     seed: { "gymbot:workouts": [userWorkout] },
     ai: (body) => (body.system.startsWith("You are an expert strength coach") ? "**Verdict**: solid lockout." : "OK"),
   });
-  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: /^Workout/ }).tap();
   await page.getByRole("button", { name: "Show details for Bench Press (Dumbbell)" }).first().tap();
   const sheet = page.getByRole("dialog");
   await sheet.getByRole("button", { name: "Check my form" }).tap(); // folded until asked for

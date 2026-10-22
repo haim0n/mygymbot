@@ -26,7 +26,7 @@ try {
     await tab(name);
     await shot(name.toLowerCase());
   }
-  await page.getByRole("button", { name: /^Log/ }).first().tap();
+  await page.getByRole("button", { name: /^Workout/ }).first().tap();
   await shot("log");
   const start = page.getByRole("button", { name: /^Start with Up next|^Start plan / }).first();
   if (await start.count()) {

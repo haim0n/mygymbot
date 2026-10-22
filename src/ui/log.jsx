@@ -503,7 +503,7 @@ export function LogView({ workouts, setWorkouts, session, setSession, settings, 
           </button>
         }
       >
-        Log workout
+        Workout
       </ViewTitle>
 
       {highlights && <SessionHighlights facts={highlights} onClose={() => setHighlights(null)} />}

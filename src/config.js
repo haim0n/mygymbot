@@ -82,7 +82,7 @@ export const LEFT_OPEN_HOURS = 6; // a workout going longer than this was left o
 // The first-time tour: one card per tab, in the tab bar's order, for a new athlete on the first open (and again from Profile).
 export const TOUR_STEPS = [
   { tab: "coach", title: "Coach", text: "Your coach. Ask about training, food or recovery; it knows your workouts and plans." },
-  { tab: "log", title: "Log", text: "Start a workout here. Tick each set; the app sets the weights, the rest and what comes next." },
+  { tab: "log", title: "Workout", text: "Start a workout here. Tick each set; the app sets the weights, the rest and what comes next." },
   { tab: "food", title: "Food", text: "Snap a meal. The app counts the protein toward your daily target." },
   { tab: "progress", title: "Progress", text: "Your charts: strength over time, weekly volume, muscles worked and bodyweight." },
   { tab: "goals", title: "Profile", text: "About you, your equipment and your goals. The more your coach knows, the better it plans." },

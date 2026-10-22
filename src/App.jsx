@@ -21,7 +21,7 @@ import { RestTimerBar, useRestFun, useRestNote, useRestTimer } from "./ui/rest-t
 
 export const TABS = [
   { id: "coach", label: "Coach", Icon: MessageCircle },
-  { id: "log", label: "Log", Icon: Dumbbell },
+  { id: "log", label: "Workout", Icon: Dumbbell },
   { id: "food", label: "Food", Icon: Utensils },
   { id: "progress", label: "Progress", Icon: TrendingUp },
   { id: "goals", label: "Profile", Icon: User },
@@ -43,7 +43,7 @@ export function BottomNav({ tab, onSelect, workoutInProgress }) {
             {id === "log" && workoutInProgress && (
               <>
                 <span className="absolute top-2 right-1/4 h-2.5 w-2.5 rounded-full bg-blue-700" />
-                <span className="sr-only">, workout in progress</span>
+                <span className="sr-only">, in progress</span>
               </>
             )}
           </button>
@@ -58,7 +58,7 @@ export default function GymBot() {
   const restTimer = useRestTimer();
   const [detailsFor, setDetailsFor] = useState(null); // exercise shown in the details sheet
   const [tourStep, setTourStep] = useState(null); // the first-time tour's card, or null when it isn't showing
-  const [showImport, setShowImport] = useState(false); // Import history open in Log; the coach can open it
+  const [showImport, setShowImport] = useState(false); // Import history open in Workout; the coach can open it
   const [workouts, setWorkouts, workoutsLoaded] = usePersistentState(STORAGE_KEYS.workouts, []);
   const [settings, setSettings, settingsLoaded] = usePersistentState(STORAGE_KEYS.settings, DEFAULT_SETTINGS);
   const [chat, setChat, chatLoaded] = usePersistentState(STORAGE_KEYS.chat, []);

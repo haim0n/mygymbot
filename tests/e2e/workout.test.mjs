@@ -5,7 +5,7 @@ import { userWorkout, settings } from "../fixtures.mjs";
 
 test("live workout: start with Up next, reorder, check off, survive a reload, finish", async (t) => {
   const { page, errors } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
-  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: /^Workout/ }).tap();
   await page.getByRole("button", { name: /Start with Up next/ }).tap();
   const workout = section(page, "Workout");
   assert.equal((await exerciseNames(workout)).length, 7);
@@ -21,13 +21,13 @@ test("live workout: start with Up next, reorder, check off, survive a reload, fi
   while (!(await stored(page, "gymbot:rest"))) await page.waitForTimeout(100); // saved
   await page.reload(); // the rest keeps counting
   assert.match(await page.locator("div.fixed.top-0").innerText(), /Resting after Hammer Curl/);
-  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: /^Workout/ }).tap();
   await page.getByRole("button", { name: "Skip" }).tap();
 
   await first.getByLabel("Set 2 weight").fill("8");
   await settle(page);
   await page.reload(); // like closing the app mid-workout
-  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: /^Workout/ }).tap();
   assert.equal((await exerciseNames(workout))[0], "Hammer Curl (Dumbbell)");
   assert.equal(await first.getByRole("button", { name: "Set 1 done" }).getAttribute("aria-pressed"), "true");
   assert.equal(await first.getByLabel("Set 2 weight").inputValue(), "8");
@@ -52,7 +52,7 @@ test("live workout: start with Up next, reorder, check off, survive a reload, fi
 
 test("set feel: one tap under the set just done moves the next sets, and the rest bar shows what comes next", async (t) => {
   const { page, errors } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
-  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: /^Workout/ }).tap();
   await page.getByRole("button", { name: /Start with Up next/ }).tap();
   const first = section(page, "Workout").locator("ol > li").first();
   const weight = Number(await first.getByLabel("Set 2 weight").inputValue());
@@ -77,7 +77,7 @@ test("set feel: one tap under the set just done moves the next sets, and the res
 
 test("out of order: finishing the last exercise brings the first one not done into view", async (t) => {
   const { page, errors } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
-  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: /^Workout/ }).tap();
   await page.getByRole("button", { name: /Start with Up next/ }).tap();
   const items = section(page, "Workout").locator("ol > li");
   const inView = (item) => item.evaluate((el) => el.getBoundingClientRect().top >= 0 && el.getBoundingClientRect().bottom <= innerHeight);
@@ -93,7 +93,7 @@ test("out of order: finishing the last exercise brings the first one not done in
 
 test("finish by mistake: Continue this workout takes the saved workout back and reopens it as it was", async (t) => {
   const { page, errors } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
-  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: /^Workout/ }).tap();
   await page.getByRole("button", { name: /Start with Up next/ }).tap();
   const workout = section(page, "Workout");
   const names = await exerciseNames(workout);
@@ -114,7 +114,7 @@ test("finish by mistake: Continue this workout takes the saved workout back and 
 
 test("left open: hours later the workout asks to be saved as that day or trained today; removing logged sets takes two taps", async (t) => {
   const { page, errors } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
-  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: /^Workout/ }).tap();
   await page.getByRole("button", { name: /Start with Up next/ }).tap();
   const workout = section(page, "Workout");
   const first = workout.locator("ol > li").first();
@@ -140,7 +140,7 @@ test("left open: hours later the workout asks to be saved as that day or trained
 
 test("exercise picker: with their equipment set, the exercises it allows, then all of them on a tap", async (t) => {
   const { page, errors } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout], "gymbot:settings": settings({ equipment: ["dumbbell"] }) } });
-  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: /^Workout/ }).tap();
   await page.getByRole("button", { name: "Start an empty workout" }).tap();
   await section(page, "Workout").getByRole("button", { name: "Add exercise" }).tap();
   const picker = page.getByRole("dialog", { name: "Add an exercise" });
@@ -156,7 +156,7 @@ test("exercise picker: with their equipment set, the exercises it allows, then a
 
 test("exercise picker: find an exercise by name, add it, then replace it with one for the same muscle", async (t) => {
   const { page, errors } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
-  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: /^Workout/ }).tap();
   await page.getByRole("button", { name: "Start an empty workout" }).tap();
   const workout = section(page, "Workout");
 
@@ -208,7 +208,7 @@ test("rest notes: the coach writes once per exercise while resting; Reply contin
     seed: { "gymbot:workouts": [userWorkout] },
     ai: (body) => (body.system.includes("rest screen") ? `Note ${++notes}: slow on the way down.` : isCoachChat(body) ? "Good, keep it there." : "OK"),
   });
-  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: /^Workout/ }).tap();
   await page.getByRole("button", { name: /Start with Up next/ }).tap();
   const items = section(page, "Workout").locator("ol > li");
   const bar = page.locator("div.fixed.top-0");
@@ -236,7 +236,7 @@ test("rest notes: the coach writes once per exercise while resting; Reply contin
   assert.ok(aiRequests.find(isCoachChat).system.includes("between sets"));
 
   await page.getByRole("button", { name: "Skip" }).tap();
-  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: /^Workout/ }).tap();
   await items.nth(2).getByRole("button", { name: "Set 1 done" }).tap();
   await bar.getByText("Note 3").waitFor();
   assert.ok(aiRequests.filter((b) => b.system.includes("rest screen"))[2].messages[0].content.includes("- athlete: Felt heavy")); // picks up the chat
@@ -256,7 +256,7 @@ test("between sets: trivia, the answer on a tap, Next for another, never on a re
     seed: { "gymbot:workouts": [userWorkout], "gymbot:settings": { ...settings(), restFun: { kind: "Trivia", topic: "space" } } },
     ai: (body) => (body.system.startsWith("Write short items") ? JSON.stringify({ items }) : body.system.includes("rest screen") ? "Brace first." : "OK"),
   });
-  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: /^Workout/ }).tap();
   await page.getByRole("button", { name: /Start with Up next/ }).tap();
   const first = section(page, "Workout").locator("ol > li").first();
   const bar = page.locator("div.fixed.top-0");
@@ -315,7 +315,7 @@ test("exercise photos: known names right away, others matched once by the AI and
     seed: { "gymbot:workouts": [userWorkout, rare] },
     ai: (body) => (body.system.startsWith("Match each exercise") ? '{"Zottman Curl (Dumbbell)":"Zottman_Curl","Made Up Lift":"Made_Up"}' : "OK"),
   });
-  await page.getByRole("button", { name: "Log", exact: true }).tap();
+  await page.getByRole("button", { name: "Workout", exact: true }).tap();
   await page.getByRole("button", { name: /^Show all/ }).tap();
   const photo = (name) => page.getByRole("button", { name: `Show details for ${name}` }).first().locator("img");
   await photo("Zottman Curl (Dumbbell)").waitFor();
@@ -329,7 +329,7 @@ test("exercise photos: known names right away, others matched once by the AI and
   assert.deepEqual(asked.map((b) => b.messages[0].content.split("\n").sort()), [["Made Up Lift", "Zottman Curl (Dumbbell)"]]); // known names are never asked
 
   await page.reload();
-  await page.getByRole("button", { name: "Log", exact: true }).tap();
+  await page.getByRole("button", { name: "Workout", exact: true }).tap();
   await page.getByRole("button", { name: "Show details for Seated Chest Fly (Machine)" }).first().tap();
   const sheet = page.getByRole("dialog");
   assert.deepEqual(await sheet.locator("img").evaluateAll((imgs) => Promise.all(imgs.map(async (i) => (await i.decode(), [i.alt, i.naturalWidth > 0])))), [
@@ -342,7 +342,7 @@ test("exercise photos: known names right away, others matched once by the AI and
 
 test("history: folded by default, then edit a saved workout", async (t) => {
   const { page, errors } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
-  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: /^Workout/ }).tap();
   const history = section(page, /^History/);
   const toggle = history.getByRole("button", { name: /^History/ });
   assert.equal(await toggle.getAttribute("aria-expanded"), "false");
@@ -372,7 +372,7 @@ test("workout plans: the next one starts in a tap, a workout saves over a plan, 
     seed: { "gymbot:workouts": [{ ...userWorkout, routine: "A" }], "gymbot:settings": { ...settings(), routines: [a, b] } },
     ai: (body) => (isCoachChat(body) ? "Add legs to B.\n[plan: B: Lat Pulldown (Cable), back squat]" : "OK"),
   });
-  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: /^Workout/ }).tap();
   const start = section(page, "Start a workout");
   assert.match(await start.locator("li", { hasText: "Next" }).innerText(), /^B/);
   await start.getByRole("button", { name: "Start plan B" }).tap();

@@ -5,7 +5,7 @@ import { userWorkout } from "../fixtures.mjs";
 
 test("activities: log a run and yoga; Progress and the coach see them", async (t) => {
   const { page, errors, aiRequests } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
-  await page.getByRole("button", { name: /^Log/ }).tap();
+  await page.getByRole("button", { name: /^Workout/ }).tap();
   const panel = section(page, "Log an activity");
   assert.equal(await panel.getByLabel("Minutes").count(), 0); // small until an activity is picked
 
