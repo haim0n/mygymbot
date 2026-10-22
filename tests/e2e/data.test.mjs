@@ -7,7 +7,7 @@ import { userWorkout, settings } from "../fixtures.mjs";
 test("export: every gymbot key as one JSON object, next to the app version and commit", async (t) => {
   const seed = { "gymbot:workouts": [userWorkout], "gymbot:settings": settings() };
   const { page, errors } = await openApp(t, { seed });
-  await page.getByRole("button", { name: "Goals", exact: true }).tap();
+  await page.getByRole("button", { name: "Profile", exact: true }).tap();
   const { version } = JSON.parse(await readFile(new URL("../../package.json", import.meta.url), "utf8"));
   await page.getByText(`MyGymBot ${version} ${COMMIT}`).waitFor();
   assert.equal(await page.getByText("not medical advice").count(), 2); // under Injuries and at the bottom
@@ -161,9 +161,9 @@ test("errors: an uncaught error in the app is reported to the server once", asyn
   assert.deepEqual(errors, ["boom", "boom"]);
 });
 
-test("feedback: sent from Goals with the app version", async (t) => {
+test("feedback: sent from Profile with the app version", async (t) => {
   const { page, errors } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
-  await page.getByRole("button", { name: "Goals", exact: true }).tap();
+  await page.getByRole("button", { name: "Profile", exact: true }).tap();
   const panel = section(page, "Feedback");
   assert.ok(await panel.getByRole("button", { name: "Send feedback" }).isDisabled());
   await panel.getByLabel("Feedback").fill("The rest timer should vibrate");

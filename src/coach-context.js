@@ -26,7 +26,7 @@ export function recentPainLines(workouts) {
 
 // No workouts and no plans: the coach interviews them and suggests a first plan. Saving a plan or logging anything ends it.
 export const isNewAthlete = (settings, workouts) => !workouts.length && !(settings.routines ?? []).length;
-// The first-time tour shows once, to a new athlete; Goals can show it again.
+// The first-time tour shows once, to a new athlete; Profile can show it again.
 export const wantsTour = (settings, workouts) => isNewAthlete(settings, workouts) && !settings.tourSeen;
 
 const pickFrom = (options) => (value) => options.find((option) => option.toLowerCase() === value.toLowerCase());

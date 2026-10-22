@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from "react";
-import { MessageCircle, Dumbbell, Utensils, TrendingUp, Target, Loader2 } from "lucide-react";
+import { MessageCircle, Dumbbell, Utensils, TrendingUp, User, Loader2 } from "lucide-react";
 import { DEFAULT_SETTINGS, GLOBAL_CSS, STORAGE_KEYS, TOUR_STEPS } from "./config.js";
 import { usePersistentState, useSaveProblem } from "./storage.js";
 import { today } from "./dates.js";
@@ -24,7 +24,7 @@ export const TABS = [
   { id: "log", label: "Log", Icon: Dumbbell },
   { id: "food", label: "Food", Icon: Utensils },
   { id: "progress", label: "Progress", Icon: TrendingUp },
-  { id: "goals", label: "Goals", Icon: Target },
+  { id: "goals", label: "Profile", Icon: User },
 ];
 
 export function BottomNav({ tab, onSelect, workoutInProgress }) {
@@ -83,7 +83,7 @@ export default function GymBot() {
     setShowImport(true);
     setTab("log");
   };
-  const [showEquipment, setShowEquipment] = useState(false); // Goals scrolls to Equipment once, when the coach's button opened it
+  const [showEquipment, setShowEquipment] = useState(false); // Profile scrolls to Equipment once, when the coach's button opened it
   const openEquipment = () => {
     setShowEquipment(true);
     setTab("goals");

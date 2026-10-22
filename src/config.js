@@ -1,6 +1,6 @@
 import { Footprints, Mountain, Bike, Waves, PersonStanding, Activity } from "lucide-react";
 
-// Shown under Goals, so users and developers can tell which build they run. Bump it with package.json's "version" on every release.
+// Shown under Profile, so users and developers can tell which build they run. Bump it with package.json's "version" on every release.
 export const APP_VERSION = "0.16.0";
 
 export const STORAGE_KEYS = {
@@ -46,7 +46,7 @@ export const EQUIPMENT_STEPS = {
   cable: { kg: 5, lb: 10 },
   bodyweight: { kg: 2.5, lb: 5 }, // added weight on a belt or vest
 };
-// The equipment chips in Goals. `allows` lists the equipment types above that an item makes possible; bodyweight always is.
+// The equipment chips in Profile. `allows` lists the equipment types above that an item makes possible; bodyweight always is.
 export const EQUIPMENT_ITEMS = [
   { id: "barbell", label: "Barbell and rack", group: "Free weights", allows: ["barbell", "bigBarbell"] },
   { id: "dumbbell", label: "Dumbbells", group: "Free weights", allows: ["dumbbell"] },
@@ -79,13 +79,13 @@ export const SET_FEELS = [
 export const PLATE_LIFTS = /barbell|bench press|squat|deadlift|overhead press|military press|push press|bent over row|pendlay row|clean|snatch|hip thrust/;
 export const NOT_PLATE_LIFTS = /dumbbell|kettlebell|machine|smith|cable|hack|goblet|leg press|pistol|split squat|bodyweight/;
 export const LEFT_OPEN_HOURS = 6; // a workout going longer than this was left open (one past midnight is not)
-// The first-time tour: one card per tab, in the tab bar's order, for a new athlete on the first open (and again from Goals).
+// The first-time tour: one card per tab, in the tab bar's order, for a new athlete on the first open (and again from Profile).
 export const TOUR_STEPS = [
   { tab: "coach", title: "Coach", text: "Your coach. Ask about training, food or recovery; it knows your workouts and plans." },
   { tab: "log", title: "Log", text: "Start a workout here. Tick each set; the app sets the weights, the rest and what comes next." },
   { tab: "food", title: "Food", text: "Snap a meal. The app counts the protein toward your daily target." },
   { tab: "progress", title: "Progress", text: "Your charts: strength over time, weekly volume, muscles worked and bodyweight." },
-  { tab: "goals", title: "Goals", text: "About you, your equipment and your goals. The more your coach knows, the better it plans." },
+  { tab: "goals", title: "Profile", text: "About you, your equipment and your goals. The more your coach knows, the better it plans." },
 ];
 export const SWIPE_AWAY_PX = 80; // a card dragged this far sideways is swiped away; less springs back
 export const SET_FEEL_SCROLL_DELAY_MS = 300; // the set feel row is checked for being in sight once it has grown open (.gb-reveal)
@@ -118,7 +118,7 @@ export const PLAN_STATUS = {
   hold: { label: "Hold for pain", className: "bg-rose-50 text-rose-700" },
 };
 
-// Shown where injuries are entered and at the bottom of Goals; the final wording waits for the legal review (#21).
+// Shown where injuries are entered and at the bottom of Profile; the final wording waits for the legal review (#21).
 export const MEDICAL_NOTICE = "MyGymBot gives training suggestions, not medical advice. See a doctor or physiotherapist about pain or injuries.";
 export const SAVE_RETRY_MS = { first: 1000, max: 10000 }; // a failed save is retried after 1 s, doubling up to 10 s
 export const CHAT_CONTEXT_SIZE = 12; // messages sent to the coach per request
@@ -187,7 +187,7 @@ export const MUSCLE_RULES = [
 export const VIDEO_MARKER = /^\s*\[video:\s*(.+?)\]\s*$/i; // the coach writes [video: Exercise Name] on its own line
 export const ROUTINE_MARKER = /^\s*\[plan:\s*([^:\]]+?)\s*:\s*(.+?)\]\s*$/i; // the coach writes [plan: Name: Exercise, Exercise, ...] on its own line
 export const IMPORT_MARKER = /^\s*\[import\]\s*$/i; // the coach writes [import] on its own line for a button that opens Import history
-export const EQUIPMENT_MARKER = /^\s*\[equipment\]\s*$/i; // the same for a button that opens Goals, Equipment, in the onboarding chat
+export const EQUIPMENT_MARKER = /^\s*\[equipment\]\s*$/i; // the same for a button that opens Profile, Equipment, in the onboarding chat
 export const MEMORY_MARKER = /^\s*\[remember:\s*(.+?)\]\s*$/i; // the coach writes [remember: fact] or [remember: fact | replaces: old fact] on its own line
 export const PROFILE_MARKER = /^\s*\[profile:\s*(.+?)\]\s*$/i; // a new athlete's interview ends with [profile: field: value; field: value; ...]
 export const VIDEO_LIBRARY = [
@@ -257,7 +257,7 @@ export const REST_NOTE_KINDS = [
   "a word on the set just done that cites its numbers",
   "a short, interesting fact about this exercise or the muscle it trains",
 ];
-// Something to read between sets that isn't training, picked in Goals ("Between sets"). One AI call writes a batch of
+// Something to read between sets that isn't training, picked in Profile ("Between sets"). One AI call writes a batch of
 // REST_FUN_ITEMS at the start of a workout, and another when REST_FUN_REFILL_AT or fewer are left unread. The last
 // REST_FUN_SEEN are remembered across workouts and sent along, so they don't come back. `ask` is what a batch asks for,
 // `reveal` the button that shows the answer (none for facts), `next` the button for another one.

@@ -89,7 +89,7 @@ export function GoalsView({ settings, setSettings, records, workouts, onShowTour
 
   return (
     <div className="space-y-4">
-      <ViewTitle>Goals</ViewTitle>
+      <ViewTitle>Profile</ViewTitle>
 
       <Panel className="space-y-3">
         <div>

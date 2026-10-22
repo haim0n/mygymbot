@@ -106,7 +106,7 @@ export function useRestNote({ rest, session, setSession, context, chat }) {
   return rest && session && !session.coachQuiet && latest?.restStartedAt === rest.startedAt ? latest.text : null; // the session can load after the rest
 }
 
-// Something to read between sets that isn't training, when the athlete picked a kind in Goals. Batches of items are written
+// Something to read between sets that isn't training, when the athlete picked a kind in Profile. Batches of items are written
 // into the session (one at the start of a workout, so the first rest has one, and another when few are left unread), and
 // what was shown is remembered in the settings so later workouts don't repeat it. Each rest starts on the next item, and
 // Next moves on within a rest. It waits on the rests that get a coach's note, so the bar shows one thing to read.

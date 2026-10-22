@@ -79,7 +79,7 @@ test("coach: the chat opens at the latest message under a pinned Today card, and
   assert.deepEqual(errors, []);
 });
 
-test("coach memory: what the athlete says is remembered, shown in Goals, editable, and sent with later chats", async (t) => {
+test("coach memory: what the athlete says is remembered, shown in Profile, editable, and sent with later chats", async (t) => {
   const { page, errors, aiRequests } = await openApp(t, {
     seed: { "gymbot:workouts": [userWorkout] },
     ai: (body) => (!isCoachChat(body) ? "OK" : body.messages.at(-1).content.includes("like") ? "Dumbbells it is.\n[remember: Prefers dumbbells over barbells]" : "Upper body today."),
@@ -90,7 +90,7 @@ test("coach memory: what the athlete says is remembered, shown in Goals, editabl
   await settle(page);
   assert.deepEqual((await stored(page, "gymbot:settings")).coachMemory.map((f) => f.text), ["Prefers dumbbells over barbells"]);
 
-  await page.getByRole("button", { name: "Goals", exact: true }).tap();
+  await page.getByRole("button", { name: "Profile", exact: true }).tap();
   const panel = section(page, "What your coach knows");
   await panel.getByLabel("Fact 1", { exact: true }).fill("Prefers dumbbells");
   await page.getByRole("button", { name: "Coach", exact: true }).tap();
@@ -99,7 +99,7 @@ test("coach memory: what the athlete says is remembered, shown in Goals, editabl
   await settle(page);
   assert.match(aiRequests.filter(isCoachChat).at(-1).system, /WHAT YOU KNOW ABOUT THE ATHLETE[^\n]*\n- Prefers dumbbells \(\d{4}-\d\d-\d\d\)/);
 
-  await page.getByRole("button", { name: "Goals", exact: true }).tap();
+  await page.getByRole("button", { name: "Profile", exact: true }).tap();
   await panel.getByRole("button", { name: "Delete fact 1" }).tap();
   await panel.getByRole("button", { name: "Tap again to delete" }).tap();
   await panel.getByText("Tell your coach about preferences").waitFor();
@@ -148,13 +148,13 @@ test("onboarding: a new athlete's coach asks first, then the profile and plans i
   assert.deepEqual(errors, []);
 });
 
-test("first-time tour: once for a new athlete, one card per tab, then the interview; Goals shows it again, Back closes it", async (t) => {
+test("first-time tour: once for a new athlete, one card per tab, then the interview; Profile shows it again, Back closes it", async (t) => {
   const { page, errors } = await openApp(t);
   const tour = page.getByRole("dialog");
   const tab = (name) => page.getByRole("navigation").getByRole("button", { name, exact: true });
   await tour.getByText("1 of 5").waitFor();
   assert.equal(await tab("Coach").getAttribute("aria-current"), "page");
-  for (const [i, name] of ["Log", "Food", "Progress", "Goals"].entries()) {
+  for (const [i, name] of ["Log", "Food", "Progress", "Profile"].entries()) {
     await tour.getByRole("button", { name: "Next" }).tap();
     await tour.getByText(`${i + 2} of 5`).waitFor();
     assert.equal(await tab(name).getAttribute("aria-current"), "page"); // the screen behind is the tab it describes
@@ -170,7 +170,7 @@ test("first-time tour: once for a new athlete, one card per tab, then the interv
   await page.getByText("A few quick questions first").waitFor();
   assert.equal(await tour.count(), 0); // once
 
-  await tab("Goals").tap();
+  await tab("Profile").tap();
   await page.getByRole("button", { name: "Show the tour again" }).tap();
   await tour.getByText("1 of 5").waitFor();
   await page.goBack(); // Android's Back skips it
@@ -210,7 +210,7 @@ test("injuries: the profile note is read into muscles, and Autopilot holds the l
     seed: { "gymbot:workouts": [userWorkout] },
     ai: (body) => (body.system.startsWith("Below is an athlete's note") ? '{"muscles":["shoulders","nonsense"]}' : "OK"),
   });
-  await page.getByRole("button", { name: "Goals", exact: true }).tap();
+  await page.getByRole("button", { name: "Profile", exact: true }).tap();
   await page.getByPlaceholder(/Left shoulder gets cranky/).fill("Left shoulder sore since last week");
   await page.getByText("Autopilot keeps the weight on lifts that work your shoulders.").waitFor();
   assert.equal(aiRequests.filter((b) => b.system.startsWith("Below is an athlete's note")).length, 1); // once, after typing stopped
@@ -224,7 +224,7 @@ test("injuries: the profile note is read into muscles, and Autopilot holds the l
   assert.deepEqual(errors, []);
 });
 
-test("onboarding: the coach's Pick your equipment button opens Goals with Equipment in sight", async (t) => {
+test("onboarding: the coach's Pick your equipment button opens Profile with Equipment in sight", async (t) => {
   const { page, errors } = await openApp(t, { ai: (body) => (isCoachChat(body) ? "What equipment can you use?\n[equipment]" : "OK") });
   await page.getByRole("button", { name: "Skip" }).tap(); // the first-time tour
   await page.getByPlaceholder("Message your coach").fill("No injuries");
@@ -237,9 +237,9 @@ test("onboarding: the coach's Pick your equipment button opens Goals with Equipm
   assert.deepEqual(errors, []);
 });
 
-test("equipment: picked in Goals by place, by tap or from the logged workouts, and the coach plans with it", async (t) => {
+test("equipment: picked in Profile by place, by tap or from the logged workouts, and the coach plans with it", async (t) => {
   const { page, errors, aiRequests } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
-  await page.getByRole("button", { name: "Goals", exact: true }).tap();
+  await page.getByRole("button", { name: "Profile", exact: true }).tap();
   const panel = section(page, "Equipment");
   await panel.getByText("Pick where you train").waitFor();
   const pressed = () => panel.getByRole("button", { pressed: true }).allInnerTexts();
@@ -271,7 +271,7 @@ test("equipment from photos: what the AI sees is ticked, added to the list, and 
   let answer = '{"items":["cable","kettlebell","rowing boat"],"dumbbellMax":null}';
   const { page, errors, aiRequests } = await openApp(t, { ai: (body) => (body.system.startsWith("You list the training equipment") ? answer : "OK") });
   await page.getByRole("button", { name: "Skip" }).tap(); // the first-time tour
-  await page.getByRole("button", { name: "Goals", exact: true }).tap();
+  await page.getByRole("button", { name: "Profile", exact: true }).tap();
   const panel = section(page, "Equipment");
   const photo = (name) => ({ name, mimeType: "image/png", buffer: Buffer.from(PNG_1PX, "base64") });
 
