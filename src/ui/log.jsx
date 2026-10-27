@@ -8,7 +8,7 @@ import { describeSets, lastGymWorkout, sanitizeExercises, sortNewestFirst, worko
 import { formatRange } from "../autopilot.js";
 import { sessionHighlights } from "../motivation.js";
 import { describeMuscles, musclesFor } from "../muscles.js";
-import { addExercises, addSet, completeExercise, currentExerciseId, editSet, moveExercise, newExerciseSets, nextRoutine, planExercise, planSession, removeExercise, removeSet, renameExercise, workoutMinutes, formatElapsed, leftOpen, startedOn, repeatLastWorkout, replaceExercise, routineSession, sessionExercise, sessionSetCounts, sessionToWorkout, startSession, targetExercise, toggleSet, workoutToSession } from "../workout.js";
+import { addExercises, addSet, completeExercise, currentExerciseId, editSet, moveExercise, newExerciseSets, nextRoutine, planExercise, planSession, removeExercise, removeSet, renameExercise, workoutMinutes, formatElapsed, leftOpen, startedOn, repeatWorkout, replaceExercise, routineSession, sessionExercise, sessionSetCounts, sessionToWorkout, startSession, targetExercise, toggleSet, workoutToSession } from "../workout.js";
 import { pendingCheckIn } from "../schedule.js";
 import { activityEntry, activityLabel, paceText, sanitizeActivities } from "../activities.js";
 import { DeleteButton, ErrorText, Field, Panel, PrimaryButton, Reveal, SectionTitle, ViewTitle, inputClass, useArmed } from "./primitives.jsx";
@@ -70,7 +70,7 @@ export function StartWorkoutPanel({ routines, next, planCount, lastWorkout, onSt
           ))}
         </ul>
       ) : (
-        <p className="text-sm text-zinc-500">Doing the same workouts in turn, like A and B? Save one as a plan while you train it, or ask your coach to suggest some.</p>
+        <p className="text-sm text-zinc-500">Doing the same workouts in turn, like A and B? Save one as a plan while you train it or from History, or ask your coach to suggest some.</p>
       )}
       {planCount > 0 && (routines.length ? <button onClick={onStartPlan} className={outlineButton}>{upNext}</button> : <PrimaryButton onClick={onStartPlan}>{upNext}</PrimaryButton>)}
       {lastWorkout && (
@@ -311,21 +311,20 @@ export function SessionDetails({ session, setSession }) {
   );
 }
 
-// Saves the workout's exercises, in order, as a plan to start from next time. An existing plan's name updates that plan.
-export function SaveRoutineForm({ session, setSession, onSave }) {
+// Saves a workout's exercises, in order, as a plan to start from next time. An existing plan's name updates that plan.
+export function SaveRoutineForm({ names, defaultName = "", onSave }) {
   const [name, setName] = useState(null); // null while closed
   const [savedAs, setSavedAs] = useState("");
 
   function save() {
-    onSave({ name, exercises: [...new Set(session.exercises.map((e) => e.name))] });
-    setSession((s) => ({ ...s, routine: name.trim() })); // this workout counts as that plan, so the next one comes after it
+    onSave({ name: name.trim(), exercises: [...new Set(names)] });
     setSavedAs(name.trim());
     setName(null);
   }
 
   if (name === null)
     return (
-      <button onClick={() => setName(session.routine ?? "")} className="gb-tap text-sm font-semibold text-blue-700">
+      <button onClick={() => setName(savedAs || defaultName)} className="gb-tap text-sm font-semibold text-blue-700">
         {savedAs ? `Saved as plan ${savedAs}` : "Save as a plan"}
       </button>
     );
@@ -386,7 +385,16 @@ export function WorkoutPanel({ session, setSession, unit, onFinish, onStartRest,
         <Plus className="w-5 h-5" />
         Add exercise
       </button>
-      {session.exercises.length > 0 && <SaveRoutineForm session={session} setSession={setSession} onSave={onSaveRoutine} />}
+      {session.exercises.length > 0 && (
+        <SaveRoutineForm
+          names={session.exercises.map((e) => e.name)}
+          defaultName={session.routine}
+          onSave={(routine) => {
+            onSaveRoutine(routine);
+            setSession((s) => ({ ...s, routine: routine.name })); // this workout counts as that plan, so the next one comes after it
+          }}
+        />
+      )}
       <SessionDetails session={session} setSession={setSession} />
       <PrimaryButton onClick={onFinish} disabled={done === 0}>
         Finish and save {done} {done === 1 ? "set" : "sets"}
@@ -526,7 +534,7 @@ export function LogView({ workouts, setWorkouts, session, setSession, settings, 
           planCount={plans.length}
           lastWorkout={lastGymWorkout(workouts)}
           onStartPlan={() => setSession(planSession(plans))}
-          onRepeatLast={() => setSession(repeatLastWorkout(workouts, plans))}
+          onRepeatLast={() => setSession(repeatWorkout(lastGymWorkout(workouts), plans))}
           onStartEmpty={() => setSession(startSession())}
         />
       )}
@@ -575,6 +583,15 @@ export function LogView({ workouts, setWorkouts, session, setSession, settings, 
         workouts={workouts}
         unit={unit}
         yourExercises={yourExercises}
+        onSaveRoutine={onSaveRoutine}
+        onRepeat={
+          session
+            ? undefined // one workout at a time
+            : (workout) => {
+                setSession(repeatWorkout(workout, plans));
+                window.scrollTo({ top: 0, behavior: "smooth" }); // the workout starts at the top
+              }
+        }
         onUpdate={(updated) => setWorkouts((all) => all.map((w) => (w.id === updated.id ? updated : w)))}
         onDelete={(id) => setWorkouts((all) => all.filter((w) => w.id !== id))}
       />
@@ -698,8 +715,8 @@ export function PlanRow({ plan, muscles, unit, onAdd, onRangeChange, onRest }) {
 export const HISTORY_LIMIT = 20;
 
 // Folded by default: one line with the count. Open it for one compact row per workout,
-// and tap a row for its sets, Edit and Delete.
-export function WorkoutHistory({ workouts, unit, yourExercises, onUpdate, onDelete }) {
+// and tap a row for its sets, Repeat (not during a workout), Edit, Delete and Save as a plan.
+export function WorkoutHistory({ workouts, unit, yourExercises, onRepeat, onSaveRoutine, onUpdate, onDelete }) {
   const [open, setOpen] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [editingId, setEditingId] = useState(null);
@@ -798,6 +815,11 @@ export function WorkoutHistory({ workouts, unit, yourExercises, onUpdate, onDele
                         </p>
                       )}
                       <div className="mt-2 flex items-center gap-5">
+                        {onRepeat && workout.exercises.length > 0 && (
+                          <button onClick={() => onRepeat(workout)} className="gb-tap text-sm font-semibold text-blue-700">
+                            Repeat
+                          </button>
+                        )}
                         {workout.exercises.length > 0 && (
                           <button onClick={() => setEditingId(workout.id)} className="gb-tap text-sm font-semibold text-blue-700">
                             Edit
@@ -805,6 +827,12 @@ export function WorkoutHistory({ workouts, unit, yourExercises, onUpdate, onDele
                         )}
                         <DeleteButton label="Delete workout" onConfirm={() => onDelete(workout.id)} />
                       </div>
+                      {workout.exercises.length > 0 && (
+                        <div className="mt-2">
+                          {/* No name filled in: an old A would replace today's A */}
+                          <SaveRoutineForm names={workout.exercises.map((e) => e.name)} onSave={onSaveRoutine} />
+                        </div>
+                      )}
                     </div>
                   )}
                 </li>

@@ -365,6 +365,32 @@ test("history: folded by default, then edit a saved workout", async (t) => {
   assert.deepEqual(errors, []);
 });
 
+test("history: save a past workout as a plan, and repeat it as a new workout", async (t) => {
+  const { page, errors } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
+  await page.getByRole("button", { name: /^Workout/ }).tap();
+  const history = section(page, /^History/);
+  await history.getByRole("button", { name: /^History/ }).tap();
+  await history.getByRole("button", { name: /Sep 23/ }).tap();
+  const names = userWorkout.exercises.map((e) => e.name);
+
+  await history.getByRole("button", { name: "Save as a plan" }).tap();
+  await history.getByLabel("Plan name").fill("Kettlebell day");
+  await history.getByRole("button", { name: "Save", exact: true }).tap();
+  await history.getByText("Saved as plan Kettlebell day").waitFor();
+  await settle(page);
+  assert.deepEqual((await stored(page, "gymbot:settings")).routines, [{ name: "Kettlebell day", exercises: names }]);
+
+  await history.getByRole("button", { name: "Repeat", exact: true }).tap();
+  await settle(page);
+  const session = await stored(page, "gymbot:session");
+  assert.deepEqual(session.exercises.map((e) => e.name), names); // same order; the live workout is where it is changed
+  assert.ok(session.exercises.every((e) => e.sets.every((set) => !set.done)));
+  assert.equal(await history.getByRole("button", { name: "Repeat", exact: true }).count(), 0); // one workout at a time
+  assert.equal(await history.getByRole("button", { name: "Edit", exact: true }).count(), 1); // the row is still open
+  assert.deepEqual(await stored(page, "gymbot:workouts"), [userWorkout]); // the past workout is unchanged, and nothing is saved until Finish
+  assert.deepEqual(errors, []);
+});
+
 test("workout plans: the next one starts in a tap, a workout saves over a plan, the coach suggests one", async (t) => {
   const a = { name: "A", exercises: ["Bench Press (Dumbbell)", "Front Squat (Kettlebell)"] };
   const b = { name: "B", exercises: ["Lat Pulldown (Cable)", "Seated Row (Close Grip) (Machine)", "Hammer Curl (Dumbbell)"] };

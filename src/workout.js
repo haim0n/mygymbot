@@ -1,6 +1,6 @@
 import { LEFT_OPEN_HOURS, NEW_EXERCISE_TARGET, NOT_PLATE_LIFTS, PLATES, PLATE_LIFTS, REST_FUN_ITEMS, REST_FUN_KINDS, REST_FUN_REFILL_AT, REST_FUN_SEEN, REST_NOTE_CHAT_MESSAGES, REST_NOTE_KINDS, ROUTINE_MARKER, SET_FEELS } from "./config.js";
 import { formatShortDate, toDateKey, today } from "./dates.js";
-import { cleanExerciseName, describeSets, lastGymWorkout, newId, platesPerSide, sortNewestFirst } from "./training.js";
+import { cleanExerciseName, describeSets, newId, platesPerSide, sortNewestFirst } from "./training.js";
 import { nextWeightUp, repeatSet, restSeconds, weightStep } from "./autopilot.js";
 
 // The workout in progress. It's saved as you go, so closing the app mid-session loses nothing.
@@ -26,10 +26,9 @@ export function targetExercise(name, plans, sets) {
   return plan ? planExercise(plan) : sessionExercise(name, sets);
 }
 
-// Your last workout's exercises, in the same order, at today's Autopilot targets where there is one. A repeat counts as the same workout plan.
-export function repeatLastWorkout(workouts, plans) {
-  const last = lastGymWorkout(workouts);
-  return { ...startSession(), routine: last?.routine, exercises: (last?.exercises ?? []).map((e) => targetExercise(e.name, plans, e.sets)) };
+// A past workout's exercises, in the same order, at today's Autopilot targets where there is one. A repeat counts as the same workout plan.
+export function repeatWorkout(workout, plans) {
+  return { ...startSession(), routine: workout.routine, exercises: workout.exercises.map((e) => targetExercise(e.name, plans, e.sets)) };
 }
 
 // Saved workout plans are "routines" in code, since Autopilot's per-exercise targets are already "plans".

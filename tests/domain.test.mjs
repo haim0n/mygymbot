@@ -268,7 +268,7 @@ test("Video library: fixed links only; exercises it doesn't cover get none", () 
 
 test("Live workout: repeat keeps order, reorder respects the ends, only done sets are saved", () => {
   const plans = app.buildAutopilotPlans([userWorkout(daysAgo(3))], settingsWith());
-  let s = app.repeatLastWorkout([userWorkout(daysAgo(3))], plans);
+  let s = app.repeatWorkout(userWorkout(daysAgo(3)), plans);
   const names = () => s.exercises.map((e) => e.name.split(" (")[0]);
   assert.deepEqual(names().slice(0, 3), ["Bench Press", "Front Squat", "Lat Pulldown"]);
   assert.deepEqual(s.exercises[0].sets.map((x) => [x.weight, x.reps]), [[44, 10], [44, 10]]);
@@ -313,7 +313,7 @@ test("Workout plans: done in turn, started at Autopilot's targets, edited by nam
   ]);
   assert.equal(app.sessionToWorkout(session).routine, "A");
   assert.equal(app.sessionToWorkout({ ...session, routine: undefined }).routine, undefined);
-  assert.equal(app.repeatLastWorkout([tagged("1", 1, "B")], plans).routine, "B");
+  assert.equal(app.repeatWorkout(tagged("1", 1, "B"), plans).routine, "B");
 
   assert.deepEqual(app.saveRoutine([a, b], { name: " a ", exercises: ["Deadlift"] }), [{ name: "a", exercises: ["Deadlift"] }, b]);
   assert.deepEqual(app.saveRoutine([a], { name: "C", exercises: ["Deadlift"] }), [a, { name: "C", exercises: ["Deadlift"] }]);
@@ -420,7 +420,7 @@ test("Set feel: too easy or too hard moves the next sets at that weight; it is s
   const saved = app.sessionToWorkout(done);
   assert.deepEqual(saved.exercises[0].sets[0], { weight: 80, reps: 8, feel: "easy" });
   assert.equal(app.workoutToSession(saved).exercises[0].sets[0].feel, "easy"); // kept when a saved workout is fixed
-  assert.equal(app.repeatLastWorkout([{ ...saved, date: daysAgo(1) }], []).exercises[0].sets[0].feel, undefined); // a new workout starts unrated
+  assert.equal(app.repeatWorkout({ ...saved, date: daysAgo(1) }, []).exercises[0].sets[0].feel, undefined); // a new workout starts unrated
   assert.equal(
     app.finishedWorkoutRequest(saved, 48, [{ tone: "celebrate", text: "New best on Bench Press." }], "kg"),
     "FINISHED WORKOUT (48 min):\n- Bench Press: 80×8, 82.5×8, 82.5×8, 60×12 (felt too easy)\n- Push Up: 2×10 @ BW\nHIGHLIGHTS:\n- New best on Bench Press."
