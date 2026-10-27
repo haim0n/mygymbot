@@ -102,6 +102,7 @@ Snatch
 Split_Squat_with_Dumbbells
 Standing_Biceps_Cable_Curl
 Standing_Calf_Raises
+Standing_Dumbbell_Calf_Raise
 Standing_Dumbbell_Triceps_Extension
 Standing_Low-Pulley_Deltoid_Raise
 Standing_Military_Press
