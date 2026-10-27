@@ -16,7 +16,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Res
 from fastapi.staticfiles import StaticFiles
 
 from server import gemini, iap
-from server.storage import Stores
+from server.storage import Stores, TooLargeError
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 DEV_USER = "dev"  # the only user without IAP (local dev); data in data/dev.json
@@ -32,6 +32,7 @@ MAX_ERROR_REPORT_CHARS = 2000  # a stack trace fits; a flood doesn't
 MAX_VERSION_CHARS = 20
 AI_LIMIT_MESSAGE = "You've reached today's limit for the coach. It resets tomorrow."
 AI_TOO_LONG_MESSAGE = "That's too much for the coach at once. Try a shorter message or fewer pictures."
+STORAGE_FULL_MESSAGE = "Your data is over the size limit, so this change wasn't saved."
 
 
 @dataclass
@@ -113,7 +114,11 @@ def create_app(stores: Stores, iap_audience: str | None, commit: str | None = No
             value = json.loads(await request.body())  # the app only stores JSON; parsing keeps the file readable
         except json.JSONDecodeError:
             return PlainTextResponse("Value must be JSON", status_code=400)
-        await asyncio.to_thread(stores.for_user(request.state.user).set, key, value)
+        try:
+            await asyncio.to_thread(stores.for_user(request.state.user).set, key, value)
+        except TooLargeError as error:
+            logger.warning("Storage write refused for %s: %s", request.state.user, error)
+            return PlainTextResponse(STORAGE_FULL_MESSAGE, status_code=413)
         return Response(status_code=204)
 
     @app.delete("/api/storage/{key:path}")

@@ -13,7 +13,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from fastapi.testclient import TestClient
 from google.auth import crypt, jwt
 
-from server import gemini, iap
+from server import gemini, iap, storage
 from server import app as app_module
 from server.app import create_app
 from server.storage import Store, Stores
@@ -58,6 +58,16 @@ def test_storage_round_trip_saves_readable_json(data_file: Path) -> None:
     assert client.put("/api/storage/x", content="not json").status_code == 400
     assert client.delete("/api/storage/gymbot:workouts").status_code == 204
     assert client.get("/api/storage/gymbot:workouts").status_code == 404
+
+
+def test_storage_refuses_a_write_that_makes_the_file_too_large(data_file: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    client = client_for(data_file)
+    monkeypatch.setattr(storage, "MAX_USER_DATA_BYTES", 100)
+    assert client.put("/api/storage/gymbot:chat", content=json.dumps("a" * 50)).status_code == 204
+    assert client.put("/api/storage/gymbot:food", content=json.dumps("b" * 50)).status_code == 413  # the file's total counts
+    assert client.get("/api/storage/gymbot:food").status_code == 404
+    assert json.loads(data_file.read_text()) == {"gymbot:chat": "a" * 50}
+    assert client.put("/api/storage/gymbot:chat", content=json.dumps("c" * 60)).status_code == 204  # replacing a value counts once
 
 
 def test_storage_backs_up_once_a_day_and_refuses_a_corrupt_file(data_file: Path) -> None:

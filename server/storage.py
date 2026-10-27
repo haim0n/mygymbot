@@ -8,6 +8,12 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+MAX_USER_DATA_BYTES = 5_000_000  # per user's file; the largest is about 80 KB, and the server keeps every open file in memory
+
+
+class TooLargeError(ValueError):
+    """A write would make the user's file larger than ``MAX_USER_DATA_BYTES``."""
+
 
 @dataclass
 class Store:
@@ -39,21 +45,28 @@ class Store:
         return self.data[key]
 
     def set(self, key: str, value: Any) -> None:
-        """Store ``value`` under ``key`` and save."""
+        """Store ``value`` under ``key`` and save.
+
+        :raises TooLargeError: when the file would grow over ``MAX_USER_DATA_BYTES``; nothing changes then.
+        """
         with self._lock:
-            self.data[key] = value
-            self._save()
+            data = {**self.data, key: value}
+            text = json.dumps(data, indent=1)  # ASCII, so its length is its size in bytes
+            if len(text) > MAX_USER_DATA_BYTES:
+                raise TooLargeError(f"{len(text)} bytes, over {MAX_USER_DATA_BYTES}")
+            self.data = data
+            self._write(text)
 
     def delete(self, key: str) -> None:
         """Remove ``key`` (if present) and save."""
         with self._lock:
             self.data.pop(key, None)
-            self._save()
+            self._write(json.dumps(self.data, indent=1))
 
-    def _save(self) -> None:
+    def _write(self, text: str) -> None:
         """Write through a temporary file, so a crash never leaves half a file."""
         temporary = self.path.with_suffix(".tmp")
-        temporary.write_text(json.dumps(self.data, indent=1))
+        temporary.write_text(text)
         temporary.replace(self.path)
 
 
