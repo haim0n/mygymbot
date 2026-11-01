@@ -96,6 +96,7 @@ Side_Bridge
 Side_Lateral_Raise
 Sit-Up
 Smith_Machine_Bench_Press
+Smith_Machine_Calf_Raise
 Smith_Machine_Incline_Bench_Press
 Smith_Machine_Squat
 Snatch
