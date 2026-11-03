@@ -29,6 +29,7 @@ Safe data and safe costs first, then the checks that protect every later change.
 
 ## Then: keep people
 
+- Beginners are told what to do: a guided workout, one set at a time (#34), and a first-workout tour with form cues between sets (#35).
 - The coach as the main feature: it sets things up, talks, and changes plans itself (#12, #6).
 - Workout reminders as web push, with a service worker that doesn't cache the app's files (#26).
 - Health Connect import, after a native or TWA shell exists (#27).
