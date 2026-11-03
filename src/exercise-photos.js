@@ -188,6 +188,7 @@ export const EXERCISE_PHOTOS = [
 "Dumbbell_Clean",
 "Dumbbell_Floor_Press",
 "Dumbbell_Flyes",
+"Dumbbell_Goblet_Squat",
 "Dumbbell_Incline_Row",
 "Dumbbell_Incline_Shoulder_Raise",
 "Dumbbell_Lunges",

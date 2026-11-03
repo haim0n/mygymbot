@@ -55,7 +55,7 @@ export const PHOTO_MATCHES = {
   "Barbell Back Squat": "Barbell_Squat",
   "Front Squat": "Front_Barbell_Squat",
   "Goblet Squat (Kettlebell)": "Goblet_Squat",
-  "Goblet Squat (Dumbbell)": "Goblet_Squat",
+  "Goblet Squat (Dumbbell)": "Dumbbell_Goblet_Squat",
   "Front Squat (Kettlebell)": "Front_Squats_With_Two_Kettlebells",
   "Sumo Squat (Dumbbell)": "Plie_Dumbbell_Squat",
   "Hack Squat (Machine)": "Hack_Squat",

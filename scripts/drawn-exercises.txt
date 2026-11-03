@@ -37,6 +37,7 @@ Dips_-_Triceps_Version
 Dumbbell_Bench_Press
 Dumbbell_Bicep_Curl
 Dumbbell_Flyes
+Dumbbell_Goblet_Squat
 Dumbbell_Lunges
 Dumbbell_Rear_Lunge
 Dumbbell_Shoulder_Press

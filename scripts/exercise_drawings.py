@@ -4,7 +4,8 @@ Each listed exercise gets a start and a finish drawing from Gemini (``DRAWING_MO
 ``mygymbot``, about $0.07 per picture). Each is drawn from its own photo with the same detailed style and the dataset's
 description of the movement: with the start drawing as a reference, Gemini kept copying the start pose. The drawings
 replace the photos in ``web/exercises/`` (same file names, so the app needs no change), and their ids are added to
-``scripts/drawn-exercises.txt``, which ``exercise_photos.py`` leaves alone.
+``scripts/drawn-exercises.txt``, which ``exercise_photos.py`` leaves alone. A variant (``VARIANTS`` in ``exercise_photos.py``)
+is drawn from another exercise's photo, with the equipment changed, under its own id.
 
 Run: ``uv run python scripts/exercise_drawings.py ID [ID ...]`` (ids from ``src/exercise-photos.js``; the next batch is
 the ids there that ``drawn-exercises.txt`` doesn't list yet). Then look at every sheet in ``.drawings/review-*.png``
@@ -23,7 +24,7 @@ import google.auth
 from google import genai
 from google.genai import types
 
-from exercise_photos import DRAWN_FILE, PHOTO_WIDTH, PHOTOS_DIR, ROOT, WEBP_QUALITY, fetch
+from exercise_photos import DRAWN_FILE, PHOTO_WIDTH, PHOTOS_DIR, ROOT, VARIANTS, WEBP_QUALITY, fetch
 
 GCP_PROJECT = "mygymbot"
 DRAWING_MODEL = "gemini-3.1-flash-image"
@@ -36,7 +37,7 @@ PROMPT = (
     "clothes. Only these muscles are red, drawn as anatomical muscle shapes: {muscles}; all other muscles stay grey. "
     "Equipment in dark grey, drawn clearly so it is easy to recognise. Draw only the person and the equipment they are "
     "using: leave out racks, machines, benches and weights they don't touch. No text, no logos, no floor, no shadows. "
-    "Square image. How the exercise moves: {instructions} This photo is the {position} of the movement; draw that pose."
+    "Square image. How the exercise moves: {instructions} This photo is the {position} of the movement; draw that pose.{change}"
 )
 POSITIONS = ("start", "end")
 
@@ -73,7 +74,12 @@ def save_webp(image: bytes, exercise_id: str, index: int) -> None:
 def draw_exercise(exercise: dict) -> str | None:
     """Start and finish drawings for one exercise; returns its id, or ``None`` if Gemini failed (the photos stay)."""
     exercise_id = exercise["id"]
-    words = {"name": exercise["name"], "muscles": ", ".join(exercise["primaryMuscles"]), "instructions": " ".join(exercise["instructions"])}
+    words = {
+        "name": exercise["name"],
+        "muscles": ", ".join(exercise["primaryMuscles"]),
+        "instructions": " ".join(exercise["instructions"]),
+        "change": exercise.get("change", ""),
+    }
     photos = [fetch(f"exercises/{image}") for image in exercise["images"]]
     try:
         drawings = [
@@ -114,7 +120,9 @@ def save_review_sheets(ids: list[str], rows_per_sheet: int = 8) -> None:
 
 def main(ids: list[str]) -> None:
     by_id = {e["id"]: e for e in json.loads(fetch("dist/exercises.json"))}
-    unknown = [i for i in ids if i not in by_id or not (PHOTOS_DIR / f"{i}-0.webp").exists()]
+    for variant, (source, change) in VARIANTS.items():
+        by_id[variant] = {**by_id[source], "id": variant, "change": f" {change}"}
+    unknown = [i for i in ids if i not in by_id or not (i in VARIANTS or (PHOTOS_DIR / f"{i}-0.webp").exists())]
     if unknown:
         sys.exit(f"Not in web/exercises/: {', '.join(unknown)}")
     REVIEW_DIR.mkdir(exist_ok=True)
