@@ -683,3 +683,22 @@ test("Workout duration: minutes, then hours, then the day a workout left open st
   assert.deepEqual([999, 1000, 12500, 123456].map(app.formatVolume), ["999", "1k", "12.5k", "123k"]);
   assert.ok(app.finishedWorkoutRequest({ exercises: [] }, null, [], "kg").startsWith("FINISHED WORKOUT:"));
 });
+
+test("Ticking a set carries its weight to the empty sets after it, and beginners train guided until they ask for the list", () => {
+  const squat = app.sessionExercise("Goblet Squat (Dumbbell)", app.newExerciseSets());
+  const session = { ...app.startSession(), exercises: [squat] };
+  const typed = app.editSet(session, squat.id, squat.sets[0].id, "weight", "12");
+  const done = app.toggleSet(typed, squat.id, squat.sets[0].id);
+  assert.deepEqual(done.exercises[0].sets.map((set) => set.weight), ["12", "12", "12"]);
+  assert.deepEqual(app.rateSet(done, squat.id, squat.sets[0].id, "easy", "kg").exercises[0].sets.map((set) => set.weight), ["12", 14, 14]); // so set feel can move them
+  assert.deepEqual(app.editRemainingSets(done, squat.id, squat.sets[1].id, "weight", "10").exercises[0].sets.map((set) => set.weight), ["12", "10", "10"]); // from here on; done sets stay
+  const lastTyped = app.editSet(typed, squat.id, squat.sets[2].id, "weight", "10");
+  assert.deepEqual(app.toggleSet(lastTyped, squat.id, squat.sets[0].id).exercises[0].sets.map((set) => set.weight), ["12", "12", "10"]); // a typed weight stays
+  assert.deepEqual(app.toggleSet(session, squat.id, squat.sets[0].id).exercises[0].sets.map((set) => set.weight), ["", "", ""]); // nothing typed, nothing to carry
+
+  const beginner = { experience: "Beginner" };
+  assert.equal(app.wantsGuided(beginner, session), true);
+  assert.equal(app.wantsGuided(beginner, { ...session, fullList: true }), false);
+  assert.equal(app.wantsGuided(beginner, app.startSession()), false); // an empty workout has nothing to guide
+  assert.equal(app.wantsGuided({ experience: "Intermediate" }, session), false);
+});

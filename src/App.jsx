@@ -6,7 +6,7 @@ import { today } from "./dates.js";
 import { currentBodyweight, exercisesByFrequency, logBodyweight, personalRecords } from "./training.js";
 import { buildAutopilotPlans } from "./autopilot.js";
 import { todayFacts } from "./motivation.js";
-import { feelResult, nextSet, rateSet, saveRoutine } from "./workout.js";
+import { feelResult, nextSet, rateSet, saveRoutine, wantsGuided } from "./workout.js";
 import { buildCoachContext, isNewAthlete, rememberFacts, wantsTour } from "./coach-context.js";
 import { useDailyNote } from "./ui/motivation.jsx";
 import { useInjuryAreas, useLearnedMuscles } from "./ui/muscles.jsx";
@@ -116,6 +116,7 @@ export default function GymBot() {
   const restNote = useRestNote({ rest: restTimer.rest, session, setSession, context: coachContext, chat });
   const rest = restTimer.rest;
   const restFun = useRestFun({ rest, session, setSession, settings, setSettings });
+  const guided = wantsGuided(settings.profile, session);
   const restExercise = rest && session?.exercises.find((e) => e.id === rest.exerciseId);
   const ratedSet = restExercise?.sets.find((set) => set.id === rest.setId && set.done);
   const [restBarHeight, setRestBarHeight] = useState(112);
@@ -185,7 +186,7 @@ export default function GymBot() {
   const views = {
     coach: <CoachView chat={chat} setChat={setChat} context={coachContext} briefing={{ facts, note: dailyNote }} newAthlete={isNewAthlete(settings, workouts)} onNavigate={setTab} onSaveRoutine={storeRoutine} onSaveProfile={storeProfile} onOpenImport={openImport} onOpenEquipment={openEquipment} onRemember={remember} />,
     log: (
-      <LogView workouts={workouts} setWorkouts={setWorkouts} session={session} setSession={setSession} settings={settings} coachContext={coachContext} plans={plans} yourExercises={namesInUse} learnedMuscles={learnedMuscles} onRangeChange={setRepRange} onStartRest={restTimer.start} feelPrompt={feelPrompt} onSaveRoutine={storeRoutine} onDeleteRoutine={deleteRoutine} showImport={showImport} setShowImport={setShowImport} bodyweight={bodyweight} unit={unit} />
+      <LogView workouts={workouts} setWorkouts={setWorkouts} session={session} setSession={setSession} settings={settings} coachContext={coachContext} plans={plans} yourExercises={namesInUse} learnedMuscles={learnedMuscles} onRangeChange={setRepRange} onStartRest={restTimer.start} feelPrompt={feelPrompt} onSaveRoutine={storeRoutine} onDeleteRoutine={deleteRoutine} showImport={showImport} setShowImport={setShowImport} bodyweight={bodyweight} unit={unit} guided={guided} rest={rest} />
     ),
     food: <FoodView food={food} setFood={setFood} bodyweight={currentBodyweight(bodyweightLog, settings.profile)} unit={unit} />,
     progress: <ProgressView workouts={workouts} records={records} exerciseNames={exerciseNames} learnedMuscles={learnedMuscles} unit={unit} daysPerWeek={daysPerWeek} onNavigate={setTab}
@@ -205,9 +206,10 @@ export default function GymBot() {
 
         {loaded ? (
           <>
+            {/* The guided view shows the next set itself, so the rest bar over it doesn't */}
             <RestTimerBar
               timer={restTimer}
-              next={rest && session ? nextSet(session, rest.exerciseId) : null}
+              next={rest && session && !(guided && tab === "log") ? nextSet(session, rest.exerciseId) : null}
               unit={unit}
               note={restNote}
               fun={restFun}

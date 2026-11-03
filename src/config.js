@@ -68,6 +68,7 @@ export const REST_BY_REP_RANGE = [[6, 180], [10, 120], [15, 90], [Infinity, 60]]
 export const BIG_LIFT_EXTRA_REST = 60; // seconds, for squats, deadlifts and hip thrusts
 export const MAX_DAYS_BEFORE_EASING_BACK = 21;
 export const PLAN_LOOKBACK_DAYS = 56; // only plan lifts trained in the last 8 weeks
+export const GUESS_EXTRA_REPS = 4; // the guided view asks for a weight you could lift this many more times than the target, so a guess starts light
 export const NEW_EXERCISE_TARGET = { sets: 3, reps: 8 }; // a workout plan's exercise without an Autopilot target starts here; you fill in the weight
 // How a set felt, asked in the rest bar. Too easy or too hard moves the exercise's next sets one weight step (2 reps without weight).
 export const SET_FEELS = [

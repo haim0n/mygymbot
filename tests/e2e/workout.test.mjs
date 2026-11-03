@@ -75,6 +75,52 @@ test("set feel: one tap under the set just done moves the next sets, and the res
   assert.deepEqual(errors, []);
 });
 
+test("guided workout: a beginner's first workout one set at a time, the weight typed once, then the full list and back", async (t) => {
+  const plan = { name: "A", exercises: ["Goblet Squat (Dumbbell)", "Push Up"] };
+  const { page, errors } = await openApp(t, {
+    seed: { "gymbot:settings": { ...settings({ experience: "Beginner" }), routines: [plan] } },
+    ai: () => "Keep your chest tall.",
+  });
+  await page.getByRole("button", { name: /^Workout/ }).tap();
+  await page.getByRole("button", { name: "Start plan A" }).tap();
+  await page.getByText("Workout A, exercise 1 of 2").waitFor();
+  const done = page.getByRole("button", { name: /^(Done|Set \d done)$/ }); // during a rest it names the set
+  assert.equal(await done.isDisabled(), true); // no weight yet
+  await page.getByText("Pick a weight you could lift 12 times.").waitFor();
+  await page.getByLabel("Weight", { exact: true }).pressSequentially("12"); // the field stays while it fills
+  assert.equal(await page.getByLabel("Weight", { exact: true }).inputValue(), "12");
+  await done.tap();
+
+  const bar = page.locator("div.fixed.top-0");
+  await bar.getByText("Keep your chest tall.").waitFor();
+  assert.doesNotMatch(await bar.innerText(), /Next set/); // the screen shows it
+  await page.getByText("Do 8 reps at 12 kg").waitFor(); // carried to the next set
+  await page.getByText("Rest first. It chimes when the next set is due.").waitFor();
+  await page.getByRole("button", { name: "Set 2 done" }).waitFor();
+  await page.getByRole("group", { name: "How was that set?" }).getByRole("button", { name: "Too easy" }).tap();
+  await page.getByText("Do 8 reps at 14 kg").waitFor();
+
+  await page.getByRole("button", { name: "Full list" }).tap();
+  const first = section(page, "Workout A").locator("ol > li").first();
+  assert.deepEqual(await Promise.all([1, 2, 3].map((n) => first.getByLabel(`Set ${n} weight`).inputValue())), ["12", "14", "14"]);
+  while (!(await stored(page, "gymbot:session").catch(() => null))?.fullList) await page.waitForTimeout(100); // saved (a 404 until the first write)
+  await page.reload(); // the list stays for this workout
+  await page.getByRole("button", { name: "Guide me, one set at a time" }).tap();
+  await page.getByText("Do 8 reps at 14 kg").waitFor();
+
+  await done.tap();
+  await done.tap();
+  await page.getByText("Push Up").first().waitFor();
+  assert.equal(await page.getByLabel("Weight", { exact: true }).count(), 0); // bodyweight: no weight to pick
+  for (let set = 0; set < 3; set++) await done.tap();
+  await page.getByRole("button", { name: "Finish and save 6 sets" }).tap();
+  await page.getByRole("dialog", { name: "Workout done" }).waitFor();
+  await settle(page);
+  const saved = (await stored(page, "gymbot:workouts")).at(-1);
+  assert.deepEqual(saved.exercises.map((e) => e.sets.map((set) => set.weight)), [[12, 14, 14], [0, 0, 0]]);
+  assert.deepEqual(errors, []);
+});
+
 test("out of order: finishing the last exercise brings the first one not done into view", async (t) => {
   const { page, errors } = await openApp(t, { seed: { "gymbot:workouts": [userWorkout] } });
   await page.getByRole("button", { name: /^Workout/ }).tap();

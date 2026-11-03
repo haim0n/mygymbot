@@ -90,10 +90,31 @@ export function replaceExercise(session, exerciseId, name, plans) {
 }
 // Fixing a saved workout: the sets were right, the exercise was another one.
 export const renameExercise = (session, exerciseId, name) => withExercises(session, (list) => list.map((e) => (e.id === exerciseId ? { ...e, name } : e)));
+// A weight typed on one set carries to the exercise's later sets that have none yet. Set feel moves only the sets at the
+// rated weight, so without this a first workout's empty sets would stay empty (and save as bodyweight).
+function carryWeight(session, exerciseId, setId) {
+  return withExercise(session, exerciseId, (e) => {
+    const index = e.sets.findIndex((set) => set.id === setId);
+    const weight = e.sets[index]?.weight;
+    if (weight === "" || weight == null) return e;
+    return { ...e, sets: e.sets.map((set, i) => (i > index && !set.done && set.weight === "" ? { ...set, weight } : set)) };
+  });
+}
+// Beginners train in the guided view (one set at a time), once the workout has exercises in it, unless they asked for the
+// full list in this workout.
+export const wantsGuided = (profile, session) => profile.experience === "Beginner" && Boolean(session?.exercises.length) && !session.fullList;
 export const removeExercise = (session, exerciseId) => withExercises(session, (list) => list.filter((e) => e.id !== exerciseId));
 export const moveExercise = (session, exerciseId, offset) =>
   withExercises(session, (list) => moveItem(list, list.findIndex((e) => e.id === exerciseId), offset));
-export const toggleSet = (session, exerciseId, setId) => withSet(session, exerciseId, setId, (set) => ({ ...set, done: !set.done }));
+// The guided view's Change weight or reps: the set shown and the later ones still to do, as a beginner who changes the
+// weight means it from here on.
+export const editRemainingSets = (session, exerciseId, setId, field, value) =>
+  withExercise(session, exerciseId, (e) => {
+    const index = e.sets.findIndex((set) => set.id === setId);
+    return { ...e, sets: e.sets.map((set, i) => (i === index || (i > index && !set.done) ? { ...set, [field]: value } : set)) };
+  });
+// Ticking a set also carries its weight to the empty sets after it (carryWeight), in both views.
+export const toggleSet = (session, exerciseId, setId) => withSet(carryWeight(session, exerciseId, setId), exerciseId, setId, (set) => ({ ...set, done: !set.done }));
 export const editSet = (session, exerciseId, setId, field, value) => withSet(session, exerciseId, setId, (set) => ({ ...set, [field]: value }));
 export const addSet = (session, exerciseId) =>
   withExercise(session, exerciseId, (e) => ({ ...e, sets: [...e.sets, newSet(e.sets.at(-1) ?? { weight: 0, reps: 8 })] }));
@@ -147,13 +168,22 @@ export function feelResult(exercise, set, unit) {
 }
 
 // "82.5 kg × 8. Per side: 25, 5, 1.25" for a lift on a barbell; the plates spare the mental maths between sets.
-export function describeNextSet({ exercise, set }, unit) {
+export function describeNextSet(next, unit) {
+  const weight = Number(next.set.weight) || 0;
+  if (!weight) return `${next.set.reps} reps`;
+  const plates = platesText(next, unit);
+  return `${weight} ${unit} × ${next.set.reps}${plates ? `. ${plates}` : ""}`;
+}
+
+// A lift on a barbell loaded with plates (not sleds or machines).
+export const loadsPlates = (name) => PLATE_LIFTS.test(name.toLowerCase()) && !NOT_PLATE_LIFTS.test(name.toLowerCase());
+
+// The plates per side for a lift on a barbell ("Per side: 20, 5", or "Empty bar"); null for anything else.
+export function platesText({ exercise, set }, unit) {
   const weight = Number(set.weight) || 0;
-  if (!weight) return `${set.reps} reps`;
-  const name = exercise.name.toLowerCase();
-  const onBar = PLATE_LIFTS.test(name) && !NOT_PLATE_LIFTS.test(name) && weight >= PLATES[unit].bar;
+  if (!loadsPlates(exercise.name) || weight < PLATES[unit].bar) return null;
   const plates = platesPerSide(weight, unit).map((plate) => plate.weight);
-  return `${weight} ${unit} × ${set.reps}${onBar ? `. ${plates.length ? `Per side: ${plates.join(", ")}` : "Empty bar"}` : ""}`;
+  return plates.length ? `Per side: ${plates.join(", ")}` : "Empty bar";
 }
 
 // What comes after this rest: the exercise's next set, else the first set left in the workout. Null when all are done.

@@ -1,21 +1,21 @@
-import { Fragment, useState, useEffect, useRef } from "react";
+import { Fragment, useContext, useState, useEffect, useRef } from "react";
 import { Trash2, Plus, Sparkles, Loader2, X, Check, Timer, PlayCircle, ChevronUp, ChevronDown, ArrowUpDown, ArrowLeftRight } from "lucide-react";
-import { PLAN_STATUS, REP_RANGES } from "../config.js";
+import { GUESS_EXTRA_REPS, PLAN_STATUS, PLATES, REP_RANGES, SET_FEELS } from "../config.js";
 import { LOG_PARSER_PROMPT } from "../prompts.js";
 import { askAIForJson } from "../ai.js";
 import { formatClock, formatDate, formatShortDate, formatVolume, today } from "../dates.js";
-import { describeSets, lastGymWorkout, sanitizeExercises, sortNewestFirst, workoutVolume, guideFor } from "../training.js";
-import { formatRange } from "../autopilot.js";
+import { describeSets, lastGymWorkout, sanitizeExercises, sortNewestFirst, workoutVolume, guideFor, photoFor } from "../training.js";
+import { equipmentOf, formatRange } from "../autopilot.js";
 import { sessionHighlights } from "../motivation.js";
 import { describeMuscles, musclesFor } from "../muscles.js";
-import { addExercises, addSet, completeExercise, currentExerciseId, editSet, moveExercise, newExerciseSets, nextRoutine, planExercise, planSession, removeExercise, removeSet, renameExercise, workoutMinutes, formatElapsed, leftOpen, startedOn, repeatWorkout, replaceExercise, routineSession, sessionExercise, sessionSetCounts, sessionToWorkout, startSession, targetExercise, toggleSet, workoutToSession } from "../workout.js";
+import { nextSet, platesText, loadsPlates, editRemainingSets, addExercises, addSet, completeExercise, currentExerciseId, editSet, moveExercise, newExerciseSets, nextRoutine, planExercise, planSession, removeExercise, removeSet, renameExercise, workoutMinutes, formatElapsed, leftOpen, startedOn, repeatWorkout, replaceExercise, routineSession, sessionExercise, sessionSetCounts, sessionToWorkout, startSession, targetExercise, toggleSet, workoutToSession } from "../workout.js";
 import { pendingCheckIn } from "../schedule.js";
 import { activityEntry, activityLabel, paceText, sanitizeActivities } from "../activities.js";
 import { DeleteButton, ErrorText, Field, Panel, PrimaryButton, Reveal, SectionTitle, ViewTitle, inputClass, useArmed } from "./primitives.jsx";
 import { SetFeel } from "./rest-timer.jsx";
 import { SessionHighlights, WorkoutDone } from "./motivation.jsx";
 import { VideoGuides } from "./videos.jsx";
-import { ExercisePicker, ExerciseThumb } from "./exercises.jsx";
+import { ExerciseContext, ExercisePicker, ExerciseThumb } from "./exercises.jsx";
 import { CheckInCard, CoachReply } from "./check-in.jsx";
 import { ActivityIcon, ActivityPanel } from "./activities.jsx";
 import { ImportPanel } from "./import-history.jsx";
@@ -338,15 +338,10 @@ export function SaveRoutineForm({ names, defaultName = "", onSave }) {
   );
 }
 
-export function WorkoutPanel({ session, setSession, unit, onFinish, onStartRest, feelPrompt, onSaveRoutine, onFindExercise }) {
+export function WorkoutPanel({ session, setSession, unit, onFinish, onSetDone, feelPrompt, onSaveRoutine, onFindExercise }) {
   const [discardArmed, armDiscard] = useArmed();
   const now = useNow(30_000);
   const { done, total } = sessionSetCounts(session);
-
-  // Rest after every set except the very last one of the workout.
-  const onSetDone = (exercise, set) => {
-    if (total - done > 1) onStartRest(exercise.rest, exercise.name, { exerciseId: exercise.id, setId: set.id });
-  };
 
   const isLeftOpen = leftOpen(session.startedAt, now);
   const sameDay = startedOn(session.startedAt) === today();
@@ -360,6 +355,11 @@ export function WorkoutPanel({ session, setSession, unit, onFinish, onStartRest,
           {total > 0 && `${isLeftOpen ? "" : ", "}${done} of ${total} sets`}
         </span>
       </div>
+      {session.fullList && (
+        <button onClick={() => setSession((s) => ({ ...s, fullList: false }))} className="gb-tap -mt-1 text-sm font-semibold text-blue-700">
+          Guide me, one set at a time
+        </button>
+      )}
       {isLeftOpen && (
         // A workout left open: done back then and never finished, or started early and trained now
         <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
@@ -409,6 +409,163 @@ export function WorkoutPanel({ session, setSession, unit, onFinish, onStartRest,
   );
 }
 
+// Beginners: the same live workout, one set at a time. It reads and changes the same session as the full list, so the two
+// views swap at any time. During a rest the set just done gets its feel question here, above the next set's Done.
+export function GuidedWorkout({ session, setSession, unit, rest, feelPrompt, onSetDone, onFinish }) {
+  const { learnedMuscles, learnedPhotos, showDetails } = useContext(ExerciseContext);
+  const [changing, setChanging] = useState(false);
+  const [typingFor, setTypingFor] = useState(null); // the set whose weight is being typed: its field stays while it fills
+  const { done } = sessionSetCounts(session);
+  const next = nextSet(session, null);
+  const link = "gb-tap text-sm font-semibold";
+  const showList = () => setSession((s) => ({ ...s, fullList: true }));
+
+  if (!next)
+    return (
+      <Panel className="space-y-3">
+        <SectionTitle>That was the last set</SectionTitle>
+        <PrimaryButton onClick={onFinish}>Finish and save {done} {done === 1 ? "set" : "sets"}</PrimaryButton>
+        <button onClick={showList} className={`${link} w-full text-zinc-500`}>Full list</button>
+      </Panel>
+    );
+
+  const { exercise, set } = next;
+  const equipment = equipmentOf(exercise.name);
+  const weighted = equipment !== "bodyweight";
+  const noWeight = weighted && !(Number(set.weight) > 0); // 0 kg would save a dumbbell set as bodyweight
+  const askWeight = !changing && (noWeight || typingFor === set.id);
+  const resting = rest && rest.endsAt > Date.now(); // not once the rest bar says Rest over
+  const photo = photoFor(exercise.name, learnedPhotos);
+  const muscles = musclesFor(exercise.name, learnedMuscles);
+  // One line under the name: the coach's cue for this exercise once there is one (not while the rest bar shows it), else the muscles
+  const note = session.coachQuiet ? null : session.coachNotes?.findLast((n) => n.exercise === exercise.name);
+  // While the feel question shows, the muscles line gives way, so the screen fits under the rest bar.
+  const cue = note && note.restStartedAt !== rest?.startedAt ? note.text : !feelPrompt && muscles && `Works ${describeMuscles(muscles).toLowerCase()}.`;
+  const perDumbbell = equipment === "dumbbell" ? " per dumbbell" : "";
+  const plates = platesText(next, unit);
+
+  function finishSet() {
+    setChanging(false);
+    setSession((s) => toggleSet(s, exercise.id, set.id));
+    onSetDone(exercise, set);
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-baseline justify-between text-sm text-zinc-500">
+        <span>
+          {session.routine ? `Workout ${session.routine}, e` : "E"}xercise {session.exercises.indexOf(exercise) + 1} of {session.exercises.length}
+        </span>
+        <button onClick={showList} className={`${link} text-blue-700`}>Full list</button>
+      </div>
+
+      {/* While resting, the picture shrinks to a thumbnail, so the feel question and Done stay in sight under the rest bar */}
+      {!feelPrompt && (
+        <button onClick={() => showDetails(exercise.name)} aria-label={`How to do ${exercise.name}`} className="relative block w-full overflow-hidden rounded-2xl border border-zinc-200 bg-white">
+          {photo ? (
+            <span className="grid grid-cols-2">
+              <img src={`/exercises/${photo}-0.webp`} alt="" className="aspect-square w-full object-contain" />
+              <img src={`/exercises/${photo}-1.webp`} alt="" className="aspect-square w-full object-contain" />
+            </span>
+          ) : (
+            <span className="flex justify-center py-3">
+              <ExerciseThumb name={exercise.name} size={160} interactive={false} />
+            </span>
+          )}
+          <span className="absolute bottom-2 right-2 rounded-full bg-white/90 px-3 py-1 text-sm font-semibold text-blue-700 shadow">How to do it</span>
+        </button>
+      )}
+
+      <div className="flex items-center gap-3">
+        {feelPrompt && <ExerciseThumb name={exercise.name} size={64} />}
+        <div className="min-w-0">
+          <h2 className="gb-display text-3xl font-bold leading-tight text-zinc-900">{exercise.name}</h2>
+          {cue && <p className="mt-0.5 text-zinc-700">{cue}</p>}
+        </div>
+      </div>
+
+      <div className="rounded-2xl bg-white p-4">
+        <div className="mb-2 flex items-center gap-3">
+          <span className="shrink-0 text-sm font-semibold text-zinc-700">
+            Set {exercise.sets.indexOf(set) + 1} of {exercise.sets.length}
+          </span>
+          <span className="flex flex-1 gap-1" aria-hidden="true">
+            {exercise.sets.map((s) => (
+              <span key={s.id} className={`h-1.5 flex-1 rounded-full ${s.done ? "bg-green-600" : s === set ? "bg-blue-700" : "bg-zinc-200"}`} />
+            ))}
+          </span>
+        </div>
+        <div className="gb-display text-4xl font-bold leading-tight text-zinc-900 tabular-nums">
+          {!askWeight && Number(set.weight) > 0 ? `Do ${set.reps} reps at ${set.weight} ${unit}` : `Do ${set.reps} reps`}
+        </div>
+        {askWeight ? (
+          <>
+            <p className="mt-1 text-zinc-700">Pick a weight you could lift {Number(set.reps) + GUESS_EXTRA_REPS} times.</p>
+            <div className="mt-3 flex items-center gap-3">
+              <input
+                type="number"
+                inputMode="decimal"
+                enterKeyHint="done"
+                value={set.weight}
+                onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()} // the keyboard goes, and Done shows
+                onChange={(e) => {
+                  setTypingFor(set.id);
+                  setSession((s) => editSet(s, exercise.id, set.id, "weight", e.target.value));
+                }}
+                aria-label="Weight"
+                className="h-14 w-28 rounded-xl border border-zinc-300 text-center text-2xl tabular-nums"
+              />
+              <span className="text-zinc-600">{unit}{perDumbbell}</span>
+            </div>
+            {loadsPlates(exercise.name) && <p className="mt-2 text-sm text-zinc-600">The bar alone is {PLATES[unit].bar} {unit}.</p>}
+            {!feelPrompt && <p className="mt-2 text-sm text-zinc-500">Not sure? Start light. After the set, you say how it felt, and the weight changes to match.</p>}
+          </>
+        ) : (
+          <>
+            {perDumbbell && <p className="text-zinc-600">The weight is per dumbbell.</p>}
+            {plates && <p className="text-zinc-600">{plates}.</p>}
+            {changing ? (
+              <SetRow set={set} number={exercise.sets.indexOf(set) + 1} unit={unit} onEdit={(field, value) => setSession((s) => editRemainingSets(s, exercise.id, set.id, field, value))} />
+            ) : (
+              <button onClick={() => setChanging(true)} className={`${link} mt-1 text-blue-700`}>Change weight or reps</button>
+            )}
+          </>
+        )}
+      </div>
+
+      {feelPrompt && (
+        <div className="rounded-2xl bg-white p-4">
+          {feelPrompt.result ? (
+            <p className="gb-fade text-sm font-medium text-blue-900">{feelPrompt.result}</p>
+          ) : (
+            <>
+              <p className="mb-2 font-semibold text-zinc-900">{rest.label === exercise.name ? "How was the set you just did?" : `How was your last set of ${rest.label}?`}</p>
+              <div role="group" aria-label="How was that set?" className="flex gap-2">
+                {SET_FEELS.map((feel) => (
+                  <button key={feel.id} onClick={() => feelPrompt.onRate(feel.id)} className="h-11 flex-1 rounded-full bg-zinc-100 text-sm font-semibold text-zinc-700">
+                    {feel.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {resting && <p className="text-center text-sm text-zinc-500">Rest first. It chimes when the next set is due.</p>}
+      {/* During a rest it names the set and is outlined, so it doesn't read as "done resting" */}
+      <button
+        onClick={finishSet}
+        disabled={noWeight}
+        className={`flex h-16 w-full items-center justify-center gap-2 rounded-2xl text-xl font-bold disabled:opacity-40 ${resting ? "border-2 border-blue-700 bg-white text-blue-700" : "bg-blue-700 text-white"}`}
+      >
+        <Check className="h-6 w-6" />
+        {resting ? `Set ${exercise.sets.indexOf(set) + 1} done` : "Done"}
+      </button>
+    </div>
+  );
+}
+
 // Fix a saved workout with the same cards used while training: edit sets, add or remove them, reorder exercises, and
 // replace an exercise logged under the wrong name (its sets stay).
 export function WorkoutEditor({ workout, unit, yourExercises, onSave, onCancel }) {
@@ -438,7 +595,7 @@ export function WorkoutEditor({ workout, unit, yourExercises, onSave, onCancel }
   );
 }
 
-export function LogView({ workouts, setWorkouts, session, setSession, settings, plans, yourExercises, learnedMuscles, coachContext, onRangeChange, onStartRest, feelPrompt, onSaveRoutine, onDeleteRoutine, showImport, setShowImport, bodyweight, unit }) {
+export function LogView({ workouts, setWorkouts, session, setSession, settings, plans, yourExercises, learnedMuscles, coachContext, onRangeChange, onStartRest, feelPrompt, onSaveRoutine, onDeleteRoutine, showImport, setShowImport, bodyweight, unit, guided, rest }) {
   const [description, setDescription] = useState("");
   const [picker, setPicker] = useState(null); // null while closed, else { replacing: the exercise to swap, or null to add one }
   const [busy, setBusy] = useState(false);
@@ -502,6 +659,29 @@ export function LogView({ workouts, setWorkouts, session, setSession, settings, 
     window.scrollTo({ top: 0 }); // after the finish screen, the check-in waits at the top
   }
 
+  // Rest after every set except the very last one of the workout.
+  function restAfter(exercise, set) {
+    const { done, total } = sessionSetCounts(session);
+    if (total - done > 1) onStartRest(exercise.rest, exercise.name, { exerciseId: exercise.id, setId: set.id });
+  }
+
+  // The finish screen and the exercise picker stay open when the view switches under them (Continue this workout, or a
+  // first exercise picked).
+  const finishScreen = finished && (
+    <WorkoutDone {...finished} unit={unit} context={coachContext} bodyweight={bodyweight} onDone={() => setFinished(null)} onContinue={continueWorkout} />
+  );
+  const exercisePicker = picker && <ExercisePicker yourNames={yourExercises} replacing={picker.replacing?.name} onPick={pickExercise} onClose={() => setPicker(null)} />;
+
+  // The guided view is the whole page: one set, nothing else to read
+  if (session && guided)
+    return (
+      <>
+        <GuidedWorkout session={session} setSession={setSession} unit={unit} rest={rest} feelPrompt={feelPrompt} onSetDone={restAfter} onFinish={finishWorkout} />
+        {finishScreen}
+        {exercisePicker}
+      </>
+    );
+
   return (
     <div className="space-y-4">
       <ViewTitle
@@ -515,16 +695,14 @@ export function LogView({ workouts, setWorkouts, session, setSession, settings, 
       </ViewTitle>
 
       {highlights && <SessionHighlights facts={highlights} onClose={() => setHighlights(null)} />}
-      {finished && (
-        <WorkoutDone {...finished} unit={unit} context={coachContext} bodyweight={bodyweight} onDone={() => setFinished(null)} onContinue={continueWorkout} />
-      )}
+      {finishScreen}
       {checkInWorkout && !session && <CheckInCard key={checkInWorkout.id} workout={checkInWorkout} context={coachContext} onSave={saveCheckIn} />}
       {coachReply && <CoachReply text={coachReply} onClose={() => setCoachReply(null)} />}
 
       {showImport && <ImportPanel workouts={workouts} setWorkouts={setWorkouts} unit={unit} />}
 
       {session ? (
-        <WorkoutPanel session={session} setSession={setSession} unit={unit} onFinish={finishWorkout} onStartRest={onStartRest} feelPrompt={feelPrompt} onSaveRoutine={onSaveRoutine} onFindExercise={(replacing) => setPicker({ replacing })} />
+        <WorkoutPanel session={session} setSession={setSession} unit={unit} onFinish={finishWorkout} onSetDone={restAfter} feelPrompt={feelPrompt} onSaveRoutine={onSaveRoutine} onFindExercise={(replacing) => setPicker({ replacing })} />
       ) : (
         <StartWorkoutPanel
           routines={routines}
@@ -577,7 +755,7 @@ export function LogView({ workouts, setWorkouts, session, setSession, settings, 
         </Panel>
       )}
 
-      {picker && <ExercisePicker yourNames={yourExercises} replacing={picker.replacing?.name} onPick={pickExercise} onClose={() => setPicker(null)} />}
+      {exercisePicker}
 
       <WorkoutHistory
         workouts={workouts}
