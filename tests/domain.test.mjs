@@ -507,6 +507,7 @@ test("Rest notes: once per exercise, never when quiet, and the coach hears the s
   assert.equal(app.wantsRestNote(noted, "Leg Extension"), true);
   assert.equal(app.wantsRestNote({ ...session, coachQuiet: true }, "Leg Extension"), false);
   assert.ok(app.restNoteRequest(noted, "Leg Press").includes("Write a quick question")); // the next kind in turn
+  assert.ok(app.restNoteRequest(noted, "Leg Press", [], true).includes("Write a cue for the next set.")); // beginners: always the cue
   assert.ok(app.restNoteRequest(noted, "Leg Press").endsWith("You already said this workout:\n- Drive through the heels."));
   const chat = [{ role: "assistant", content: "How did it feel?" }, { role: "user", content: "Heavy, my knee aches" }];
   assert.ok(app.restNoteRequest(session, "Leg Press", chat).includes("LATEST COACH CHAT (oldest first):\n- coach: How did it feel?\n- athlete: Heavy, my knee aches"));

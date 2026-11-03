@@ -2,8 +2,8 @@
 // Run: node scripts/coach_eval.mjs [NAME ...]  (no names: all). Real Gemini calls billed to mygymbot, about a cent a run.
 // The system prompt is built exactly as the app builds it: COACH_PROMPT, or a scenario's own prompt such as the finish
 // screen's, then buildCoachContext.
-import { COACH_PROMPT, WORKOUT_DONE_PROMPT } from "../src/prompts.js";
-import { finishedWorkoutRequest } from "../src/workout.js";
+import { COACH_PROMPT, REST_NOTE_PROMPT, WORKOUT_DONE_PROMPT } from "../src/prompts.js";
+import { finishedWorkoutRequest, restNoteRequest } from "../src/workout.js";
 import { buildCoachContext } from "../src/coach-context.js";
 import { buildAutopilotPlans } from "../src/autopilot.js";
 import { startServer } from "../tests/e2e/helpers.mjs";
@@ -16,6 +16,15 @@ const knee = settings({ name: "Dana", notes: "Left knee hurts on deep squats", s
 // A home gym with light dumbbells, while the history still has cable and machine work from a gym.
 const homeGym = settings({ equipment: ["dumbbell", "bench"], dumbbellMax: "20" });
 const session = { exercises: [{ name: "Bench Press (Dumbbell)", sets: [{ weight: 44, reps: 10, done: true }, { weight: 44, reps: 10 }] }] };
+// The first rest of a first workout's second exercise: in turn, the coach's note would now be a question, not a cue.
+const done = (weight) => ({ weight, reps: 8, done: true });
+const secondExercise = {
+  exercises: [
+    { name: "Goblet Squat (Dumbbell)", sets: [done(12), done(12), done(12)] },
+    { name: "Bench Press (Dumbbell)", sets: [done(10), { weight: 10, reps: 8 }, { weight: 10, reps: 8 }] },
+  ],
+  coachNotes: [{ exercise: "Goblet Squat (Dumbbell)", text: "Keep your chest tall and push through your whole foot." }],
+};
 
 // A week of meals before today, with less protein on the 3 workout days (about 90 g) than on the 4 others (about 152 g),
 // and a low-protein day so far today: eggs on toast this morning, 80 kg logged. All dates are relative to today, so the
@@ -71,6 +80,23 @@ const SCENARIOS = [
     ...foodLog,
     messages: ["That felt heavy"],
     rules: ["1 to 3 short lines", "Says what to do with the next set", "Does not bring up protein or food"],
+  },
+  {
+    name: "rest-note-beginner",
+    prompt: REST_NOTE_PROMPT,
+    settings: settings({ experience: "Beginner" }),
+    workouts: [],
+    session: secondExercise,
+    messages: [restNoteRequest(secondExercise, "Bench Press (Dumbbell)", [], true)],
+    rules: ["A cue for how to do the next set of Bench Press (Dumbbell)", "No question and no fact", "Under 20 words"],
+  },
+  {
+    name: "rest-note-intermediate",
+    prompt: REST_NOTE_PROMPT,
+    settings: settings(),
+    session: secondExercise,
+    messages: [restNoteRequest(secondExercise, "Bench Press (Dumbbell)")],
+    rules: ["A quick question about how the set felt, not a cue", "Under 20 words"],
   },
   {
     name: "remember",
@@ -225,7 +251,7 @@ const SCENARIOS = [
       "What music do you like to train to?",
       "Rock",
     ],
-    rules: ["Writes a [profile: ...] tag with equipment: Dumbbells, Bench", "Plans use only dumbbell and bodyweight exercises", "No [equipment] button", "Every [plan:] exercise that isn't a barbell lift names its equipment, e.g. (Dumbbell) or (Bodyweight)"],
+    rules: ["Writes a [profile: ...] tag with experience: Beginner and equipment: Dumbbells, Bench", "Plans use only dumbbell and bodyweight exercises", "No [equipment] button", "Every [plan:] exercise that isn't a barbell lift names its equipment, e.g. (Dumbbell) or (Bodyweight)"],
   },
   {
     name: "onboarding-equipment-ask",

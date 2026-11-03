@@ -92,12 +92,12 @@ export function useRestTimer() {
 
 // The coach keeps the athlete company between sets with one short line, the first time each exercise rests.
 // Notes live in the session, so a reload doesn't ask again and the coach knows what it already said.
-export function useRestNote({ rest, session, setSession, context, chat }) {
+export function useRestNote({ rest, session, setSession, context, chat, cueOnly }) {
   const requested = useRef(null);
   useEffect(() => {
     if (!rest || requested.current === rest.startedAt || !wantsRestNote(session, rest.label)) return;
     requested.current = rest.startedAt;
-    askAI(`${REST_NOTE_PROMPT}\n\n${context}`, [{ role: "user", content: restNoteRequest(session, rest.label, chat) }])
+    askAI(`${REST_NOTE_PROMPT}\n\n${context}`, [{ role: "user", content: restNoteRequest(session, rest.label, chat, cueOnly) }])
       .then((text) => setSession((s) => s && { ...s, coachNotes: [...(s.coachNotes ?? []), { exercise: rest.label, text, restStartedAt: rest.startedAt }] }))
       .catch(() => {}); // the timer is what matters; a rest without a note is fine
   }, [rest?.startedAt]);
@@ -291,7 +291,7 @@ export function RestTimerBar({ timer, next, unit, note, fun, onReply, onQuiet, o
   }
 
   return (
-    <div ref={barRef} onAnimationEnd={onAnimationEnd} aria-hidden={leaving || undefined} className={`fixed top-0 inset-x-0 z-10 bg-zinc-900 text-white shadow-lg ${leaving ? "gb-drop-out pointer-events-none" : "gb-drop-in"}`}>
+    <div ref={barRef} data-tour="rest-bar" onAnimationEnd={onAnimationEnd} aria-hidden={leaving || undefined} className={`fixed top-0 inset-x-0 z-10 bg-zinc-900 text-white shadow-lg ${leaving ? "gb-drop-out pointer-events-none" : "gb-drop-in"}`}>
       {lastView.current}
     </div>
   );

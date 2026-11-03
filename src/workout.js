@@ -217,7 +217,8 @@ export const wantsRestNote = (session, exerciseName) =>
   Boolean(session) && !session.coachQuiet && !(session.coachNotes ?? []).some((note) => note.exercise === exerciseName);
 
 // What the coach is told when a rest starts: the set just done, the latest chat and what it already said this workout.
-export function restNoteRequest(session, exerciseName, chat = []) {
+// `cueOnly`: beginners get only a cue for the next set, never a question or a fact.
+export function restNoteRequest(session, exerciseName, chat = [], cueOnly = false) {
   const sets = session.exercises.find((e) => e.name === exerciseName)?.sets ?? [];
   const done = sets.filter((set) => set.done);
   const last = done.at(-1);
@@ -225,7 +226,7 @@ export function restNoteRequest(session, exerciseName, chat = []) {
   const talk = chat.slice(-REST_NOTE_CHAT_MESSAGES).map((m) => `- ${m.role === "user" ? "athlete" : "coach"}: ${m.content}`);
   return [
     `RESTING after set ${done.length} of ${sets.length} of ${exerciseName}${last ? ` (${last.weight}x${last.reps})` : ""}.`,
-    `Write ${REST_NOTE_KINDS[earlier.length % REST_NOTE_KINDS.length]}.`,
+    `Write ${REST_NOTE_KINDS[cueOnly ? 0 : earlier.length % REST_NOTE_KINDS.length]}.`,
     talk.length > 0 && `LATEST COACH CHAT (oldest first):\n${talk.join("\n")}`,
     earlier.length > 0 && `You already said this workout:\n${earlier.join("\n")}`,
   ]

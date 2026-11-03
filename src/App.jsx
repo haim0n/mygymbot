@@ -1,12 +1,12 @@
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from "react";
 import { MessageCircle, Dumbbell, Utensils, TrendingUp, User, Loader2 } from "lucide-react";
-import { DEFAULT_SETTINGS, GLOBAL_CSS, STORAGE_KEYS, TOUR_STEPS } from "./config.js";
+import { DEFAULT_SETTINGS, GLOBAL_CSS, STORAGE_KEYS, TOUR_STEPS, WORKOUT_TOUR_STEPS } from "./config.js";
 import { usePersistentState, useSaveProblem } from "./storage.js";
 import { today } from "./dates.js";
 import { currentBodyweight, exercisesByFrequency, logBodyweight, personalRecords } from "./training.js";
 import { buildAutopilotPlans } from "./autopilot.js";
 import { todayFacts } from "./motivation.js";
-import { feelResult, nextSet, rateSet, saveRoutine, wantsGuided } from "./workout.js";
+import { feelResult, nextSet, rateSet, saveRoutine, sessionSetCounts, wantsGuided } from "./workout.js";
 import { buildCoachContext, isNewAthlete, rememberFacts, wantsTour } from "./coach-context.js";
 import { useDailyNote } from "./ui/motivation.jsx";
 import { useInjuryAreas, useLearnedMuscles } from "./ui/muscles.jsx";
@@ -16,7 +16,7 @@ import { LogView } from "./ui/log.jsx";
 import { FoodView } from "./ui/food.jsx";
 import { ProgressView } from "./ui/progress.jsx";
 import { GoalsView } from "./ui/goals.jsx";
-import { Tour } from "./ui/tour.jsx";
+import { SpotTour, Tour } from "./ui/tour.jsx";
 import { RestTimerBar, useRestFun, useRestNote, useRestTimer } from "./ui/rest-timer.jsx";
 
 export const TABS = [
@@ -113,7 +113,7 @@ export default function GymBot() {
   const coachStyle = settings.profile.coachStyle ?? DEFAULT_SETTINGS.profile.coachStyle;
   const dailyNote = useDailyNote({ enabled: loaded && workouts.length > 0, facts, context: coachContext, style: coachStyle });
   const { unit, daysPerWeek } = settings.profile;
-  const restNote = useRestNote({ rest: restTimer.rest, session, setSession, context: coachContext, chat });
+  const restNote = useRestNote({ rest: restTimer.rest, session, setSession, context: coachContext, chat, cueOnly: settings.profile.experience === "Beginner" });
   const rest = restTimer.rest;
   const restFun = useRestFun({ rest, session, setSession, settings, setSettings });
   const guided = wantsGuided(settings.profile, session);
@@ -172,6 +172,14 @@ export default function GymBot() {
     setTab("coach");
     setSettings((s) => ({ ...s, tourSeen: true }));
   }
+  // The first-workout tour, in the full list only: its start card before the first tick, the others in the first rest.
+  // The start card's Got it isn't stored, so a reload before the first tick shows it again.
+  const [tourStartDone, setTourStartDone] = useState(false);
+  const workoutTour = session && !guided && tab === "log" && !workouts.length && !settings.workoutTourSeen;
+  const { done: doneSets, total: totalSets } = session ? sessionSetCounts(session) : { done: 0, total: 0 };
+  // An empty workout has no check circle to point at, so the start card waits for the first exercise.
+  const tourMoment = !workoutTour ? null : doneSets === 0 && totalSets > 0 && !rest && !tourStartDone ? "start" : doneSets === 1 && rest?.setId ? "rest" : null;
+  const endWorkoutTour = () => setSettings((s) => ({ ...s, workoutTourSeen: true }));
   // Opening the app mid-workout goes straight to it.
   useEffect(() => {
     if (sessionLoaded && session) setTab("log");
@@ -228,6 +236,9 @@ export default function GymBot() {
             <BottomNav tab={tab} onSelect={setTab} workoutInProgress={Boolean(session)} />
             {detailsFor && <ExerciseSheet name={detailsFor} onClose={() => setDetailsFor(null)} />}
             {tourStep !== null && <Tour step={tourStep} onNext={nextTourStep} onClose={closeTour} />}
+            {tourStep === null && tourMoment && (
+              <SpotTour key={tourMoment} steps={WORKOUT_TOUR_STEPS.filter((step) => step.at === tourMoment)} onSkip={endWorkoutTour} onClose={tourMoment === "start" ? () => setTourStartDone(true) : endWorkoutTour} />
+            )}
           </>
         ) : (
           <div className="min-h-screen flex items-center justify-center">

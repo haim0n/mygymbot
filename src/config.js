@@ -83,10 +83,17 @@ export const LEFT_OPEN_HOURS = 6; // a workout going longer than this was left o
 // The first-time tour: one card per tab, in the tab bar's order, for a new athlete on the first open (and again from Profile).
 export const TOUR_STEPS = [
   { tab: "coach", title: "Coach", text: "Your coach. Ask about training, food or recovery; it knows your workouts and plans." },
-  { tab: "log", title: "Workout", text: "Start a workout here. Tick each set; the app sets the weights, the rest and what comes next." },
+  { tab: "log", title: "Workout", text: "Start a workout here. The app tells you each set: the weight, the reps and the rest." },
   { tab: "food", title: "Food", text: "Snap a meal. The app counts the protein toward your daily target." },
   { tab: "progress", title: "Progress", text: "Your charts: strength over time, weekly volume, muscles worked and bodyweight." },
   { tab: "goals", title: "Profile", text: "About you, your equipment and your goals. The more your coach knows, the better it plans." },
+];
+// The first-workout tour: a card on one part of the live workout, in the athlete's first workout, once (settings.workoutTourSeen).
+// `at`: the workout's start or its first rest. Only in the full list: the guided view says the same on its own screen.
+export const WORKOUT_TOUR_STEPS = [
+  { at: "start", target: '[aria-label="Set 1 done"]', title: "Tick each set", text: "Type the weight you used, then tick the set. The rest starts by itself." },
+  { at: "rest", target: '[data-tour="rest-bar"]', title: "Your rest", text: "It chimes when the next set is due. Plus or minus 15 seconds changes it, and Skip ends it when you are ready." },
+  { at: "rest", target: '[aria-label="How was that set?"]', title: "How was it?", text: "One tap. Too easy or too hard changes the weight of the sets still to do." },
 ];
 export const SWIPE_AWAY_PX = 80; // a card dragged this far sideways is swiped away; less springs back
 export const SET_FEEL_SCROLL_DELAY_MS = 300; // the set feel row is checked for being in sight once it has grown open (.gb-reveal)

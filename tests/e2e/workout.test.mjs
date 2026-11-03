@@ -77,7 +77,7 @@ test("set feel: one tap under the set just done moves the next sets, and the res
 
 test("guided workout: a beginner's first workout one set at a time, the weight typed once, then the full list and back", async (t) => {
   const plan = { name: "A", exercises: ["Goblet Squat (Dumbbell)", "Push Up"] };
-  const { page, errors } = await openApp(t, {
+  const { page, errors, aiRequests } = await openApp(t, {
     seed: { "gymbot:settings": { ...settings({ experience: "Beginner" }), routines: [plan] } },
     ai: () => "Keep your chest tall.",
   });
@@ -97,13 +97,19 @@ test("guided workout: a beginner's first workout one set at a time, the weight t
   await page.getByText("Do 8 reps at 12 kg").waitFor(); // carried to the next set
   await page.getByText("Rest first. It chimes when the next set is due.").waitFor();
   await page.getByRole("button", { name: "Set 2 done" }).waitFor();
+  await settle(page); // a tour card would show by now
+  assert.equal(await page.getByRole("dialog").count(), 0); // no tour in the guided view
   await page.getByRole("group", { name: "How was that set?" }).getByRole("button", { name: "Too easy" }).tap();
   await page.getByText("Do 8 reps at 14 kg").waitFor();
 
   await page.getByRole("button", { name: "Full list" }).tap();
+  const listTour = page.getByRole("dialog", { name: "Your rest" }); // the full list has its tour, in the first rest
+  await listTour.getByRole("button", { name: "Skip" }).tap();
+  await listTour.waitFor({ state: "detached" });
   const first = section(page, "Workout A").locator("ol > li").first();
   assert.deepEqual(await Promise.all([1, 2, 3].map((n) => first.getByLabel(`Set ${n} weight`).inputValue())), ["12", "14", "14"]);
   while (!(await stored(page, "gymbot:session").catch(() => null))?.fullList) await page.waitForTimeout(100); // saved (a 404 until the first write)
+  while (!(await stored(page, "gymbot:settings")).workoutTourSeen) await page.waitForTimeout(100); // or the tour shows again
   await page.reload(); // the list stays for this workout
   await page.getByRole("button", { name: "Guide me, one set at a time" }).tap();
   await page.getByText("Do 8 reps at 14 kg").waitFor();
@@ -118,6 +124,37 @@ test("guided workout: a beginner's first workout one set at a time, the weight t
   await settle(page);
   const saved = (await stored(page, "gymbot:workouts")).at(-1);
   assert.deepEqual(saved.exercises.map((e) => e.sets.map((set) => set.weight)), [[12, 14, 14], [0, 0, 0]]);
+  const restNotes = aiRequests.map((body) => body.messages[0].content).filter((text) => text.startsWith("RESTING after"));
+  assert.equal(restNotes.length, 2); // one per exercise, both a cue for a beginner
+  assert.ok(restNotes.every((text) => text.includes("Write a cue for the next set.")));
+  assert.deepEqual(errors, []);
+});
+
+test("first-workout tour: in the full list, a card at the start and two in the first rest, once", async (t) => {
+  const plan = { name: "A", exercises: ["Bench Press (Dumbbell)", "Push Up"] };
+  const { page, errors } = await openApp(t, { seed: { "gymbot:settings": { ...settings(), routines: [plan] } } });
+  await page.getByRole("button", { name: /^Workout/ }).tap();
+  await page.getByRole("button", { name: "Start plan A" }).tap();
+  const tick = page.getByRole("dialog", { name: "Tick each set" });
+  await tick.getByRole("button", { name: "Got it" }).tap();
+  await tick.waitFor({ state: "detached" });
+
+  const first = section(page, "Workout A").locator("ol > li").first();
+  await first.getByLabel("Set 1 weight").fill("10");
+  await first.getByRole("button", { name: "Set 1 done" }).tap();
+  const rest = page.getByRole("dialog", { name: "Your rest" });
+  assert.match(await rest.innerText(), /1 of 2/);
+  await rest.getByRole("button", { name: "Next" }).tap();
+  await page.getByRole("dialog", { name: "How was it?" }).getByRole("button", { name: "Got it" }).tap();
+  await page.getByRole("dialog", { name: "How was it?" }).waitFor({ state: "detached" });
+  await settle(page);
+  assert.equal((await stored(page, "gymbot:settings")).workoutTourSeen, true);
+
+  await page.getByRole("button", { name: "Skip" }).tap(); // the rest
+  await page.reload();
+  await page.getByRole("button", { name: "Set 2 done" }).first().waitFor();
+  await settle(page); // a card would show by now
+  assert.equal(await page.getByRole("dialog").count(), 0); // shown once
   assert.deepEqual(errors, []);
 });
 
